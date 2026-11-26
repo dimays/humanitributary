@@ -7,6 +7,7 @@ covers:
   - "!evidence/migrations/**"
   - tests/test_fact_base.py
   - tests/test_evidence_and_dates.py
+  - tests/test_junk_actors.py
 ---
 
 Every statement the timeline makes is a claim, and every claim is backed by
@@ -103,12 +104,26 @@ attach to the part it supports:
   (whole numbers 1000–2100 without a comma), days after a month name, the
   ends of ranges, BCE/CE years, decades and ordinals, and bare whole numbers
   of 100 or more after "in", "by", "since" and similar words (likely years).
-- `actors()` takes runs of capitalized words (with connectors like *de*,
-  *of*, *al-* inside), drops leading function words (`NOT_NAMES`), month
-  names, the sources' own names (`SOURCES`: Wikipedia, Britannica …) and
-  Roman numerals, and drops a lone capitalized word opening a sentence of the
-  text unless it is capitalized somewhere else too. Labels of the branch's
-  `BranchEntity` items count when they appear verbatim.
+- `actors()` takes runs of capitalized words (with up to two connectors like
+  *de*, *of*, *the* between them, so "Republic of the Congo" is one name, and
+  an *al-* before, so "al-Qaeda" isn't "Qaeda"). From the front of a run it
+  drops function words (`NOT_NAMES`) and the lowercase articles a connector
+  let in ("After the Franks" is "Franks"), but keeps "New", "Great", "Old"
+  and, before a common noun or a plural, an ordinal or number
+  (`NAME_PREFIXES`: "New Zealand", "Three Kingdoms", "First World War", not
+  "Two French DGSE agents"); a sentence-opening participle before a people or
+  a month goes ("Proclaimed British"); a trailing "of <month>" goes ("ASEAN
+  Declaration of August 8"), and so does a final possessive mark. Then
+  `junk_actor(name)` rejects what is left if it isn't a name: a function word
+  or article first ("of March", "the March"), a single letter ("U.S." is not
+  "U" and "S"), a month, day or season, a lone common word (`COMMON_WORDS`,
+  from the corpus's own junk: "Literature", "Republic", "Games", "War"; not
+  institutions that act, like Congress or Parliament), a hyphenated adjective
+  ("US-led"), a possessive or a participle. The sources' own names
+  (`SOURCES`: Wikipedia, Britannica …) and Roman numerals go too, and a lone
+  capitalized word opening a sentence of the text is dropped unless it is
+  capitalized somewhere else too. Labels of the branch's `BranchEntity` items
+  count when they appear verbatim.
 
 The splitter is a heuristic that errs toward a claim an agent can dismiss.
 `sync()` brings an entry's children in line with what it derives, writing only
@@ -120,6 +135,14 @@ differences:
 | A part's value changed | Updated. If it has evidence, `recheck_after` = today, `recheck_reason` = `value_changed`. |
 | A part disappeared, no evidence | Deleted. |
 | A part disappeared, with evidence | Kept, and marked for recheck (`value_changed`) once. |
+| An actor part that `junk_actor()` rejects (with the names now found, so a fragment of one, "Zealand" beside "New Zealand", counts) | Left exactly as it is, evidence or not, and counted as `junk_kept`: these were made before the rules and removing them is the owner's decision ([ADR 0025](../adr/0025-edit-files-add-entries-and-junk-actors.md)). |
+
+`facts sweep --junk-actors --dry-run` (`sweep.junk_actors()`) reports them
+and writes nothing: every actor claim the splitter no longer derives and
+`junk_actor()` rejects, by reason, how many have no evidence of their own, and
+an evenly spaced sample of those (`--sample`, 20). Without `--dry-run` the
+command refuses: there is no mode that deletes them. On the archive corpus it
+counts 2,001 such claims, none with evidence.
 
 ## Independent witnesses
 
@@ -310,7 +333,7 @@ job runner (the `facts_sweep` job, registered right after `link_health` in
    `as_written` claim, `claims.sync()` brings its atomic claims in line (new
    ones are bulk-created at the end). `split_all(today, entries=[…])` does the
    same for some entries only, reading just their claims: an edit file
-   re-splits each entry it edits this way.
+   re-splits each entry it edits or adds this way.
 2. **Link health.** `link_health()` sets baseline hashes and finds each
    claim's link problem (above).
 3. **Conflicts.** `conflicts.from_candidates()` records date conflicts.
@@ -444,6 +467,7 @@ entries:
 | Subcommand | What |
 |---|---|
 | `facts sweep [--today D] [--dry-run] [--no-split] [--no-tasks]` | The sweep, as `job:facts_sweep`. Prints its counts as JSON. |
+| `facts sweep --junk-actors --dry-run [--sample N]` | Report only: the junk actor claims the splitter's rules now reject (above), as JSON; writes nothing, and refuses without `--dry-run`. |
 | `facts report [--today D] [--brief]` | The health report as Markdown; `--brief` leaves out the era and region tables. |
 | `facts check <slug>` | What stands between an entry and publication, as JSON. |
 | `facts record --claim ID --url U --stance S --agent A [--excerpt E] [--title T] [--method M] [--found JSON] [--task ID]` | Record evidence (method `agent_read` by default; also `browser_read`, `human`, `fetch_match`). Runs inside `revising(agent, task=…)` and prints the claim's new status and confidence. |
@@ -459,7 +483,7 @@ through the agent API ([work queue](work-queue-and-agents.md#the-agent-api)).
 | A threshold, weight or interval | Change it in `evidence/policy.py` `DEFAULTS` (or override it with `settings.FACTS`). If it changes what the sweep computes, bump `RULES_VERSION` (`facts-v1`); it is stamped on task payloads and the sweep's Revision reason. Update [fact checking](../fact-checking.md) and the tables here. Lowering an interval takes effect at the next sweep; raising one waits for each claim's next check. |
 | A new claim field | Add it to `Claim.Field` and the `claim_field_valid` constraint (a migration), and give it a `recheck_days` row. |
 | The status rule | `assess_detail()` in `evidence/confidence.py`; tests in `tests/test_fact_base.py` (`IndependenceAndStatusTests`) and `tests/test_evidence_and_dates.py`. A change of meaning needs an ADR (it refines ADR 0009). |
-| The splitter | `evidence/claims.py`. Changing what it derives changes claims' keys: the next sweep replaces unchecked parts and keeps checked ones for recheck. Tests: `SplitterTests`. |
+| The splitter | `evidence/claims.py`. Changing what it derives changes claims' keys: the next sweep replaces unchecked parts and keeps checked ones for recheck, and keeps actor parts that `junk_actor()` rejects as they are. A new kind of junk goes in `junk_actor()` (or `COMMON_WORDS`) with a real example in `tests/test_junk_actors.py`; run `facts sweep --junk-actors --dry-run` before and after. Tests: `SplitterTests`, `tests/test_junk_actors.py`. |
 | A new kind of link problem or task reason | `staleness.link_problem()`, a `task_priority` entry, a `todo` sentence in `sweep.task_payload()`, and the `verify-claims` skill. |
 | A new known publisher | `evidence/publishers.py` `KNOWN` (applies only to rows created after; existing rows are edited in the admin). |
 | A new evidence table or column | Canonical: the migration needs `audit_table()` for a new table ([revisions](revisions.md)). |

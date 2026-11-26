@@ -329,14 +329,16 @@ differs.
 New entries start as `draft`. There is no service for links, locations,
 images or connections yet: the import writes those with `apply_changes` and
 bulk creates, `governance/operations.py` with `apply_changes` and `delete`,
-and an edit file's `links` (below) the same way.
+and an edit file's `links` and its added branches, events and connections
+(below) the same way.
 
 ## Applying a reviewer's edits
 
 A review of drafts or published entries ends in verdicts: approve, edit,
-rename, reject, add a source, settle a conflict. `manage.py apply_edits`
-(`timeline/edits.py`) applies a file of them in one audited transaction
-([ADR 0023](../adr/0023-edit-files.md)):
+rename, reject, add a source, settle a conflict, add a missing branch, event
+or connection. `manage.py apply_edits` (`timeline/edits.py`) applies a file of
+them in one audited transaction ([ADR 0023](../adr/0023-edit-files.md), the
+add ops [ADR 0025](../adr/0025-edit-files-add-entries-and-junk-actors.md)):
 
 ```bash
 uv run python manage.py apply_edits var/reviews/2026-11-26-round1.edits.json --validate-only
@@ -344,8 +346,9 @@ uv run python manage.py apply_edits var/reviews/2026-11-26-round1.edits.json --a
 uv run python manage.py apply_edits var/reviews/2026-11-26-round1.edits.json --actor human:owner
 ```
 
-The file is a JSON list of operations. Each has `op`, `entry` (a slug) and a
-`reason`, and may have a `note` that only the file keeps:
+The file is a JSON list of operations. Each has `op`, `entry` (a slug; for
+`add_branch` and `add_event`, the new entry's `id`) and a `reason`, and may
+have a `note` that only the file keeps:
 
 | `op` | Keys | What it does |
 |---|---|---|
@@ -355,18 +358,32 @@ The file is a JSON list of operations. Each has `op`, `entry` (a slug) and a
 | `reject` | | A `draft` or `review` entry becomes `retracted`. |
 | `add_evidence` | `url`, `stance`, `claim`?, `title`?, `excerpt`?, `method`?, `found`? | `record_evidence` on one of the entry's claims ([evidence](evidence-and-fact-checking.md#recording-evidence)). `claim` is a field name or `{"field", "key"}`, the record claim (`as_written`) by default, where only an existing cite's row can change (a new source there is an edit's `add_cites`). Without an `excerpt`, an existing row keeps its own. |
 | `resolve_conflict` | `claim`?, `urls`? | Every `conflicts` row on the entry's claims (or one claim's, or only those URLs') becomes `unrelated` with `found_value.resolved` (who, when, the reason, what it was); the claims are recomputed. Nothing to resolve is a note, not a problem ([conflicts](evidence-and-fact-checking.md#conflicts)). |
+| `add_branch` | `branch`, `origin`?, `geo`?, `status`?, `override`? | A new branch. `branch` has SCHEMA's Branch keys: `id`, `name`, `region` (one that exists), `start`, `end`? (null or absent: continues), `startWhen`, `endWhen` (required with an `end`), `parents`?, `into`?, `text` (≤ 240) and `cites` (at least one, the shape of `add_cites`). `origin` is TL.origin's `{note (≤ 300), links: [{id, how, note (≤ 100)}], cites}`, `how` from `BranchLink.How`; `geo` is TL.geo's `{scope, lat, lon, r, label, src}` (or `{scope: global}`, `{scope: cosmic, scale}`). `save_branch` writes the row; parents, into and origin links become `BranchLink`s as the loader makes them (an origin link marks its parent link, or adds one after the parents); the `as_written` and `origin` record claims get the cites; the atomic claims are split. |
+| `add_event` | `event`, `geo`?, `status`?, `override`? | A new event: SCHEMA's Event keys `id`, `branch`, `y`, `end`?, `when`, `title` (≤ 60), `text` (≤ 240), `imp`, `link`? or `links`? (branch slugs, not its own), `cites`. `save_event` writes it, then its `EventLink`s, location, record claim and atomic claims. |
+| `add_connection` | `to`, `note`, `why`?, `cites`? | A connection (TL.enrich) from `entry` to `to` (either may be a branch or an event), its note ≤ 90 characters, appended after the entry's others (the same target again changes that row's note). The snapshot writes connections only beside "why it matters", and the why claim's cites support every note, so an entry without a `why` needs `why` (≤ 700) and `cites` in the op; with one, `why` must be left out (or be the same) and `cites` are optional, but the why claim must end with a supporting cite. The why claim's value lists the connections in order. |
+
+`add_branch` and `add_event` create the entry in `review`; `status:
+"published"` then moves it through `publish_entry` as `approve` does (the
+publishing rule, an `override` note recorded). An id that is already an
+entry's is a problem, so running an add file twice changes nothing and says
+which ids exist. Any op may name an entry, branch or link target that an
+earlier op in the same file adds (an event on a new branch, a connection to a
+new event); one added later is a problem, since the ops run in order.
 
 URLs are matched up to percent-encoding, the host's case, `www.` and a
 trailing slash (`norm_url`), so a file can name a page the way the review
 does.
 
 **Checked first, then all or nothing.** `check(ops)` reads no row but the
-branches named, and finds: unknown ops and keys, a missing reason, a bad slug,
-a title over 60 or a text over 240 characters (`site/SCHEMA.md`), `end` not
-after `y`, `imp` outside 1–3, a link to the event's own branch, a non-https or
-openstax.org URL, an excerpt over 25 words, the same page added twice or added
-and removed, two renames to one id, an id used after it was renamed or
-rejected, and branches that don't exist. If it finds anything, nothing runs.
+branches and regions named, and finds: unknown ops and keys, a missing reason,
+a bad slug, a title over 60 or a text over 240 characters (`site/SCHEMA.md`),
+`end` not after `y` (or `start`), `imp` outside 1–3, a link to the event's own
+branch, a non-https or openstax.org URL, an excerpt over 25 words, the same
+page added twice or added and removed, two renames to one id, an id used after
+it was renamed or rejected, an added entry with no cites, an origin or
+connection note over its limit, an unknown `how`, a location outside the
+`Location` constraints, an id added twice, a reference to an entry added only
+later in the file, and branches or regions that don't exist. If it finds anything, nothing runs.
 Otherwise `apply()` opens one transaction and one `revising(actor)` block and
 runs the ops in order, each in a nested `revising()` whose reason is
 `apply_edits <file> #<n> <op> <entry>: <reason>`. An op that fails (an entry
@@ -385,7 +402,10 @@ database lacks can still be checked there. `--actor` is required otherwise
 (`human:owner`, `agent:reviewer` …).
 
 Tests: `tests/test_apply_edits.py` (each op, both kinds of atomic failure, a
-rename that keeps its references, the dry run, validate-only).
+rename that keeps its references, the dry run, validate-only; the add ops: what
+each writes and how it reaches the snapshot, an event on a branch added
+earlier in the file, the publishing rule on a new event, a connection needing a
+why, their limits and order, and their dry run).
 
 ## The snapshot shape
 

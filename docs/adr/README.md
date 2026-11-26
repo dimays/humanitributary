@@ -45,6 +45,7 @@ things work now; an ADR says why, and what was given up.
 | [0022](0022-ingestion-tuning.md) | Ingestion tuned on its first run: a threshold from the data, a daily cap, routing by role, branches only where Wikidata says so | proposed |
 | [0023](0023-edit-files.md) | A reviewer's verdicts are applied as one audited edit file | proposed |
 | [0024](0024-the-app-serves-the-page.md) | The web process serves the public page until a CDN does | proposed |
+| [0025](0025-edit-files-add-entries-and-junk-actors.md) | Edit files add branches, events and connections; the splitter rejects junk actors and keeps the old ones for the owner | proposed |
 <!-- index:end -->
 
 ## Template

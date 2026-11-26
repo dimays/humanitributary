@@ -1,8 +1,8 @@
 {
   "architecture": {"reviewed": "2026-11-26", "hash": "60fb1cf6b56e"},
   "branch-governance": {"reviewed": "2026-11-26", "hash": "ec665d6fd0fd"},
-  "content-model": {"reviewed": "2026-11-26", "hash": "aa20a0387b31"},
-  "evidence-and-fact-checking": {"reviewed": "2026-11-26", "hash": "41ab92880d18"},
+  "content-model": {"reviewed": "2026-11-26", "hash": "84d08b044e6e"},
+  "evidence-and-fact-checking": {"reviewed": "2026-11-26", "hash": "839f4e5d7851"},
   "glossary": {"reviewed": "2026-11-26", "hash": "74f0112ac6ad"},
   "ingestion": {"reviewed": "2026-11-26", "hash": "3af31ff8b868"},
   "operations": {"reviewed": "2026-11-26", "hash": "803193234597"},

@@ -3,7 +3,7 @@
 Apply a reviewer's verdicts (an edit file, timeline/edits.py) in one audited transaction: every op is checked first,
 then applied in order inside revising(actor), each with its own reason; any problem lists them all and keeps nothing.
 --dry-run prints the Revisions it would write and rolls back; --validate-only checks the file's shape and limits
-(and that the branches it names exist) without reading the entries it changes.
+(and that the branches and regions it names exist, or are added earlier in the file) without reading the entries it changes.
 """
 
 from collections import Counter
@@ -14,7 +14,8 @@ from timeline import edits
 
 
 class Command(BaseCommand):
-    help = "Apply an edit file of reviewer verdicts (edit, rename, approve, reject, add_evidence, resolve_conflict) atomically."
+    help = ("Apply an edit file of reviewer verdicts (edit, rename, approve, reject, add_evidence, resolve_conflict, add_branch, add_event, "
+            "add_connection) atomically.")
 
     def add_arguments(self, parser):
         parser.add_argument("file")
@@ -39,7 +40,7 @@ class Command(BaseCommand):
         except edits.EditsInvalid as e:
             raise CommandError(f"{file}: nothing applied. {e}") from e
         for i, op, notes, lines in out.ops:
-            self.stdout.write(f"#{i} {op['op']} {op['entry']}: {op['reason']}")
+            self.stdout.write(f"#{i} {op['op']} {edits.target(op)}: {op['reason']}")
             for n in notes:
                 self.stdout.write(f"  = {n}")
             for line in lines:

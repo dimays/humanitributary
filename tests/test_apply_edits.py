@@ -1,5 +1,6 @@
 """manage.py apply_edits (timeline/edits.py): each op, atomic failure, a rename keeping its references, the dry run."""
 
+import copy
 import json
 import tempfile
 from datetime import date
@@ -17,8 +18,8 @@ from publish.export import build_content
 from publish.legacy import import_content
 from revisions import revising
 from revisions.models import Revision
-from timeline import edits
-from timeline.models import Connection, Entry, Event, EventLink, Location
+from timeline import edits, services
+from timeline.models import Branch, Connection, Entry, Event, EventLink, Location, Region
 
 from .fixtures import small
 
@@ -227,3 +228,135 @@ class ApplyEditsTests(TestCase):
         self.assertIn("title must be 1–60", str(cm.exception))
         with self.assertRaises(CommandError):
             self.run_command(ops[:1], "--dry-run")  # without --actor
+
+
+SI = "https://www.si.edu/object/carthage"
+BRANCH = {"id": "carthage", "name": "Carthage", "region": "africa", "start": -814, "end": -146, "startWhen": "c. 814 BCE (traditional)",
+          "endWhen": "146 BCE", "parents": [], "into": ["roman-republic"], "text": "A Phoenician city-state in North Africa, destroyed by Rome in 146 BCE.",
+          "cites": [{"t": "Carthage — Wikipedia", "u": "https://en.wikipedia.org/wiki/Carthage"}, {"t": "Carthage — Smithsonian", "u": SI, "k": "museum"}]}
+ORIGIN = {"note": "Founded by settlers from Tyre.", "links": [{"id": "roman-kingdom", "how": "context", "note": "A contemporary of early Rome"}],
+          "cites": [{"t": "Carthage | Britannica", "u": "https://www.britannica.com/place/Carthage-ancient-city-Tunisia"}]}
+GEO = {"scope": "place", "lat": 36.85, "lon": 10.33, "r": 40, "label": "Carthage, Tunisia", "src": "https://en.wikipedia.org/wiki/Carthage"}
+EVENT = {"id": "an-carthage-destroyed", "branch": "carthage", "y": -146, "when": "146 BCE", "title": "Rome destroys Carthage",
+         "text": "Roman forces under Scipio Aemilianus took and razed the city.", "imp": 1, "link": "roman-republic",
+         "cites": [{"t": "Third Punic War — Wikipedia", "u": "https://en.wikipedia.org/wiki/Third_Punic_War"}, {"t": "Carthage — Smithsonian", "u": SI}]}
+
+
+def add_branch(**kw):
+    return {"op": "add_branch", "branch": copy.deepcopy(BRANCH), "origin": copy.deepcopy(ORIGIN), "geo": dict(GEO), "reason": "reviewer: ADD", **kw}
+
+
+def add_event(**kw):
+    return {"op": "add_event", "event": copy.deepcopy(EVENT), "geo": dict(GEO), "reason": "reviewer: ADD", **kw}
+
+
+class AddOpsTests(TestCase):
+    def setUp(self):
+        import_content(small())
+        sweep(TODAY, tasks=False)
+        with revising("human:test", reason="setup: a region the small dump lacks"):
+            services.apply_changes(Region(slug="africa", name="Africa", position=9), {})
+
+    def apply(self, ops, **kw):
+        return edits.apply(ops, actor=ACTOR, source="add.edits.json", today=TODAY, **kw)
+
+    def test_add_branch_writes_the_branch_links_origin_location_and_claims(self):
+        self.apply([add_branch()])
+        b = Branch.objects.get(slug="carthage")
+        self.assertEqual((b.status, b.region.slug, b.start, b.end, b.origin_note), ("review", "africa", -814, -146, ORIGIN["note"]))
+        links = {(link.target.slug, link.relation, link.how, link.origin_position) for link in b.links.select_related("target")}
+        self.assertEqual(links, {("roman-republic", "into", "", None), ("roman-kingdom", "parent", "context", 0)})
+        self.assertEqual(Location.objects.get(entry=b).label, "Carthage, Tunisia")
+        record = Claim.objects.get(entry=b, field="as_written")
+        self.assertEqual(record.value["into"], ["roman-republic"])
+        self.assertEqual([ev.citation.url for ev in record.evidence.order_by("position")], ["https://en.wikipedia.org/wiki/Carthage", SI])
+        self.assertEqual(Claim.objects.get(entry=b, field="origin").value, {"note": ORIGIN["note"], "links": ["roman-kingdom"]})
+        self.assertTrue(Claim.objects.filter(entry=b, field="date", key="start").exists())  # split at once
+        self.assertEqual(set(Revision.objects.filter(table_name="timeline_branch", row_pk=str(b.pk)).values_list("actor", flat=True)), {ACTOR})
+        # Published, it reaches the snapshot in SCHEMA's shape.
+        self.apply([{"op": "approve", "entry": "carthage", "reason": "ok"}])
+        got = next(x for x in build_content()["branches"] if x["id"] == "carthage")
+        self.assertEqual((got["parents"], got["into"], got["origin"]["links"][0]["how"], got["geo"]["r"]), (["roman-kingdom"], ["roman-republic"], "context", 40))
+
+    def test_add_event_on_a_branch_added_earlier_in_the_file_and_published_under_the_rule(self):
+        out = self.apply([add_branch(status="published"), add_event(status="published")])
+        e = Event.objects.get(slug="an-carthage-destroyed")
+        self.assertEqual((e.status, e.branch.slug, e.imp), ("published", "carthage", 1))
+        self.assertEqual([link.branch.slug for link in e.event_links.all()], ["roman-republic"])
+        self.assertEqual(out.counts, {"add_branch": 1, "add_event": 1})
+        got = next(x for x in build_content()["events"] if x["id"] == "an-carthage-destroyed")
+        self.assertEqual((got["link"], len(got["cites"]), got["geo"]["label"]), ("roman-republic", 2, "Carthage, Tunisia"))
+        self.assertTrue(Claim.objects.filter(entry=e, field="actor", key="scipio-aemilianus").exists())
+
+    def test_add_event_published_on_wikipedia_alone_is_refused_unless_overridden(self):
+        op = add_event(status="published")
+        op["event"]["branch"], op["event"]["link"], op["event"]["cites"] = "roman-republic", "un", op["event"]["cites"][:1]
+        with self.assertRaises(edits.EditsInvalid) as cm:
+            self.apply([op])
+        self.assertIn("no supporting source other than Wikipedia", str(cm.exception))
+        self.assertFalse(Entry.objects.filter(slug="an-carthage-destroyed").exists())
+        self.apply([{**op, "override": "owner accepts Wikipedia here"}])
+        self.assertEqual(Entry.objects.get(slug="an-carthage-destroyed").status, "published")
+        op2 = add_event()
+        op2["event"].update(id="an-carthage-2", branch="roman-republic", link="un")
+        self.apply([op2])
+        self.assertEqual(Entry.objects.get(slug="an-carthage-2").status, "review")  # the default
+
+    def test_add_connection_needs_a_why_where_the_entry_has_none(self):
+        with self.assertRaises(edits.EditsInvalid) as cm:
+            self.apply([{"op": "add_connection", "entry": "an-punic-wars", "to": "un-charter", "note": "x", "reason": "r"}])
+        self.assertIn("has no why", str(cm.exception))
+        self.apply([add_branch(status="published"),
+                    {"op": "add_connection", "entry": "an-punic-wars", "to": "carthage", "note": "Rome's wars against Carthage",
+                     "why": "They made Rome the power of the western Mediterranean.", "reason": "r",
+                     "cites": [{"t": "Punic Wars | Britannica", "u": EB}]},
+                    {"op": "add_connection", "entry": "an-caesar-assassinated", "to": "an-punic-wars", "note": "Rome's earlier wars", "reason": "r"}])
+        content = build_content()
+        punic = next(x for x in content["events"] if x["id"] == "an-punic-wars")
+        self.assertEqual((punic["connections"], [c["u"] for c in punic["whyCites"]]), ([{"id": "carthage", "note": "Rome's wars against Carthage"}], [EB]))
+        caesar = next(x for x in content["events"] if x["id"] == "an-caesar-assassinated")
+        self.assertEqual([c["id"] for c in caesar["connections"]], ["un-charter", "an-punic-wars"])  # appended after the existing one
+        self.assertEqual(Claim.objects.get(entry__slug="an-caesar-assassinated", field="why").value["connections"], ["un-charter", "an-punic-wars"])
+        # Again, with a new note: the same connection's note changes; no second row.
+        self.apply([{"op": "add_connection", "entry": "an-caesar-assassinated", "to": "an-punic-wars", "note": "Rome's wars before", "reason": "r"}])
+        self.assertEqual(Connection.objects.filter(source__slug="an-caesar-assassinated").count(), 2)
+
+    def test_add_ops_shape_limits_and_order_are_all_listed(self):
+        bad_branch = add_branch()
+        bad_branch["branch"].update(region="atlantis", text="t" * 241, into=["later-branch"], end=-900)
+        bad_branch["origin"]["links"][0]["how"] = "vibes"
+        bad_branch["geo"]["r"] = 0
+        bad_event = add_event()
+        bad_event["event"].update(title="x" * 61, links=["un"], branch="nowhere")
+        later = add_branch()
+        later["branch"]["id"], later["origin"] = "later-branch", None
+        del later["origin"]
+        problems = edits.check([bad_branch, bad_event, later, {"op": "add_connection", "entry": "un", "to": "un", "note": "n" * 91, "reason": "r"},
+                                {"op": "add_branch", "branch": {**BRANCH, "id": "carthage"}, "reason": "twice"}])
+        text = "\n".join(problems)
+        for needle in ("region 'atlantis' doesn't exist", "text must be 1–240", "end (-900) must be after start", "how must be one of",
+                       "r (km) must be more than 0", "title must be 1–60", "give link or links, not both", "branch 'nowhere' doesn't exist",
+                       "later-branch is added later, by op #2", "can't connect to itself", "note must be 1–90", "carthage is already added by op #0"):
+            self.assertIn(needle, text)
+        with self.assertRaises(edits.EditsInvalid) as cm:
+            self.apply([{**add_event(), "event": {**EVENT, "id": "un-charter", "branch": "un"}}])
+        self.assertIn("un-charter is already an entry's id", str(cm.exception))
+
+    def test_add_ops_dry_run_and_validate_only(self):
+        before = Revision.objects.count()
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "add.edits.json"
+            path.write_text(json.dumps([add_branch(), add_event(), {"op": "add_connection", "entry": "an-carthage-destroyed", "to": "an-punic-wars",
+                                                                     "note": "The last of the three wars", "why": "It ended Carthage.", "reason": "r",
+                                                                     "cites": [{"t": "Third Punic War", "u": "https://en.wikipedia.org/wiki/Third_Punic_War"}]}]))
+            out = StringIO()
+            call_command("apply_edits", str(path), "--validate-only", stdout=out)
+            self.assertIn("3 ops valid (add_branch 1, add_connection 1, add_event 1)", out.getvalue())
+            out = StringIO()
+            call_command("apply_edits", str(path), "--actor", ACTOR, "--dry-run", stdout=out)
+        text = out.getvalue()
+        for needle in ("#0 add_branch carthage: reviewer: ADD", "+ branch carthage", "+ branch link", "(carthage into roman-republic)",
+                       "+ location", "+ connection", "(an-carthage-destroyed → an-punic-wars)", "dry run, rolled back: nothing written"):
+            self.assertIn(needle, text)
+        self.assertEqual(Revision.objects.count(), before)
+        self.assertFalse(Entry.objects.filter(slug="carthage").exists())
