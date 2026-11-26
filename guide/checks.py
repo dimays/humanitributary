@@ -1,5 +1,5 @@
 """`make check-guide`: the technical guide is whole and true to the code
-(docs/guide/README.md, ADR 0020).
+(docs/guide/README.md, ADR 0014).
 
 1. Every chapter's front matter reads (`title`, `summary`, `order`, `covers`),
    and every `covers` pattern matches a file.

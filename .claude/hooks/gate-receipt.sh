@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The gate must pass before a pull request (AGENTS.md "Working", ADR 0021).
+# The gate must pass before a pull request (AGENTS.md "Working", ADR 0015).
 # Run before `gh pr create`: blocks it (exit 2) unless `make check-pr` passed
 # on the code committed now. A draft (--draft, -d) isn't held.
 # The code is the folder the command runs in (hook_input.py), so a session in

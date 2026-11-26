@@ -235,6 +235,6 @@ says to stamp first, then commit in a separate command.
   `tests/test_guide.py` holds the command parsing; add a case for any
   command shape that fooled it.
 
-The decisions are [ADR 0020](../adr/0020-docs-technical-guide.md) (the
-guide and its stamps) and [ADR 0021](../adr/0021-docs-the-gate-and-hooks.md)
+The decisions are [ADR 0014](../adr/0014-technical-guide.md) (the
+guide and its stamps) and [ADR 0015](../adr/0015-the-gate-and-hooks.md)
 (the gate, the receipt and the hooks).

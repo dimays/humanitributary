@@ -34,7 +34,7 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 | `var/` | Gitignored: `gate-receipt.json` (the gate's last pass), `legacy.json` dumps, `releases/<version>/` snapshots (`releases/latest` → newest), `raw/` fetched documents by content hash, `logs/` (the scheduled runs). |
 | `ops/` | The local schedule: `run-jobs.sh` (start Docker/Postgres or skip, then `run_jobs`), `launchd/run-jobs.plist` (template), `schedule.sh` (install / uninstall / status). |
 | `docs/guide/` | The technical guide: a chapter per part of the platform, each stamped against the code it `covers` (`stamps.json`); `README.md` lists the chapters and says how to write one. `docs/architecture.md` points into it. |
-| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0020, the gate: 0021); the data model with an ER sketch; how claims are checked; the branch rules. |
+| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015); the data model with an ER sketch; how claims are checked; the branch rules. |
 | `guide/` | The guide's tools behind `manage.py guide check / stamp / status / covers / index`: `chapters.py`, `coverage.py` (what a chapter covers, its hash), `checks.py`. No models. |
 | `scripts/` | `make_env.py`; `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
 | `.claude/settings.json`, `.claude/hooks/` | Hooks only: before `git commit`, the guide must be fresh; before `gh pr create`, the gate must have passed on the committed code; at the end of a turn, a reminder. |
@@ -131,7 +131,7 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
     chapter, update the chapter, then `make guide-stamp CHAPTER=<name>` and
     commit `docs/guide/stamps.json` with it. A stamp says you read the
     chapter against the code; never stamp without reading. A new part of the
-    platform gets a chapter (`docs/guide/README.md`). (ADR 0020)
+    platform gets a chapter (`docs/guide/README.md`). (ADR 0014)
 15. **Every real decision gets an ADR; amend or supersede, never silently
     edit an accepted one.** A new behavior, a new source, a changed
     threshold's rationale, a new dependency or service: write
@@ -139,7 +139,7 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
     change a decision, a new ADR's Status says it amends, refines or
     supersedes the old one, with a link, and the old one's Status names it
     back. `make check-adr` enforces the form; `make adr-index` updates the
-    index. (ADR 0020)
+    index. (ADR 0014)
 
 ## Working
 

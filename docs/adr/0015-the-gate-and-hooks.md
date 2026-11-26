@@ -1,4 +1,4 @@
-# 0021 — One gate before every pull request, a receipt for it, and hooks that hold the line
+# 0015 — One gate before every pull request, a receipt for it, and hooks that hold the line
 
 **Status:** proposed (November 2026)
 

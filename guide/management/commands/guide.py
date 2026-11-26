@@ -1,4 +1,4 @@
-"""The technical guide's tools (docs/guide/README.md, ADR 0020):
+"""The technical guide's tools (docs/guide/README.md, ADR 0014):
 
     manage.py guide check                 every chapter whole and true to its code (make check-guide)
     manage.py guide stamp ingestion …     record that you reviewed a chapter against the code

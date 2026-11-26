@@ -1,4 +1,4 @@
-"""`make check-pr`: the gate before a pull request, and what CI runs (ADR 0021).
+"""`make check-pr`: the gate before a pull request, and what CI runs (ADR 0015).
 
     uv run python scripts/check_pr.py             run the gate; on a pass, write the receipt
     python3 scripts/check_pr.py --receipt         did the code committed now pass? (the hook

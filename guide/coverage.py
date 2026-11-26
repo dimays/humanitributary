@@ -1,5 +1,5 @@
 """Which code a chapter covers, and whether it changed since the chapter was
-reviewed (docs/guide/README.md, ADR 0020).
+reviewed (docs/guide/README.md, ADR 0014).
 
 A chapter's `covers` are paths and globs (`ingest/**`, `ingest/*.py`, a
 directory, `!pattern` to leave something out). The files they match are

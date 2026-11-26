@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The technical guide must stay true to the code (AGENTS.md rule 14, ADR 0020).
+# The technical guide must stay true to the code (AGENTS.md rule 14, ADR 0014).
 # commit: run before `git commit` and block it (exit 2) if the guide is stale.
 # stop:   run when Claude finishes a turn; a reminder only, never blocks.
 mode="${1:-commit}"

@@ -34,8 +34,8 @@ things work now; an ADR says why, and what was given up.
 | [0011](0011-branch-governance.md) | Branch governance: rules propose, people decide, applying is mechanical | accepted |
 | [0012](0012-ingestion.md) | Ingestion: scheduled, deterministic collection into the agents' queue | accepted |
 | [0013](0013-source-policy.md) | Source policy: what jobs fetch, what they never do, and why | accepted |
-| [0020](0020-docs-technical-guide.md) | A technical guide whose chapters are stamped against the code they cover | proposed |
-| [0021](0021-docs-the-gate-and-hooks.md) | One gate before every pull request, a receipt for it, and hooks that hold the line | proposed |
+| [0014](0014-technical-guide.md) | A technical guide whose chapters are stamped against the code they cover | proposed |
+| [0015](0015-the-gate-and-hooks.md) | One gate before every pull request, a receipt for it, and hooks that hold the line | proposed |
 <!-- index:end -->
 
 ## Template
