@@ -303,3 +303,51 @@ class HostedSettingsTests(TestCase):
         r = self.settings_load(STORAGE_BACKEND="local")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.split(), ["require", "3600", "WARNING"], "the database over TLS, HSTS on, no per-request URLs in the logs")
+
+
+class PublicPageTests(FreshStorage, TestCase):
+    """`/` serves the latest release's page from the store; its images and outlines.js come from site/ (ADR 0024)."""
+
+    def setUp(self):
+        super().setUp()
+        from infra import site
+
+        site.reset()
+        self.addCleanup(site.reset)
+
+    def publish_page(self, version, html):
+        storage.write(storage.RELEASES, storage.release_key(version, "timeline.html"), html)
+        storage.write_pointer({"version": version})
+
+    def test_nothing_published_is_a_503(self):
+        self.assertEqual(self.client.get("/").status_code, 503)
+
+    def test_latest_page_with_cache_headers(self):
+        self.publish_page("2026.11.26.1", b"<title>one</title>")
+        r = self.client.get("/")
+        self.assertEqual((r.status_code, r.content, r["X-Release"]), (200, b"<title>one</title>", "2026.11.26.1"))
+        self.assertIn("public, max-age=", r["Cache-Control"])
+        self.assertEqual(self.client.get("/", HTTP_IF_NONE_MATCH=r["ETag"]).status_code, 304)
+
+    def test_a_new_pointer_reaches_readers_after_the_ttl(self):
+        from infra import site
+
+        self.publish_page("2026.11.26.1", b"one")
+        self.client.get("/")
+        self.publish_page("2026.11.26.2", b"two")
+        self.assertEqual(self.client.get("/").content, b"one", "the pointer is re-read only after POINTER_TTL")
+        with mock.patch.object(site, "POINTER_TTL", 0):
+            self.assertEqual(self.client.get("/").content, b"two")
+
+    def test_assets_from_site_and_nothing_else(self):
+        r = self.client.get("/images/abbasid.jpg")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("max-age=", r["Cache-Control"])
+        self.assertEqual(self.client.get("/outlines.js").status_code, 200)
+        self.assertIn(self.client.get("/images/../build.mjs").status_code, (400, 404), "refused, never served")
+        self.assertEqual(self.client.get("/build.mjs").status_code, 404)
+
+    @override_settings(ALLOWED_HOSTS=["example.org", "www.example.org", "testserver"])
+    def test_www_redirects_to_the_bare_host(self):
+        r = self.client.get("/images/x.jpg?a=1", HTTP_HOST="www.example.org")
+        self.assertEqual((r.status_code, r["Location"]), (301, "https://example.org/images/x.jpg?a=1"))

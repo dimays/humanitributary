@@ -272,11 +272,11 @@ and mail settings are the owner's to set, never copied from a `.env`. Buildpacks
 then `heroku/python`; staging publishes with `heroku run python manage.py publish`. Staging holds the platform's data
 since November 26, 2026 (moved from the laptop) and is the only place jobs run
 (the `worker` dyno); agents use `https://data.humanitributary.com/api/agent`.
-DNS is Cloudflare's (the registrar is Namecheap): `data` points at Heroku, the
-bare domain waits for the public page. A key never goes in a URL (logs). Never
+DNS is Cloudflare's (the registrar is Namecheap): `data`, the bare domain and
+`www` point at the app, which serves the public page at `/` (the latest
+release, from the releases store: `infra/site.py`, ADR 0024). A key never goes in a URL (logs). Never
 import data into a hosted database without the owner. The
-public site is a separate static deploy of a release's `timeline.html`,
-`images/` and `outlines.js` to a CDN (ADR 0001). Commands and the config vars:
+page never reads the database (ADR 0001); a CDN can go in front later. Commands and the config vars:
 `docs/guide/operations.md`, "Hosted: Heroku".
 
 ## Style

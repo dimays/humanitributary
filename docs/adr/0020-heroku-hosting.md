@@ -1,6 +1,6 @@
 # 0020 — Heroku hosts the platform: a pipeline, staging first
 
-**Status:** proposed (November 2026); amends [0016](0016-object-storage.md) (local storage is refused when hosted unless stated); amends [0019](0019-processes-and-release-gates.md) (the worker runs as a dyno); amends [0013](0013-source-policy.md) (hosted keys are config vars, and no key rides in a URL)
+**Status:** proposed (November 2026); amends [0016](0016-object-storage.md) (local storage is refused when hosted unless stated); amends [0019](0019-processes-and-release-gates.md) (the worker runs as a dyno); amends [0013](0013-source-policy.md) (hosted keys are config vars, and no key rides in a URL); amended by [0024](0024-the-app-serves-the-page.md) (the hosted app takes the bare domain)
 
 ## Context
 
