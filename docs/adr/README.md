@@ -43,6 +43,7 @@ things work now; an ADR says why, and what was given up.
 | [0020](0020-heroku-hosting.md) | Heroku hosts the platform: a pipeline, staging first | proposed |
 | [0021](0021-the-cutover.md) | The cutover: Postgres is the only source of truth, and the legacy files are frozen | proposed |
 | [0022](0022-ingestion-tuning.md) | Ingestion tuned on its first run: a threshold from the data, a daily cap, routing by role, branches only where Wikidata says so | proposed |
+| [0023](0023-edit-files.md) | A reviewer's verdicts are applied as one audited edit file | proposed |
 <!-- index:end -->
 
 ## Template
