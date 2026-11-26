@@ -224,8 +224,11 @@ def _txid() -> int:
 
 
 def apply(proposal, ops: list[dict] | None = None, *, actor: str, task=None, note: str = "") -> dict:
-    """Run a proposal's operations (or the agent's final version of them) and mark it applied. → what was recorded."""
-    ops = ops if ops is not None else proposal.payload.get("operations", [])
+    """Run a proposal's operations (or the agent's final version of them) and mark it applied. → what was recorded.
+
+    Without `ops`: the operations an agent accepted it with over the API (payload["accepted"]), else the rule's own."""
+    if ops is None:
+        ops = (proposal.payload.get("accepted") or {}).get("operations") or proposal.payload.get("operations", [])
     problems = validate(ops)
     if problems:
         raise OperationError("; ".join(problems))

@@ -1,21 +1,41 @@
 ---
 name: review-branch-proposals
-description: Drain the review_branch_proposal queue in the Humanitributary repo — read what a branch rule proposed (split, merge, end date, new branch), decide, and either apply it mechanically (writing the names, texts and cites it leaves to you) or reject it with a reason. Use when asked to review branch proposals or to work review_branch_proposal tasks.
+description: Drain the review_branch_proposal queue in the Humanitributary repo through the agent API — read what a branch rule proposed (split, merge, end date, new branch), decide, and either accept it with the operations written out (names, texts and cites it leaves to you) for the owner to apply, or reject it with a reason. Use when asked to review branch proposals or to work review_branch_proposal tasks.
 ---
 
 # Review branch proposals
 
 The branch rules (`docs/branch-rules.md`) propose structural changes; you decide them. Read `AGENTS.md` first.
 
+## The API
+
+Work through the agent API, never the database: you hold a token, not database credentials (ADR 0017). Two
+variables come from your environment: `HUMANITRIBUTARY_API` (the base URL: `http://127.0.0.1:8000/api/agent` when
+the owner runs `make up`, the production URL later) and `HUMANITRIBUTARY_API_TOKEN` (made by the owner with
+`manage.py agent_token create <name> --scope <kind>`; never print or log it). The same calls work locally and in
+production.
+
+```bash
+api() { curl -sS -H "Authorization: Bearer $HUMANITRIBUTARY_API_TOKEN" -H "Content-Type: application/json" "$@"; }
+api "$HUMANITRIBUTARY_API/"                        # who you are, your scopes, every endpoint
+api "$HUMANITRIBUTARY_API/schemas/<kind>"          # the result shape `complete` accepts
+```
+
+A claim is a lease (30 minutes by default): `POST tasks/<id>/extend` for more, `POST tasks/<id>/release` to hand
+it back untouched, `POST tasks/<id>/fail -d '{"error": "why", "retry": true}'` to give up. `complete` checks the
+result against its schema (422 lists the problems; the task stays yours to fix and resend) and applies it through
+the service layer as `agent:<your name>`, linked to the task. What you write lands in review; it is never published
+by the API. 429 means you are over the rate limit: wait `retry_after` seconds.
+
 ## 1. Claim a task
 
 ```bash
-uv run python manage.py tasks next --kind review_branch_proposal --claim --agent agent:<you>
+api -X POST "$HUMANITRIBUTARY_API/tasks/claim" -d '{"kinds": ["review_branch_proposal"]}'
 ```
 
-The payload has everything: `rule`, `summary`, `strength`, `metrics` of each branch involved, `evidence` (clusters,
-gaps, shared events, with event ids, titles, dates and places), `operations` (what would run) and `needs_agent`
-(the fields you must write). `manage.py branches show <proposal>` prints the proposal itself.
+The payload has everything: `proposal`, `rule`, `summary`, `strength`, `metrics` of each branch involved, `evidence`
+(clusters, gaps, shared events, with event ids, titles, dates and places), `operations` (what would run) and
+`needs_agent` (the fields you must write). `GET branches/<slug>` shows a branch's events, metrics and open proposals.
 
 ## 2. Decide
 
@@ -32,40 +52,28 @@ Ask whether a reader would be better served by the change:
 Look things up as you would to write an event (`site/SCHEMA.md` citation rules: fetch and read every page you cite;
 never openstax.org; britannica.com only in a browser).
 
-## 3a. Accept: write the fields, then apply
+## 3a. Accept: write the operations
 
-Copy `operations` to a file and fill every `needs_agent` field: a branch `name`, `text` (one or two sentences in
-SCHEMA style, every statement supported), `start_when` / `end_when` as the source puts them, and `cites`
-(`[{"t": title, "u": url, "k": kind}]`, at least one, pages you read). You may drop moves that are wrong or add
-ones the rule missed; keep the shape of each op. Then:
+Copy `operations` and fill every `needs_agent` field: a branch `name`, `text` (one or two sentences in SCHEMA style,
+every statement supported), `start_when` / `end_when` as the source puts them, and `cites`
+(`[{"t": title, "u": url, "k": kind}]`, at least one, pages you read). You may drop moves that are wrong or add ones
+the rule missed; keep the shape of each op.
 
 ```bash
-uv run python manage.py branches apply <proposal> --ops ops.json --agent agent:<you> --task <task> \
-    --legacy-file site/data/99-proposal-<proposal>.js
+api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" -d '{"result": {"decision": "accept", "proposal": <id>,
+  "note": "why, in one sentence", "operations": [ … ]}}'
 ```
 
-`apply` refuses while a placeholder (`TODO`) or a cite-less new branch remains. Until the cutover keep
-`--legacy-file` (the next `make import` would otherwise undo the change), then run `make roundtrip`: it must still
-print "byte-identical" for both the JSON and the page.
+The API refuses (422) while a placeholder (`TODO`) or a cite-less new branch remains. An accepted proposal changes
+nothing yet: it is stored with your operations and status `accepted`, and the owner runs
+`manage.py branches apply <proposal>` (with `--legacy-file` until the cutover), because a structural change reaches
+the page at once.
 
 ## 3b. Reject
 
 ```bash
-uv run python manage.py branches reject <proposal> --note "why, in one sentence" --agent agent:<you>
+api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" -d '{"result": {"decision": "reject", "proposal": <id>, "note": "why, in one sentence"}}'
 ```
 
 The rule will not propose it again for 180 days, and then only if its evidence grew by half. Say why so the owner can
-tune the thresholds.
-
-## 4. Finish
-
-```bash
-uv run python manage.py tasks complete <task> --result result.json --agent agent:<you>
-```
-
-with `{"decision": "applied" | "rejected", "proposal": <id>, "note": "…", "legacy_file": "…"}`. If you cannot decide,
-`tasks release <task>` and say why in the task's error with `tasks fail <task> --error "…"` only if it can never be
-decided.
-
-A mistake can be undone: `manage.py branches revert <proposal> --agent agent:<you>` restores every row the apply
-changed (it refuses if they have changed since); delete the legacy file it wrote, too.
+tune the thresholds. If you cannot decide, `POST tasks/<id>/release`; `fail` only if it can never be decided.

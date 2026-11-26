@@ -5,22 +5,19 @@ description: Work verify_claim tasks that ingestion caused in the Humanitributar
 
 # Verify stale claims and suggested second sources
 
-This skill adds ingestion's two cases to `.claude/skills/verify-claims` (read that first: claiming, stances and
-`facts record` are the same). Both arrive as `verify_claim` tasks, keyed `claim:<id>`, so each claim has at most
-one open task.
+This skill adds ingestion's two cases to `.claude/skills/verify-claims` (read that first: the API, claiming,
+stances and the result shape are the same). Both arrive as `verify_claim` tasks, keyed `claim:<id>`, so each claim
+has at most one open task.
 
 ```bash
-uv run python manage.py tasks next --kind verify_claim --claim --agent agent:<you>
+api -X POST "$HUMANITRIBUTARY_API/tasks/claim" -d '{"kinds": ["verify_claim"]}'
 ```
 
 ## Dead, moved or changed links (`reason`: `dead_link`, `content_changed`)
 
 The daily `link_health` job re-checked the citation and the `facts sweep` turned the result into this task. The
-history is in the admin (Ingest › Link checks) or:
-
-```bash
-uv run python manage.py shell -c "from ingest.models import LinkCheck; print(list(LinkCheck.objects.filter(citation__url='<url>').values('checked_at','outcome','http_status','final_url','archive_url')[:5]))"
-```
+payload's `evidence` rows carry what it found (`http_status`, `archive_url`, `page_changed`); the full history is
+in the admin (Ingest › Link checks) for the owner.
 
 - **Dead** (404/410, a redirect to the site's home page, or 599, unreachable three rounds running): read the
   `archive_url` (Wayback) copy if there is one. It may stand as the citation (kind `archive`) if it says the same.
@@ -41,12 +38,11 @@ suggestion is not evidence.** The job matched words, not meaning.
 
 1. Open each suggestion, best score first. A DOI resolves to the publisher's page: read the abstract or the
    text you can reach. A paywalled abstract that doesn't state the claim doesn't count.
-2. If it **explicitly** supports the claim (or one atomic part: the date, the place, a number), record it:
-   `uv run python manage.py facts record --claim <part id> --url <url> --stance supports --excerpt "≤ 25 words" --agent agent:<you> --task <task>`.
-   Then mark the suggestion:
-   `uv run python manage.py shell -c "from ingest.models import SuggestedSource as S; S.objects.filter(pk=<id>).update(status='accepted', decided_by='agent:<you>')"`.
-3. Otherwise mark it `rejected` the same way. Two or three rejections with nothing better: search yourself (a
-   museum, a university, a national archive), or leave the claim single-source and say so in the result.
+2. If it **explicitly** supports the claim (or one atomic part: the date, the place, a number), put it in the
+   result's `evidence` on that part (`{"claim": <part id>, "url": …, "stance": "supports", "excerpt": "≤ 25 words"}`)
+   and its id in `suggestions.accepted`.
+3. Otherwise put its id in `suggestions.rejected`. Two or three rejections with nothing better: search yourself (a
+   museum, a university, a national archive), or leave the claim single-source and say so in the note.
 
-Finish with `tasks complete` as in `verify-claims`, adding `"suggestions": {"accepted": [ids], "rejected": [ids]}`
-to the result.
+Complete as in `verify-claims`, with `"suggestions": {"accepted": [ids], "rejected": [ids]}` in the result: the API
+records the evidence and marks each suggestion decided by you.
