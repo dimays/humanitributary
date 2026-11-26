@@ -3,7 +3,7 @@ PY := uv run python
 M := $(PY) manage.py
 TODAY := $(shell date +%F)
 
-.PHONY: help env db db-stop psql migrate dump import publish build build-release roundtrip test check serve
+.PHONY: help env db db-stop psql migrate dump import publish build build-release roundtrip test check serve jobs digest schedule-install schedule-uninstall schedule-status
 
 help: ## List the commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -56,3 +56,18 @@ check: ## Django checks, missing migrations, and the site's data validation
 
 serve: ## The admin (the owner's review screen) at http://localhost:8000/admin/
 	$(M) runserver 8000
+
+jobs: ## Run whatever ingestion jobs are due, once (manage.py run_jobs)
+	$(M) run_jobs
+
+digest: ## The queue digest an agent session reads first
+	$(M) digest
+
+schedule-install: ## Install the launchd agent: run_jobs every 15 minutes (owner's decision)
+	@ops/schedule.sh install
+
+schedule-uninstall: ## Remove the launchd agent
+	@ops/schedule.sh uninstall
+
+schedule-status: ## Is the schedule installed, and the latest log lines
+	@ops/schedule.sh status

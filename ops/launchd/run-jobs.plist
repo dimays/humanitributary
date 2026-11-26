@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: ops/schedule.sh install fills in @LABEL@ and @REPO@ and copies it to ~/Library/LaunchAgents/@LABEL@.plist.
+     Runs ops/run-jobs.sh every 15 minutes (and once at load). -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>@LABEL@</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>@REPO@/ops/run-jobs.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>@REPO@</string>
+  <key>StartInterval</key>
+  <integer>900</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>LowPriorityIO</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>@REPO@/var/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>@REPO@/var/logs/launchd.err.log</string>
+</dict>
+</plist>
