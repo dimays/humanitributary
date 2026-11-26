@@ -76,7 +76,7 @@ def sync_items(prefix: str, items: list[dict], *, actor: str, counts: Counter):
             if best and ratio >= 0.85:
                 key = best
         seen.add(key)
-        _, state = upsert_candidate(key, created_by=actor, values=it["values"], entities=it["entities"])
+        _, state = upsert_candidate(key, created_by=actor, values=it["values"], entities=it["entities"], documents=it.get("documents"))
         counts[f"candidates_{state}"] += 1
     for k, c in existing.items():
         if k not in seen and c.status == Candidate.Status.QUEUED and not c.details.get("gone"):
@@ -166,6 +166,7 @@ def portal_day(fetcher, ctx, d: date, page: dict):
                                     "external": it["external"], "roles": roles, "document_id": doc.pk, "document_url": url,
                                     "attribution": f"Wikipedia, \"{portal_title(d)}\" ({LICENSE})"}),
             "entities": [ents[t] for t in set(it["links"]) | set(it["topics"]) if t in ents],
+            "documents": [doc],
         })
     sync_items(f"portal:{d.isoformat()}:", rows, actor=ctx.actor, counts=ctx.counts)
     ctx.counts["items"] += len(items)
@@ -320,6 +321,7 @@ def _year_page(ctx, year, branch, entity, page, publisher_for, set_document_enti
                                     "roles": {ents[t].qid: "item" for t in it["links"] if t in ents}, "document_id": doc.pk, "document_url": url,
                                     "attribution": f"Wikipedia, \"{page['title']}\" ({LICENSE})"}),
             "entities": [ents[t] for t in set(it["links"]) if t in ents],
+            "documents": [doc],
         })
     sync_items(f"year:{page['title']}:", rows, actor=ctx.actor, counts=ctx.counts)
     ctx.counts["items"] += len(items)

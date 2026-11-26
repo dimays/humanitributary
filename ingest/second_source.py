@@ -1,4 +1,4 @@
-"""Second sources: walk the claims only Wikipedia supports, ask the lookup adapters for material that may support them,
+"""Second sources: walk the claims only Wikipedia supports (evidence.confidence.wikipedia_only), ask the lookup adapters for material that may support them,
 store what they find as SuggestedSource rows and queue a `verify_claim` task for an agent to read and decide.
 Never writes Evidence and never changes a claim's status: corroboration needs an agent's reading (ADR 0004).
 
@@ -18,6 +18,19 @@ from work.models import AgentTask
 
 from . import lookup, wikidata
 from .models import BranchEntity, Candidate, Entity, JobState, SuggestedSource
+
+
+def wikipedia_only_claims() -> list[int]:
+    """Claims whose supporting evidence is all Wikipedia (the publishing rule's question, evidence.confidence)."""
+    from collections import defaultdict
+
+    from evidence.confidence import EVIDENCE_FIELDS, wikipedia_only
+    from evidence.models import Evidence
+
+    rows = defaultdict(list)
+    for row in Evidence.objects.values_list("claim_id", *EVIDENCE_FIELDS).order_by("claim_id", "position"):
+        rows[row[0]].append(row[1:])
+    return sorted(cid for cid, r in rows.items() if wikipedia_only(r))
 
 
 def claim_query(fetcher, claim, counts) -> lookup.Query:
@@ -56,7 +69,7 @@ def run_second_source(ctx):
     limit = int(ctx.opt("limit", 60))
     state, _ = JobState.objects.get_or_create(name="second_source")
     after = int(state.state.get("after_claim", 0))
-    qs = Claim.objects.filter(status="single_source").select_related("entry").order_by("id")
+    qs = Claim.objects.filter(pk__in=wikipedia_only_claims()).select_related("entry").order_by("id")
     batch = list(qs.filter(pk__gt=after)[:limit])
     if len(batch) < limit:  # wrap around: a later round may find what an earlier one didn't
         batch += list(qs.exclude(pk__in=[c.pk for c in batch])[: limit - len(batch)])
@@ -77,15 +90,24 @@ def run_second_source(ctx):
         for h in hits:
             ctx.counts[f"family_{_family(h.adapter)}"] += 1
         sugg = [s for s in SuggestedSource.objects.filter(claim=claim, status="suggested").order_by("-score", "id")[:5]]
+        rows = [{"id": s.pk, "adapter": s.adapter, "url": s.url, "title": s.title, "publisher": s.publisher_domain,
+                 "date": s.date_text, "snippet": s.snippet, "kind": s.kind, "score": s.score, "ids": s.ids} for s in sugg]
+        # The facts sweep may already have queued this claim (same dedupe key, reason no_second_source): add to it.
+        open_task = AgentTask.objects.filter(kind="verify_claim", dedupe_key=f"claim:{claim.pk}", status="queued").first()
+        if open_task is not None:
+            if (open_task.payload or {}).get("suggested_sources") != rows:
+                open_task.payload = {**(open_task.payload or {}), "suggested_sources": rows}
+                open_task.save(update_fields=["payload"])
+            ctx.counts["verify_tasks_enriched"] += 1
+            continue
         _, created = queue.enqueue("verify_claim", created_by=ctx.actor, dedupe_key=f"claim:{claim.pk}", priority=2, target_claim=claim,
                                    target_entry=claim.entry, payload={
-                                       "reason": "second source: only Wikipedia supports this claim", "entry": claim.entry.slug,
+                                       "reason": "no_second_source", "entry": claim.entry.slug,
                                        "field": claim.field, "value": claim.value, "query": {"title": q.title, "year": q.year},
-                                       "suggested_sources": [{"id": s.pk, "adapter": s.adapter, "url": s.url, "title": s.title, "publisher": s.publisher_domain,
-                                                              "date": s.date_text, "snippet": s.snippet, "kind": s.kind, "score": s.score, "ids": s.ids} for s in sugg],
-                                       "instructions": "Skill: .claude/skills/verify-stale-claims (second-source section). A suggestion is not "
-                                                       "evidence: read the page; only if it explicitly supports the claim add Evidence (agent_read) "
-                                                       "and mark the suggestion accepted, else rejected."})
+                                       "suggested_sources": rows,
+                                       "instructions": "Skill: .claude/skills/verify-claims (\"Suggested second sources\"). A suggestion is not "
+                                                       "evidence: read the page; only if it explicitly supports the claim record it with "
+                                                       "`manage.py facts record` and mark the suggestion accepted, else rejected."})
         ctx.counts["verify_tasks_created" if created else "verify_tasks_existing"] += 1
     if batch:
         state.state["after_claim"] = max(c.pk for c in batch) if len(batch) == limit else 0

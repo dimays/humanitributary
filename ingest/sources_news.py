@@ -67,7 +67,7 @@ class NewsWriter:
             values=dict(kind=kind, title=title[:300], summary=text, when_text=when or when_text(d), y_guess=decimal_year(d), precision="day",
                         details={"source": self.source, "date": d.isoformat(), "url": curl, "publisher": doc.publisher.domain if doc.publisher else "",
                                  "roles": {e.qid: "alias" for e in mentions}, "document_id": doc.pk, **(metadata or {})}),
-            entities=list(mentions),
+            entities=list(mentions), documents=[doc],
         )
         ctx.counts[f"candidates_{cstate}"] += 1
         return doc

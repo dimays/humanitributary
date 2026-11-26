@@ -14,9 +14,12 @@ browser), and hosts that answered with a bot challenge in the last BLOCKED_COOLD
   "error", retried next round.
 - Dead links get a Wayback Machine snapshot looked up (archive.org availability API).
 
-Every result is a LinkCheck row; the Citation keeps the latest (written through revising("job:link_health")).
-For dead and changed citations, every claim they support is marked stale (recheck_after = yesterday, then its
-status recomputed by evidence.confidence) and gets a `verify_claim` task.
+Every result is a LinkCheck row; the Citation keeps the latest (`last_checked_at`, `http_status`, `content_hash`,
+`archive_url`, written through revising("job:link_health")). The fact base takes it from there (docs/adr/0009-fact-base.md):
+`facts sweep` (the `facts_sweep` job, which runs right after this one) sees a dead link (status ≥ 400) or a content
+hash that differs from the one the evidence was checked against, pulls the claim's recheck to today and queues a
+`verify_claim` task with the page diff. A link dead after three failed rounds without an HTTP answer is recorded
+with status UNREACHABLE (599) so the sweep treats it as dead too.
 """
 
 from collections import defaultdict
@@ -26,12 +29,10 @@ from urllib.parse import quote, urlsplit
 from django.db.models import F
 from django.utils import timezone
 
-from evidence.confidence import refresh
-from evidence.models import Citation, Claim, Evidence
+from evidence.models import Citation
 from evidence.publishers import domain_of
 from revisions import revising
 from timeline.services import apply_changes
-from work import queue
 
 from . import policy
 from .extract import canonical_url, extract_html, text_hash
@@ -40,6 +41,7 @@ from .models import LinkCheck
 from .wikidata import api_get, title_from_url
 
 ACTOR = "job:link_health"
+UNREACHABLE = 599  # no HTTP answer for three rounds in a row (a non-standard code, as some proxies use)
 O = LinkCheck.Outcome
 
 
@@ -181,28 +183,6 @@ def check_url(fetcher, c: Citation, last: LinkCheck | None) -> dict:
     return {**res, "outcome": O.REDIRECTED if moved else O.OK}
 
 
-def mark_stale(citation: Citation, check: LinkCheck, counts):
-    """Each claim the citation supports: stale now (recheck_after = yesterday), status recomputed, a verify_claim task."""
-    yesterday = timezone.now().date() - timedelta(days=1)
-    claims = Claim.objects.filter(evidence__citation=citation, evidence__stance__in=["supports", "partial"]).distinct().select_related("entry")
-    with revising(ACTOR, reason=f"citation {citation.pk} {check.outcome}: re-verify"):
-        for claim in claims:
-            if claim.recheck_after is None or claim.recheck_after > yesterday:
-                apply_changes(claim, {"recheck_after": yesterday})
-            refresh(claim)
-            counts["claims_stale"] += 1
-    for claim in claims:
-        ev = list(Evidence.objects.filter(claim=claim, citation=citation).values_list("pk", flat=True))
-        _, created = queue.enqueue("verify_claim", created_by=ACTOR, dedupe_key=f"claim:{claim.pk}", priority=5 if check.outcome == O.DEAD else 3,
-                                   target_claim=claim, target_entry=claim.entry,
-                                   payload={"reason": f"citation {check.outcome}", "citation": citation.url, "citation_id": citation.pk,
-                                            "outcome": check.outcome, "http_status": check.http_status, "final_url": check.final_url,
-                                            "archive_url": check.archive_url, "evidence_ids": ev, "entry": claim.entry.slug, "field": claim.field,
-                                            "value": claim.value,
-                                            "instructions": "Skill: .claude/skills/verify-stale-claims. Re-read the source (or the archive copy, or a replacement)."})
-        counts["verify_tasks_created" if created else "verify_tasks_existing"] += 1
-
-
 def run(ctx):
     """Re-check `limit` cited URLs (default 200): status, redirects, content changes, Wayback for dead links."""
     limit = int(ctx.opt("limit", 200))
@@ -225,7 +205,7 @@ def run(ctx):
         if outcome == O.ERROR and _consecutive_failures(c) >= 2:
             outcome, r["error"] = O.DEAD, (r.get("error", "") + " (third failed round in a row)").strip()
         archive = wayback(ctx.fetcher, c.url) if outcome == O.DEAD else ""
-        check = LinkCheck.objects.create(citation=c, checked_at=now, method=r.get("method", ""), http_status=r.get("http_status"),
+        LinkCheck.objects.create(citation=c, checked_at=now, method=r.get("method", ""), http_status=r.get("http_status"),
                                          final_url=(r.get("final_url") or "")[:1000], content_hash=r.get("content_hash", ""), outcome=outcome,
                                          etag=r.get("etag", ""), last_modified=r.get("last_modified", ""), archive_url=archive,
                                          error=r.get("error", "")[:2000], elapsed_ms=r.get("elapsed_ms"))
@@ -233,6 +213,8 @@ def run(ctx):
         values = {"last_checked_at": now}
         if r.get("http_status"):
             values["http_status"] = r["http_status"]
+        if outcome == O.DEAD and not (r.get("http_status") or 0) >= 400:
+            values["http_status"] = UNREACHABLE  # dead without a 4xx (home-page redirect, or three failed rounds)
         if r.get("content_hash") and not r["content_hash"].startswith("rev:") and outcome in (O.OK, O.CHANGED, O.REDIRECTED):
             values["content_hash"] = r["content_hash"]
         if r.get("final_url") and outcome in (O.OK, O.REDIRECTED, O.CHANGED) and r["final_url"].startswith("https://"):
@@ -241,5 +223,3 @@ def run(ctx):
             values["archive_url"] = archive[:1000]
         with revising(ACTOR, reason=f"link health: {outcome}"):
             apply_changes(c, values)
-        if outcome in (O.DEAD, O.CHANGED):
-            mark_stale(c, check, ctx.counts)

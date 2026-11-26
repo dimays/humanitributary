@@ -114,6 +114,29 @@ def link_health(ctx):
     linkhealth.run(ctx)
 
 
+@job("facts_sweep", interval=DAY)
+def facts_sweep(ctx):
+    """The fact base's daily sweep (evidence/sweep.py): recompute, stale dead or changed links, verify_claim tasks."""
+    from evidence import sweep
+
+    out = sweep.sweep(actor=ctx.actor)
+    for section, stats in out.items():
+        if isinstance(stats, dict):
+            for k, v in stats.items():
+                if isinstance(v, (int, float)):
+                    ctx.counts[f"{section}.{k}"] += v
+
+
+@job("branches_review", interval=WEEK)
+def branches_review(ctx):
+    """Branch governance's weekly review (governance/review.py): rules → proposals and tasks."""
+    from governance import review
+
+    out = review.review(actor="job:branches_review")
+    ctx.counts.update(out.get("counts", {}))
+    ctx.counts["findings"] = len(out.get("findings", []))
+
+
 @job("second_source", interval=DAY)
 def second_source_(ctx):
     """Suggested second sources for claims only Wikipedia supports (verify_claim tasks)."""

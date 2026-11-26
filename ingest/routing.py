@@ -152,7 +152,7 @@ def seed_branch_entities(fetcher, ctx, *, branches=None, actor="job:seed_branch_
     from . import wikidata
 
     counts = ctx.counts
-    qs = Branch.objects.exclude(status="retracted").order_by("position", "slug")
+    qs = Branch.objects.exclude(status="retracted").order_by("slug")
     qs = qs.filter(slug__in=branches) if branches else qs.filter(entities__isnull=True)
     todo = list(qs[:limit] if limit else qs)
     cited_by = defaultdict(set)

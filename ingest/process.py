@@ -303,7 +303,7 @@ def signals(cands, keys, router: Router, counts, today: date):
         via = sorted({slug for c in (e.facts or {}).get("P17", []) for _, slug, *_ in router.by_qid.get(c, [])})
         first, last = min(s["days"]), max(s["days"])
         pr = round(min(100.0, 8 * len(s["clusters"]) + 4 * len(s["days"])), 2)
-        Candidate.objects.update_or_create(source_key=f"signal:{e.qid}", defaults=dict(
+        sig, _ = Candidate.objects.update_or_create(source_key=f"signal:{e.qid}", defaults=dict(
             kind="new_branch_signal", title=f"Possible new branch: {e.label}"[:300],
             summary=f"{e.label} ({e.description or e.kind}) appears in {len(s['clusters'])} stories on {len(s['days'])} days "
                     f"between {first} and {last}, and no branch is mapped to {e.qid}." + (f" Its country routes to: {', '.join(via)}." if via else ""),
@@ -312,6 +312,8 @@ def signals(cands, keys, router: Router, counts, today: date):
                      "first": first.isoformat(), "last": last.isoformat(), "sample_candidates": s["candidates"], "country_routes_to": via,
                      "wikipedia": article_url(e.enwiki_title) if e.enwiki_title else None},
         ))
+        if set(sig.entities.values_list("pk", flat=True)) != {e.pk}:
+            sig.entities.set([e])  # governance.review.new_branch_signals reads the signal's entity
         live.add(f"signal:{e.qid}")
         counts["signals"] += 1
     # A signal whose entity has since been mapped to a branch is settled.

@@ -445,10 +445,14 @@ class LinkHealthTests(SeededTestCase):
         self.assertNotIn("britannica", " ".join(out), "browser_only publishers are never checked")
         dead = Citation.objects.get(url__endswith="never_was_xyz")
         self.assertTrue(dead.archive_url.startswith("https://web.archive.org/"))
+        self.assertEqual(dead.http_status, 404)
+        # The fact base's sweep (the next job in the registry) turns the dead link into a stale claim and a task.
+        r = run("facts_sweep")
+        self.assertEqual(r.status, "ok", r.error)
         self.claim.refresh_from_db()
-        self.assertEqual(self.claim.status, "stale")
-        task = AgentTask.objects.get(kind="verify_claim")
-        self.assertEqual(task.target_claim_id, self.claim.pk)
+        self.assertEqual((self.claim.status, self.claim.recheck_reason), ("stale", "dead_link"))
+        task = AgentTask.objects.get(kind="verify_claim", target_claim=self.claim)
+        self.assertEqual(task.dedupe_key, f"claim:{self.claim.pk}")
         ok = Citation.objects.get(url="https://www.archives.gov/founding-docs/declaration")
         self.assertTrue(ok.content_hash and ok.last_checked_at)
         from revisions.models import Revision

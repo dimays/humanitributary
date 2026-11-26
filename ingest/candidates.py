@@ -36,7 +36,7 @@ def first_sentence(text: str, limit: int = 200) -> str:
     return s
 
 
-def upsert_candidate(source_key: str, *, created_by: str, values: dict, entities=None) -> tuple[Candidate, str]:
+def upsert_candidate(source_key: str, *, created_by: str, values: dict, entities=None, documents=None) -> tuple[Candidate, str]:
     """Create or refresh a candidate by its source key. Review state (status, decisions, result) is never touched
     here; the routing, duplicate and priority fields belong to the `process` job. → (candidate, "new"|"changed"|"unchanged")"""
     c = Candidate.objects.filter(source_key=source_key).first()
@@ -63,6 +63,10 @@ def upsert_candidate(source_key: str, *, created_by: str, values: dict, entities
         if want != have:
             c.entities.set(list(want))
             state = "changed" if state == "unchanged" else state
+    if documents is not None:
+        want = {d.pk for d in documents}
+        if want != set(c.documents.values_list("pk", flat=True)):
+            c.documents.set(list(want))
     return c, state
 
 
