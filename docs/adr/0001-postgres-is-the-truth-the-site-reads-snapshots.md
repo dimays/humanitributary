@@ -1,6 +1,6 @@
 # 0001 — Postgres is the source of truth; the site reads static snapshots
 
-**Status:** accepted (November 2026)
+**Status:** accepted (November 2026); amended by [0020](0020-the-cutover.md) (the cutover)
 
 ## Context
 

@@ -54,7 +54,7 @@ By reason:
 
 - `no_second_source`: find a reputable non-Wikipedia page that explicitly supports the claim and record it on the
   atomic parts it supports (the date, the place, a number: their ids are in `parts`). New citations go on parts;
-  the record claim's list belongs to the legacy import until the cutover (the API refuses a new one there).
+  the record claim's list is the entry's own cites (the API refuses a new one there; ADR 0020 leaves lifting that to a later decision).
 - `conflict`: read both sources. If ours is wrong or reputable sources disagree, put the corrected text in
   `proposed_text` ("Sources differ: …" or "Wikipedia says …; Britannica says …", which the publishing rule and the
   release gate require for a contested claim); the owner applies it. If the conflicting page is about something

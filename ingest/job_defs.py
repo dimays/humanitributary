@@ -108,6 +108,25 @@ def process_(ctx):
     process.run(ctx)
 
 
+@job("entity_relations", interval=60)
+def entity_relations(ctx):
+    """Wikidata relations (part of, follows, replaces, subclass of; subnational or party) for the entities behind
+    new-branch signals, and for what those relations name, up to branchable.MAX_HOPS steps: what the NEW-BRANCH rule
+    reads (ingest/branchable.py). A few requests a run; cached for ENTITY_TTL_DAYS."""
+    from . import branchable
+
+    qids = sorted({q for q in Candidate.objects.filter(kind="new_branch_signal", status__in=["queued", "claimed"]).values_list("details__qid", flat=True) if q})
+    seen = set()
+    for _ in range(branchable.MAX_HOPS + 1):
+        todo = [q for q in qids if q not in seen]
+        if not todo:
+            break
+        seen |= set(todo)
+        wikidata.fetch_entities(ctx.fetcher, todo, counts=ctx.counts)
+        wikidata.fetch_relations(ctx.fetcher, todo, counts=ctx.counts)
+        qids = sorted(branchable.relation_targets(Entity.objects.filter(qid__in=todo)) - seen)
+
+
 @job("enrich_tasks", interval=60)
 def enrich_tasks(ctx):
     """Lookup adapters for queued write_event tasks (suggested sources in the payload)."""

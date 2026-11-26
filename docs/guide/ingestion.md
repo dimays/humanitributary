@@ -110,7 +110,8 @@ seeded feed's `interval_minutes` (`ingest/seed.py` `FEEDS`), shown in the third 
 | `historian_sync` | week (feed) | 1 week | Office of the Historian Milestones (TEI on GitHub), for its lookup. |
 | `refresh_entities` | day (feed) | 1 day | Re-reads Wikidata facts older than 30 days (`per_run` 2,000), then re-derives every entity's kind. |
 | `pageviews` | 360 min | — | Wikipedia pageviews for recent candidates' stories. |
-| `process` | 15 min | — | Routing, duplicates, clusters, priority, `write_event` tasks, new-branch signals. |
+| `process` | 15 min | — | Routing, duplicates, clusters, priority, `write_event` tasks (at most `WRITE_EVENT_TASKS_PER_DAY` new a day), new-branch signals. |
+| `entity_relations` | 60 min | — | Wikidata relations (part of, follows, replaces, subclass of; subnational or party) for the entities behind new-branch signals and the items those relations name, up to 3 steps: what the NEW-BRANCH rule reads. |
 | `enrich_tasks` | 60 min | — | Lookup adapters' suggestions added to queued `write_event` payloads. |
 | `link_health` | day | — | Re-checks 200 cited URLs. |
 | `facts_sweep` | day | — | The fact base's sweep (`evidence/sweep.py`, [ADR 0009](../adr/0009-fact-base.md)); runs right after `link_health`. |
@@ -292,6 +293,14 @@ errors up to 4 times, waiting 5, 10, 20, 40 s (at most 60).
 `refresh_entities` re-derives every kind from stored facts after each run, so a change to the class table applies
 to all entities without new requests.
 
+**Relations** (`fetch_relations`), only for possible new branches: two more queries per batch, the statements in
+`RELATION_PROPS` (P361 part of, P155 follows, P1365 replaces, P279 subclass of) and which `IS_A_CLASSES` the item
+is an instance of through any chain of subclasses (`P31/P279*`: Q10864048 first-level administrative division,
+Q7278 political party), which the facts can't say ("Florida" is a "U.S. state", a subclass of the first). Stored
+in `Entity.relations` (`{"P361": […], …, "is_a": […]}`) with `relations_at`, re-read after `ENTITY_TTL_DAYS`. The
+`entity_relations` job fetches them, and the entities they name, for the queued signals; `ingest/branchable.py`
+reads them ([new-branch signals](#new-branch-signals)).
+
 **Text without links** (feed items) is matched by `ingest.candidates.AliasMatcher`: proper-noun n-grams of 1 to 6
 words (the first word capitalized) looked up in the labels and aliases of known person, polity, place, org and event
 entities, with names of at least 4 characters. An ambiguous name goes to the entity mentioned in the most
@@ -308,19 +317,35 @@ rows: "this Wikidata item belongs to this branch, with this weight".
 
 ### How a candidate is scored
 
-    score(branch) = Σ over the candidate's entities e:  role(e) × weight(BranchEntity) × hit(e → branch)
+    score(branch) = max over the candidate's entities e of  role(e) × mention(e) × weight(BranchEntity) × hit(e → branch)
+                    + 0.01 for each further entity that routes to the branch
 
 | Factor | Value | Constant |
 |---|---|---|
+| role: the portal item's story article (`topic_qid`, role `story`) | 1.0 | `ROLE_WEIGHT["story"]` |
 | role: linked in the item itself | 1.0 | `ROLE_WEIGHT["item"]` |
-| role: a context topic (the portal's parent bullets) | 0.5 | `ROLE_WEIGHT["topic"]` |
 | role: a name matched in a feed item's text | 0.7 | `ROLE_WEIGHT["alias"]` |
+| role: a context topic above the story (the portal's parent bullets) | 0.5 | `ROLE_WEIGHT["topic"]` |
 | hit: e is one of the branch's own entities (the country itself) | 1.0 | `HIT_DIRECT` |
-| hit: e is in a country (P17) or located in (P131) an entity of the branch | 0.6 | `HIT_IN_COUNTRY` |
-| hit: e is a person whose citizenship (P27) is an entity of the branch | 0.3 | `HIT_CITIZEN` |
+| hit: e is in a country (P17) or located in (P131) an entity of the branch, with n values in that statement | 0.6 / n (an event: 0.6 / √n) | `HIT_IN_COUNTRY` |
+| hit: e is a person whose citizenship (P27) is an entity of the branch, with n citizenships | 0.3 / n | `HIT_CITIZEN` |
+| mention: an indirect hit (country, citizenship) through a concept or a work | × 0.5 | `PASSING_MENTION`, `PASSING_KINDS` |
+| each further entity routing to the same branch | + 0.01 | `MORE_MENTIONS` |
 
-So a country beats a place in that country, which beats a citizen of it. People only route through citizenship;
-everything else only through P17 and P131.
+Why each part ([ADR 0021](../adr/0021-ingestion-tuning.md), from the first real run):
+
+- **The strongest mention, not the sum.** Naming a port and its country, or three American politicians, is one
+  mention of the place. The sum put "Ukrainian attacks on the Russian shadow fleet" on Libya, where the attacks
+  happened, because every item named the port and the country. The 0.01 per further entity only breaks ties.
+- **Countries split.** A sea in 20 countries is in any one of them only a twentieth as surely. An event involves
+  each of its countries, but a long participant list (the Gaza war's P17 names six states) is weak evidence for any
+  one of them, hence the square root.
+- **Passing mentions.** A concept or work in the item ("Mediterranean Sea", "U.S. state", "news media in the United
+  States") routes through its country at half weight. A concept that is itself a branch's entity ("artificial
+  intelligence") is a direct hit and counts in full.
+
+So a country beats a place in that country, which beats a citizen of it, and the country of an event or place
+counts for more than the citizenship of a person in the story.
 
 - **Date fit.** A branch scores only when the candidate's year falls inside its span, with a year's margin each
   side (an open-ended branch runs to next year). A 2026 item never routes to the Ottoman Empire.
@@ -328,23 +353,39 @@ everything else only through P17 and P131.
 - **Result.** Scores are rounded to 3 places; zero scores are dropped. The top branch is the highest score, ties
   broken by slug. A branch counts as **touched** at `TOUCH_THRESHOLD` (0.6) or more (used by priority). The reasons
   (up to 8 per branch) are kept in the candidate's `details.routing`.
+- **A story's branches** (`suggested`, for the task payload) are the candidates' scores summed: the top branch, and
+  of the next two those with at least `LINK_MIN_SHARE` (35%) of its score. The first run suggested India for the
+  US elections at 2% of the US score.
 
 ### How branches get their entities
 
 `seed_branch_entities` maps branches that have no `BranchEntity` rows yet (or the ones named in `--opt branches=`),
-skipping retracted ones. It only accepts exact matches:
+skipping retracted ones and the ones in `CORRECTIONS` (below). It only accepts exact matches:
 
 1. **Name variants.** "Iran (Qajar to Islamic Republic)" also tries "Iran"; "Republic of Senegal" also tries
    "Senegal"; "A / B" tries both halves (`name_variants`).
 2. Each variant is looked up as an English Wikipedia title (redirects followed: Wikipedia's own primary-topic
    decision). The item must not be a disambiguation page and must be of an expected kind.
-3. An item the branch already cites (a Wikipedia article in its evidence) wins. Otherwise the first variant that
+3. **Two guards.** A place whose country (P17) is a polity with one of the branch's names gives way to that
+   country: "Ireland" is the island's article, and its country Ireland (Q27) is the branch. An item that ended
+   (P576 dissolved, P582 end) within the first `MIN_SPAN_COVER` (a tenth) of the branch's span is a predecessor,
+   not the branch (`covers`): SFR Yugoslavia, dissolved in 1992, isn't "Former Yugoslav states" (1991 on). Only
+   the end counts, since a state's inception (P571) is often its latest constitution (France: 1792).
+4. An item the branch already cites (a Wikipedia article in its evidence) wins. Otherwise the first variant that
    is the full name, or any variant whose item is a polity or organization. (A concept's short name is too often
    another topic: "Ubuntu" is the operating system.)
-4. **Members** listed in a name ("Gulf states (Kuwait, Bahrain, …)") each map, when their title is a polity, with
-   role `member` and weight 0.8. The main match gets weight 1.0.
-5. A branch with no match becomes a `map_branch_entities` task (dedupe key `branch:<slug>`, priority 1) with its
+5. **Members** listed in a name ("Gulf states (Kuwait, Bahrain, …)") each map, when their title is a polity (and
+   passes the date guard), with role `member` and weight 0.8. The main match gets weight 1.0.
+6. A branch with no match becomes a `map_branch_entities` task (dedupe key `branch:<slug>`, priority 1) with its
    variants and cited articles, for an agent to decide.
+
+**Corrections.** `CORRECTIONS` holds the hand-checked mappings exact titles got wrong or couldn't reach, and every
+seeding run applies them (`apply_corrections`): `use` rows are created (note `routing.CORRECTIONS`), `never` rows
+deleted. Today: `ireland` → Ireland (Q27), never the island (Q22890); `post-yugoslav-states` → the seven successor
+states as members, never SFR Yugoslavia (Q83286) or Yugoslavia (Q36704); `palestine` also → the State of Palestine
+(Q219060), Palestine (Q23792), the Gaza Strip, the West Bank (weight 0.8) and the Palestinians (Q201190), since the
+branch was mapped only to the Palestinian National Authority, which the news rarely names. Migration
+`ingest/migrations/0005_entity_relations_and_routing_corrections.py` deletes the two wrong rows the first run had. Prefer a guard to a new line here.
 
 `confident_match` (matching Wikidata's entity search results) is only used when `seed_branch_entities` is called
 with `search=True`, which the job doesn't do.
@@ -416,16 +457,25 @@ All the parts are stored in each candidate's `details.priority_parts`, so a prio
 
 ### write_event tasks
 
-A cluster becomes a `write_event` task when its priority is at least `WRITE_EVENT_THRESHOLD` (45, or
+A cluster becomes a `write_event` task when its priority is at least `WRITE_EVENT_THRESHOLD` (64, or
 `--opt threshold=`) and at least one member comes from the portal or a year page (Wikipedia backs it). Clusters are
 taken highest first, up to `MAX_TASK_UPDATES` (150) a run. The task's dedupe key is `cluster:<key>` and its
 priority the rounded cluster priority, so re-running never duplicates it. While the task is still queued, its
 payload and priority are refreshed (keeping any `suggested_sources` that `enrich_tasks` added).
 
+- **The threshold's method.** About the top 12.5% of clusters should qualify (the middle of 10–15%): 64 is the
+  priority of the cluster at the 12.5th percentile from the top of the first real run's 682 clusters (64.86),
+  rounded down, which lets 95 (13.9%) through. Re-derive it the same way when the formula or routing changes
+  ([ADR 0021](../adr/0021-ingestion-tuning.md)).
+- **The daily cap.** At most `settings.WRITE_EVENT_TASKS_PER_DAY` (20; env `WRITE_EVENT_TASKS_PER_DAY`, or
+  `--opt per_day=`) new tasks per local day, counting the tasks this job created since midnight whatever their
+  state. A qualifying cluster without an open task waits when the day's cap is used (`tasks_held_by_daily_cap`),
+  and gets its task on a later run if it still qualifies. On the first run's data: 20 created, 75 held.
+
 The payload is everything an agent needs to write the event:
 
-- `suggested`: the top 3 branches by summed score, date, precision, first and last dates, a title hint, branches
-  to link;
+- `suggested`: the story's branches (`routing.suggested`: the top one, then up to two with at least 35% of its
+  score), date, precision, first and last dates, a title hint, branches to link (the ones after the first);
 - `items`: up to 12 members with their text (up to 1,200 characters), source and attribution;
 - `sources`: up to 15 links with tier and `fetch_policy` (so the agent knows which to read in a browser), and an
   excerpt of at most 25 words for feed items;
@@ -453,6 +503,22 @@ An entity becomes a `new_branch_signal` candidate (key `signal:<QID>`) when, amo
 Its priority is min(100, 8 × clusters + 4 × days). The signal carries its entity, which branch governance's
 NEW-BRANCH rule reads ([branch governance](branch-governance.md)). A queued signal whose entity has since been
 mapped is settled (rejected, with `details.settled`).
+
+**Can it be a branch, and under what?** [ingest/branchable.py](../../ingest/branchable.py) answers both for the
+rule, from Wikidata alone (the entity's facts and `relations`, read by the `entity_relations` job):
+
+- `can_be_branch(entity, today)` → (yes or no, why). Yes for a sovereign state or historical polity
+  (`STATE_CLASSES`, or a polity with a dissolution date), a people (`PEOPLE_CLASSES`), an international
+  organization (`INTERNATIONAL_ORG_CLASSES`), and a conflict or movement (`CONFLICT_CLASSES`, `MOVEMENT_CLASSES`)
+  that has run at least `LONG_RUNNING_YEARS` (2) from its start (P580/P571) to its end or today. Never a political
+  party (P31 or `is_a` Q7278) or a subnational unit (`is_a` Q10864048, or a class in `SUBNATIONAL_CLASSES` when the
+  relations aren't read yet). Everything else (an election, an operation, a hack) is an event on a branch.
+- `parent(entity, by_qid, lookup, today)` → (branch or None, how). The first of these that names exactly one branch
+  (through `BranchEntity`) wins: succession (P1365 replaces, P155 follows, up to `MAX_HOPS` (3) steps back, a branch
+  that started before it); part of (P361, up to 3 steps, a branch alive at its start); its country (P17, unless it
+  is a state itself); its class (P279, then P31). Two branches at the same distance stop that search: it doesn't
+  guess further up. Otherwise None: "needs review". Co-occurrence (the branches its stories touched) is never
+  used: it put El Salvador under Haiti and the International Criminal Court under Sudan.
 
 ## Lookups and second sources
 
@@ -514,13 +580,18 @@ so and points at `make schedule-status`.
 `tests/test_ingest.py` covers the whole pipeline with no network. `tests/cassette.py` replays recorded responses
 from `tests/fixtures/ingest/` and fails loudly on any request not in the cassette; unknown robots.txt requests answer
 404 (allow all). `tests/record_fixtures.py` re-records cassettes against the live services (not part of the suite).
+`tests/fixtures/ingest/first_run.json` is a recording of the first real run's routing inputs (three misrouted stories'
+candidates and entities, the run's BranchEntity rows, the 17 signals' entities with their relations), written from
+a database by `tests/record_first_run.py`; `FirstRunTests` replays it.
 Hand-made responses (`cassette.response`) cover what live services won't reliably show: 404s, CAPTCHAs, 503s.
 
 ## Changing it
 
 | Change | What it needs |
 |---|---|
-| A threshold or weight (45, 0.5, 2.0, the priority weights, the signal counts) | Change the constant in `ingest/process.py` or `ingest/routing.py`, say why in the commit, and update this chapter and [ADR 0012](../adr/0012-ingestion.md). `test_priority_formula` restates the formula, so update it too. |
+| A threshold or weight (64, the daily cap, 0.5, 2.0, the priority and routing weights, the signal counts) | Change the constant in `ingest/process.py`, `ingest/routing.py` or the setting, say why in the commit, and update this chapter and [ADR 0021](../adr/0021-ingestion-tuning.md) (the threshold is re-derived by its method). `test_priority_formula` restates the formula and `FirstRunTests` replays the first run's misroutes, so run them. |
+| A wrong mapping | A guard in `seed_branch_entities` if the mistake has a pattern, else a line in `routing.CORRECTIONS`; then `run_job seed_branch_entities --opt branches=<slug>`. |
+| What can be a branch, or how a parent is chosen | `ingest/branchable.py`; `FirstRunTests.test_new_branch_proposals` pins the first run's 17 signals. A change in what NEW-BRANCH proposes bumps `governance/thresholds.py` `RULES_VERSION`. |
 | A new job | A function in `ingest/job_defs.py` with `@job(name, interval=…)`, placed where it should run in the order. A feed job also needs a `Feed` row with `config.job` (add it to `ingest/seed.py` `FEEDS`). Add it to the table above and to ADR 0012. |
 | A new source | Read its terms first ([adding a source](sources-and-terms.md#adding-a-source)), then a reader in `sources_news.py` or `sources_wiki.py` using `NewsWriter` or `upsert_candidate`, and a recorded cassette and test. |
 | A new Wikidata property or kind class | `ingest/wikidata.py` `PROPS` or `KIND_CLASSES`; `refresh_entities` re-derives kinds on its next run. |

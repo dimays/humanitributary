@@ -247,6 +247,47 @@ def fetch_entities(fetcher, qids, *, refresh=False, counts=None, titles: dict | 
     return {q: have[q] for q in qids if q in have}
 
 
+RELATION_PROPS = ["P361", "P155", "P1365", "P279"]  # part of, follows, replaces, subclass of
+IS_A_CLASSES = ["Q10864048", "Q7278"]  # first-level administrative division, political party
+
+
+def relations_queries(qids: list[str]) -> list[str]:
+    """Two queries per batch: the relation statements, and which IS_A_CLASSES each item is an instance of through
+    any chain of subclasses (P31/P279*), which the facts query can't say (Florida is a "U.S. state", a subclass of
+    a first-level administrative division)."""
+    values = " ".join(f"wd:{q}" for q in qids)
+    props = " ".join(f"wdt:{p}" for p in RELATION_PROPS)
+    classes = " ".join(f"wd:{c}" for c in IS_A_CLASSES)
+    return [
+        f"SELECT ?item ?p ?v WHERE {{ VALUES ?item {{ {values} }} VALUES ?p {{ {props} }} ?item ?p ?v . }}",
+        f"SELECT DISTINCT ?item ?cls WHERE {{ VALUES ?item {{ {values} }} VALUES ?cls {{ {classes} }} ?item wdt:P31/wdt:P279* ?cls . }}",
+    ]
+
+
+def fetch_relations(fetcher, qids, *, refresh=False, counts=None) -> int:
+    """Fill Entity.relations for `qids` (missing, or older than ENTITY_TTL_DAYS): what ingest/branchable.py reads to
+    decide whether an entity can be a branch and under which parent. → how many entities were read."""
+    ents = {e.qid: e for e in Entity.objects.filter(qid__in=[q for q in qids if q])}
+    todo = sorted((q for q, e in ents.items() if refresh or not _fresh(e.relations_at, ENTITY_TTL_DAYS)), key=lambda q: int(q[1:]))
+    now = timezone.now()
+    for i in range(0, len(todo), SPARQL_BATCH):
+        batch = todo[i:i + SPARQL_BATCH]
+        rel_q, isa_q = relations_queries(batch)
+        info: dict = {}
+        parse_facts(_sparql(fetcher, rel_q), info)
+        isa: dict = {}
+        for b in _sparql(fetcher, isa_q):
+            item, cls = b["item"]["value"].rsplit("/", 1)[-1], b["cls"]["value"].rsplit("/", 1)[-1]
+            isa.setdefault(item, set()).add(cls)
+        for q in batch:
+            rel = {p: v for p, v in (info.get(q, _blank())["facts"]).items() if p in RELATION_PROPS}
+            rel["is_a"] = sorted(isa.get(q, ()))
+            Entity.objects.filter(pk=ents[q].pk).update(relations=rel, relations_at=now)
+        if counts is not None:
+            counts["relations_fetched"] += len(batch)
+    return len(todo)
+
+
 def resolve(fetcher, titles, *, counts=None) -> dict[str, Entity]:
     """{title: Entity} for every title that has a Wikidata item."""
     t2q = resolve_titles(fetcher, titles, counts=counts)

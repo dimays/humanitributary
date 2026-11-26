@@ -152,6 +152,9 @@ STORAGES = {
 
 # How long an agent's claim on a task lasts before another agent may take it (work/queue.py).
 TASK_LEASE_MINUTES = int(os.getenv("TASK_LEASE_MINUTES", "30"))
+# At most this many new write_event tasks a day from the `process` job (highest priority first; the rest wait for a
+# later day): a backfill or a busy news day can't flood the queue (docs/adr/0021-ingestion-tuning.md).
+WRITE_EVENT_TASKS_PER_DAY = int(os.getenv("WRITE_EVENT_TASKS_PER_DAY", "20"))
 
 # Ingestion (ingest/, docs/adr/0012-ingestion.md). The User-Agent names the bot and a generic contact, never a
 # person: the project's repository by default (Wikimedia asks for a contact).

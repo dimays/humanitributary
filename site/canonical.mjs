@@ -1,7 +1,8 @@
 // The one canonical shape of the timeline's content: every branch and event with its keys in a fixed order, and only
 // the keys the schema knows (SCHEMA.md). build.mjs writes this into timeline.html and into `--dump-json`, and
 // `manage.py publish` writes the same shape from Postgres (publish/export.py mirrors the key lists below), so a build
-// from data/*.js and a build from a published snapshot of the same content are byte-identical.
+// from the frozen legacy files (archive/site-data, build.mjs --archive) and a published snapshot of the same content
+// are byte-identical.
 //
 // Array order is kept as given: branches and events in file order (the page breaks ties in its sorts by it), and every
 // list (cites, parents, links, images, connections) in the order its author wrote it.

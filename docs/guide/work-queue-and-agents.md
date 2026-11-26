@@ -321,7 +321,7 @@ production URL.
 
 | Skill | Works | What it covers |
 |---|---|---|
-| `drain-write-events` | `write_event` | Claim over the API; read the payload (and `GET entries/<slug>`, `GET branches/<slug>`, `GET search`); decide (duplicate, rejected, or one event); fetch and read every source cited (`browser_only` publishers in a browser, marked `browser_read`; never openstax.org); aim for a non-Wikipedia source; complete with the event in `site/SCHEMA.md` style, which lands in review. It no longer edits `site/data/` or runs `make import`: the owner carries a published event into the data files until the cutover. |
+| `drain-write-events` | `write_event` | Claim over the API; read the payload (and `GET entries/<slug>`, `GET branches/<slug>`, `GET search`); decide (duplicate, rejected, or one event); fetch and read every source cited (`browser_only` publishers in a browser, marked `browser_read`; never openstax.org); aim for a non-Wikipedia source; complete with the event in `site/SCHEMA.md` style, which lands in review; the owner publishes it (`facts publish`), and the next release carries it. |
 | `verify-claims` | `verify_claim` | Claim; read each cited page; complete with a stance per page and part as `evidence` rows; what to do per reason (`no_second_source` on the atomic parts, `conflict` with a `proposed_text` for the owner, the recheck reasons). |
 | `verify-stale-claims` | `verify_claim` from ingestion | The dead-link and changed-page cases (archived copies, replacements, re-recording `supports` to stamp a new hash) and suggested second sources (read each, add it as evidence only if it explicitly supports the claim, list it in `suggestions.accepted` or `rejected`). |
 | `review-branch-proposals` | `review_branch_proposal` | What to ask of each rule; fill every `needs_agent` field; accept with the operations (for the owner's `branches apply`) or reject with a note. |
@@ -346,11 +346,9 @@ opens them for it (`agentapi/apply.py`):
   command, which runs the proposal's operations (those an agent accepted it
   with, if any) through the services and marks the proposal applied.
 
-Until the cutover the legacy data files are still imported over Postgres
-([content model](content-model.md)). A published event that exists only in
-Postgres is retracted by the next `make import --retract-missing`, so the
-owner carries the events agents wrote into `site/data/` when publishing them,
-and runs `branches apply` with `--legacy-file`.
+Postgres is the only record ([ADR 0020](../adr/0020-the-cutover.md)): what
+an agent writes and the owner publishes reaches readers with the next
+release, and nothing imports over it.
 
 ## The agent API
 

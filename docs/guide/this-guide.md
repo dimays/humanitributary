@@ -157,22 +157,22 @@ pass, and it is what CI runs too:
    the most common failure.
 2. Then three lanes side by side:
    - **quick checks**, one after another: `check-adr`, `manage.py check`,
-     `makemigrations --check --dry-run`, `node site/build.mjs --check`,
-     and `ruff check` when `pyproject.toml` or a `ruff.toml` configures
-     ruff;
+     `makemigrations --check --dry-run`, and `ruff check` when
+     `pyproject.toml` or a `ruff.toml` configures ruff;
    - **tests**: `manage.py test` (on its own `test_<database>`);
-   - **roundtrip**: `make roundtrip` (dump, import, publish with its
-     release gates, mirror the release, the two byte-for-byte comparisons
-     on the legacy keys, and a build of the release itself:
-     [Publishing](publishing.md)).
+   - **release gates**: `make roundtrip` (`manage.py publish --check`: the
+     release gates on the database's content, deterministic, build, contested
+     and the change report, writing nothing: [Publishing](publishing.md#release-gates)).
 
-The tests and the round trip both need a Postgres: the Docker one locally,
-a service container in CI. The tests never touch object storage (the
-runner swaps in temporary directories), but the round trip writes to the
-database in `DATABASE_URL` and publishes a release into the store `.env`
-names. So a worktree that runs the gate while another session ingests
-should have a database of its own (a `humanitributary_<branch>` database
-on the same server, named in that worktree's `.env`).
+The tests and the release gates both need a Postgres: the Docker one
+locally, a service container in CI (filled from the frozen legacy files by
+`make import-archive`, since the real content isn't in git). The tests never
+touch object storage (the runner swaps in temporary directories), and the
+release gates write nothing: they read the database in `DATABASE_URL` and
+the release pointer in the store `.env` names (for the change report). A
+worktree that runs the gate while another session ingests can still have a
+database of its own (a `humanitributary_<branch>` database on the same
+server, named in that worktree's `.env`), so its gates see its own content.
 
 On a pass, the gate writes `var/gate-receipt.json`: the commit and the
 tree of the files as they were on disk when the gate began (a git tree hash,

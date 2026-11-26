@@ -39,7 +39,7 @@ metrics differ from its latest row.
 | `branch`, `other_branches` | The branch it concerns (the survivor, for a merge; empty for a new branch), and the others involved. |
 | `rule_id` | The rule that fired, e.g. `SPLIT-PLACE-v1`. |
 | `summary`, `evidence` | One paragraph, and what the rule saw (clusters, gaps, shared events, with event ids, titles, dates, places). |
-| `payload` | `key`, `strength`, `operations`, `needs_agent`, `rules_version`; later `accepted`, `applied`, `reverted`, `legacy_file`. |
+| `payload` | `key`, `strength`, `operations`, `needs_agent`, `rules_version`; later `accepted`, `applied`, `reverted` (proposals applied before the cutover may also hold `legacy_file`). |
 | `status` | `proposed`, `accepted` (an agent accepted it over the API; waiting for the owner's apply), `rejected`, `applied`, `withdrawn`. |
 | `created_by`, `decided_by`, `decided_at`, `decision_note` | Who and when. |
 
@@ -86,7 +86,7 @@ write anything.
 | `SPLIT-TIME-v1` | ≥ `min_events` (30) events, and either (a) ≥ 2 phases with ≥ `min_phase_events` (8) events and ≥ `min_phase_share` (20%) each, and the widest gap between phases ≥ `min_gap_s` (0.4 s); or (b) a date where the located events before and after (≥ `min_side_events`, 10, each side) have centroids ≥ `min_shift_km` (3,000 km) apart, each side's mean spread ≤ `max_side_spread_ratio` (0.5) of that distance. | gap / 0.4, or distance / 3,000 | End the branch at the cut; a successor branch (an `into` link) takes the events from the cut on. |
 | `MERGE-OVERLAP-v1` | Two branches with centroids ≤ `max_distance_km` (800 km) apart, sharing ≥ `min_shared` (25%) of the smaller's events, and linked as parent or into (or sharing ≥ `shared_without_lineage`, 50%); and either spans overlapping ≥ `min_overlap` (60%) of the shorter (in s) with ≥ `min_shared_events` (3) shared, or the smaller has < `small_events` (15) events, sits ≥ `contained` (90%) inside the other's span, with ≥ `small_min_shared_events` (2) shared. | max over pairs of shared / 0.25 | Merge the group into one survivor. |
 | `END-STALE-v1` | Region not in `end_stale.exempt_regions` (cosmos, life, humans); ≥ `min_events` (8) events; trailing gap ≥ `min_trail_s` (0.6 s). | trail / 0.6 | An end date at the last event. |
-| `NEW-BRANCH-v1` | An entity behind ingestion's new-branch signals, mapped to no branch, seen in ≥ `new_branch.min_clusters` (5) story clusters over ≥ `min_days` (7) days. | min(clusters / 5, days / 7) | A new branch for it, and a `map_entity` operation so new material routes to it. |
+| `NEW-BRANCH-v2` | An entity behind ingestion's new-branch signals, mapped to no branch, seen in ≥ `new_branch.min_clusters` (5) story clusters over ≥ `min_days` (7) days, that can be a branch (`ingest/branchable.py`: a state or historical polity, a people, a conflict or movement of 2 years or more, an international organization; never a subnational unit or a political party). | min(clusters / 5, days / 7) | A new branch for it, under the parent its Wikidata relations name (or none), and a `map_entity` operation so new material routes to it. |
 | `THIN-v1` | `relative_density` ≤ `thin.max_relative_density` (0.15) and span ≥ `min_span_s` (0.15 s). | 0.15 / relative density | Not a proposal: an `audit` task to fill in the branch. |
 
 Details the table leaves out:
@@ -114,10 +114,19 @@ Details the table leaves out:
 - **NEW-BRANCH.** Signals are ingestion's `new_branch_signal` candidates,
   queued or claimed, which `ingest/process.py` raises at a lower bar
   (`SIGNAL_MIN_CLUSTERS` 4, `SIGNAL_MIN_DAYS` 3). `review.new_branch_signals()`
-  counts distinct cluster keys and the days from first to last document. The
-  parent is the published branch with the highest combined weight: the
-  `BranchEntity` weights of entities mentioned alongside, plus the
-  candidates' branch scores. The region is the parent's, or `global`.
+  counts distinct cluster keys and the days from first to last document, and
+  asks `ingest/branchable.py` whether the entity can be a branch
+  (`can_be_branch`) and under which parent (`parent`, from its Wikidata
+  relations: succession, part of, its country, its class; see
+  [ingestion](ingestion.md#new-branch-signals)). An entity that can't be a
+  branch is not proposed: it is counted as `NEW-BRANCH.not_a_branch` and
+  listed in `branches review`'s output with the reason ("a political party",
+  "a subnational unit", "an event that isn't …"). With no parent the proposal
+  says it needs review, `parents` is empty, and `needs_agent` lists the
+  branch's `parents` too. The parent is never chosen by co-occurrence (the
+  first version did, and put El Salvador under Haiti and the Netherlands
+  under Italy: [ADR 0021](../adr/0021-ingestion-tuning.md)). The region is the
+  parent's, or `global`.
 - **Placeholders.** Fields a rule can't know hold `TODO`
   (`rules.PLACEHOLDER`): every new branch's `text`, and NEW-BRANCH's
   `start_when`. New branches start with no cites.
@@ -161,7 +170,7 @@ every earlier proposal with the same key, newest first:
 
 | Earlier proposals with this key | Result |
 |---|---|
-| One is open (`proposed`) | Refresh it in place if the summary, evidence or payload changed (`refreshed`), else `unchanged`. Never a second proposal. |
+| One is open (`proposed`) | Refresh it in place if the summary, evidence, payload or rule id changed (`refreshed`; a rule's new version takes its open proposals over), else `unchanged`. Never a second proposal. |
 | One was accepted or applied | `already_decided`: never proposed again. |
 | The newest declined one (`rejected` or `withdrawn`) was decided less than `reject_cooldown_days` (180) ago | `held_back`. |
 | … or the finding's strength is less than `reject_regrowth` (1.5) × that proposal's strength | `held_back`. |
@@ -277,25 +286,21 @@ Revisions:
 `tests/test_governance.py` checks that apply then revert gives back a
 byte-identical snapshot.
 
-### Until the cutover: `--legacy-file`
-
-The legacy data files are still imported over Postgres
-([content model](content-model.md), ADR 0001), so a change made only in
-Postgres is undone by the next `make import`. `branches apply
---legacy-file site/data/99-<name>.js` also writes the change as a data file
-(`operations.legacy_js()`: `TL.add`, `TL.patch`, `TL.merge`, `TL.move`), after
-the database apply, and stores its path in `payload.legacy_file`. `revert`
-reminds you to delete that file. After the cutover the flag goes away.
+Postgres is the only record of an applied change: nothing imports over it
+since the cutover ([ADR 0020](../adr/0020-the-cutover.md)), so an applied
+proposal stays applied until `branches revert`. (Before the cutover
+`branches apply --legacy-file` also wrote the change into the legacy data
+files; the flag and `operations.legacy_js()` are gone.)
 
 ## Versions
 
 | Constant (`governance/thresholds.py`) | Value | Where it shows |
 |---|---|---|
-| `RULES_VERSION` | `branch-rules-v1` | Each proposal's `payload.rules_version`, the review's output, the digest section. |
+| `RULES_VERSION` | `branch-rules-v2` (v2: NEW-BRANCH proposes only what can be a branch, with parents from Wikidata) | Each proposal's `payload.rules_version`, the review's output, the digest section. |
 | `METRICS_VERSION` | `metrics-v1` | Each metric's `version` and `BranchMetric.rules_version`. |
 
-Each rule also has a version in its id (`SPLIT-PLACE-v1`, hard-coded in
-`governance/rules.py`). The hysteresis key drops it, so a bumped version
+Each rule also has a version in its id (`SPLIT-PLACE-v1`, `NEW-BRANCH-v2`,
+hard-coded in `governance/rules.py`). The hysteresis key drops it, so a bumped version
 doesn't re-propose what was already decided.
 
 ## The branches command
@@ -308,7 +313,7 @@ doesn't re-propose what was already decided.
 | `branches review [--today D] [--dry-run] [--json]` | The rules, proposals and tasks, as `job:branches_review`. Prints one line per finding, or the whole result with `--json`. |
 | `branches list [--status S]` | Proposals by id. |
 | `branches show <id>` | One proposal with its payload and evidence, as JSON. |
-| `branches apply <id> --agent A [--ops F] [--task T] [--note N] [--legacy-file P]` | Apply. |
+| `branches apply <id> --agent A [--ops F] [--task T] [--note N]` | Apply. |
 | `branches reject <id> --agent A [--note N]` | Reject. |
 | `branches revert <id> --agent A [--task T] [--force]` | Revert. |
 
@@ -320,13 +325,14 @@ count of open THIN tasks in `manage.py digest`: the `proposed` ones and the
 ## Checking the rules against history
 
 The thresholds were fitted to two of the owner's own restructurings: the
-First Americans split (`site/data/91-first-americans.js`) and the
-ECSC/EEC/EU merge (`site/data/90-restructure.js`).
-`scripts/validate_branch_rules.sh` replays the rules on the content as it was
-before them:
+First Americans split (`archive/site-data/91-first-americans.js`) and the
+ECSC/EEC/EU merge (`archive/site-data/90-restructure.js`), both in the frozen
+legacy files. `scripts/validate_branch_rules.sh` replays the rules on the
+content as it was before them:
 
-1. Copy the site's build files and every data file except `90-*` and `91-*`
-   into `var/history/`, and build a legacy dump from them.
+1. Copy every archived data file except `90-*` and `91-*` into
+   `var/history/site-data/`, and dump them (`node site/build.mjs --archive
+   var/history/site-data --dump-json …`).
 2. Create a scratch database (your database's name plus `_history`) in the
    Docker Postgres, dropped again on exit. Your own database isn't touched.
 3. Migrate it, import the dump, run `branches review` (THIN lines hidden).
@@ -345,5 +351,5 @@ Run it after changing a threshold or a rule. What it printed last time is in
 | A rule's logic | Its function in `governance/rules.py`. Bump its id's version if it changes what it finds, and `RULES_VERSION`. Tests in `tests/test_governance.py` (`RuleTests`). A new rule goes in `RULES`, with a row here and a section in branch rules. |
 | A metric | `governance/metrics.py`; bump `METRICS_VERSION` (every branch then gets a new snapshot). `MetricTests` covers the scale and clustering. |
 | The hysteresis | `review._propose()` and the `reject_*` and `undo_factor` thresholds. `ProposalTests` covers refresh, rejected proposals held back and withdrawal. A change of policy belongs in ADR 0011. |
-| A new operation | `operations.validate()`, `run()`, `legacy_js()`, and `site/restructure.mjs` (the two must keep the same semantics). Revert works from Revisions, so it needs nothing new unless the op writes non-canonical rows. |
+| A new operation | `operations.validate()` and `run()`. Revert works from Revisions, so it needs nothing new unless the op writes non-canonical rows. |
 | A new proposal kind or status | The model's choices and check constraints: a migration. |

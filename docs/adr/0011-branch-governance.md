@@ -1,6 +1,6 @@
 # 0011 — Branch governance: rules propose, people decide, applying is mechanical
 
-**Status:** accepted (November 2026)
+**Status:** accepted (November 2026); amended by [0020](0020-the-cutover.md); amended by [0021](0021-ingestion-tuning.md)
 
 ## Context
 

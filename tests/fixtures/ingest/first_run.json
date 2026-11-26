@@ -1,0 +1,5455 @@
+{
+ "branch_entities": [
+  [
+   "algeria",
+   "Q262",
+   "polity",
+   1.0
+  ],
+  [
+   "austria",
+   "Q40",
+   "polity",
+   1.0
+  ],
+  [
+   "baltic-states",
+   "Q37",
+   "member",
+   0.8
+  ],
+  [
+   "bangladesh",
+   "Q902",
+   "polity",
+   1.0
+  ],
+  [
+   "belarus",
+   "Q184",
+   "polity",
+   1.0
+  ],
+  [
+   "belgium",
+   "Q31",
+   "polity",
+   1.0
+  ],
+  [
+   "brazil",
+   "Q155",
+   "polity",
+   1.0
+  ],
+  [
+   "cold-war",
+   "Q8683",
+   "event",
+   1.0
+  ],
+  [
+   "czech-republic",
+   "Q213",
+   "polity",
+   1.0
+  ],
+  [
+   "earth",
+   "Q2",
+   "concept",
+   1.0
+  ],
+  [
+   "france",
+   "Q142",
+   "polity",
+   1.0
+  ],
+  [
+   "germany",
+   "Q183",
+   "polity",
+   1.0
+  ],
+  [
+   "great-britain",
+   "Q161885",
+   "polity",
+   1.0
+  ],
+  [
+   "haiti",
+   "Q790",
+   "polity",
+   1.0
+  ],
+  [
+   "hre",
+   "Q12548",
+   "polity",
+   1.0
+  ],
+  [
+   "iran",
+   "Q794",
+   "polity",
+   1.0
+  ],
+  [
+   "israel",
+   "Q801",
+   "polity",
+   1.0
+  ],
+  [
+   "italy",
+   "Q38",
+   "polity",
+   1.0
+  ],
+  [
+   "japan",
+   "Q17",
+   "polity",
+   1.0
+  ],
+  [
+   "jordan",
+   "Q810",
+   "polity",
+   1.0
+  ],
+  [
+   "lebanon",
+   "Q822",
+   "polity",
+   1.0
+  ],
+  [
+   "libya",
+   "Q1016",
+   "polity",
+   1.0
+  ],
+  [
+   "modern-egypt",
+   "Q79",
+   "polity",
+   1.0
+  ],
+  [
+   "new-spain",
+   "Q170603",
+   "concept",
+   1.0
+  ],
+  [
+   "new-zealand",
+   "Q664",
+   "polity",
+   1.0
+  ],
+  [
+   "palestine",
+   "Q42620",
+   "concept",
+   1.0
+  ],
+  [
+   "poland",
+   "Q36",
+   "polity",
+   1.0
+  ],
+  [
+   "portugal",
+   "Q45",
+   "polity",
+   1.0
+  ],
+  [
+   "russia",
+   "Q159",
+   "polity",
+   1.0
+  ],
+  [
+   "spain",
+   "Q29",
+   "polity",
+   1.0
+  ],
+  [
+   "sudan",
+   "Q1049",
+   "polity",
+   1.0
+  ],
+  [
+   "syria",
+   "Q858",
+   "polity",
+   1.0
+  ],
+  [
+   "tunisia",
+   "Q948",
+   "polity",
+   1.0
+  ],
+  [
+   "turkey",
+   "Q43",
+   "polity",
+   1.0
+  ],
+  [
+   "uk",
+   "Q145",
+   "polity",
+   1.0
+  ],
+  [
+   "ukraine",
+   "Q212",
+   "polity",
+   1.0
+  ],
+  [
+   "usa",
+   "Q30",
+   "polity",
+   1.0
+  ],
+  [
+   "venezuela",
+   "Q717",
+   "polity",
+   1.0
+  ],
+  [
+   "ww2",
+   "Q362",
+   "event",
+   1.0
+  ]
+ ],
+ "branches": [
+  [
+   "algeria",
+   "Algeria",
+   "africa",
+   1962.51,
+   null
+  ],
+  [
+   "austria",
+   "Austria",
+   "europe",
+   1918.86,
+   null
+  ],
+  [
+   "baltic-states",
+   "Baltic states (Estonia, Latvia, Lithuania)",
+   "europe",
+   1990.19,
+   null
+  ],
+  [
+   "bangladesh",
+   "Bangladesh",
+   "southasia",
+   1971.23,
+   null
+  ],
+  [
+   "belarus",
+   "Belarus",
+   "europe",
+   1991.65,
+   null
+  ],
+  [
+   "belgium",
+   "Belgium",
+   "europe",
+   1830.76,
+   null
+  ],
+  [
+   "brazil",
+   "Brazil",
+   "americas",
+   1822.68,
+   null
+  ],
+  [
+   "cold-war",
+   "Cold War",
+   "global",
+   1947.0,
+   1991.985
+  ],
+  [
+   "czech-republic",
+   "Czech Republic",
+   "europe",
+   1993.0,
+   null
+  ],
+  [
+   "earth",
+   "Earth",
+   "cosmos",
+   -4540000000.0,
+   null
+  ],
+  [
+   "france",
+   "France",
+   "europe",
+   987.0,
+   null
+  ],
+  [
+   "germany",
+   "Germany (reunified)",
+   "europe",
+   1990.75,
+   null
+  ],
+  [
+   "great-britain",
+   "Kingdom of Great Britain",
+   "europe",
+   1707.0,
+   1801.0
+  ],
+  [
+   "haiti",
+   "Haiti",
+   "americas",
+   1804.0,
+   null
+  ],
+  [
+   "hre",
+   "Holy Roman Empire",
+   "europe",
+   962.0,
+   1806.0
+  ],
+  [
+   "iran",
+   "Iran (Qajar to Islamic Republic)",
+   "mideast",
+   1789.0,
+   null
+  ],
+  [
+   "israel",
+   "Israel",
+   "mideast",
+   1948.37,
+   null
+  ],
+  [
+   "italy",
+   "Italy",
+   "europe",
+   1861.21,
+   null
+  ],
+  [
+   "japan",
+   "Japan",
+   "eastasia",
+   -300.0,
+   null
+  ],
+  [
+   "jordan",
+   "Jordan",
+   "mideast",
+   1921.164,
+   null
+  ],
+  [
+   "lebanon",
+   "Lebanon",
+   "mideast",
+   1920.666,
+   null
+  ],
+  [
+   "libya",
+   "Libya",
+   "mideast",
+   1951.979,
+   null
+  ],
+  [
+   "modern-egypt",
+   "Egypt (since 1922)",
+   "mideast",
+   1922.16,
+   null
+  ],
+  [
+   "new-spain",
+   "New Spain (viceroyalty)",
+   "americas",
+   1521.0,
+   1821.0
+  ],
+  [
+   "new-zealand",
+   "New Zealand",
+   "oceania",
+   1841.33,
+   null
+  ],
+  [
+   "palestine",
+   "Palestinian Authority / State of Palestine",
+   "mideast",
+   1994.34,
+   null
+  ],
+  [
+   "poland",
+   "Poland",
+   "europe",
+   1918.77,
+   null
+  ],
+  [
+   "portugal",
+   "Portugal",
+   "europe",
+   1139.0,
+   null
+  ],
+  [
+   "russia",
+   "Russia",
+   "europe",
+   1991.98,
+   null
+  ],
+  [
+   "spain",
+   "Spain",
+   "europe",
+   1479.0,
+   null
+  ],
+  [
+   "sudan",
+   "Sudan",
+   "africa",
+   1956.0,
+   null
+  ],
+  [
+   "syria",
+   "Syria",
+   "mideast",
+   1946.29,
+   null
+  ],
+  [
+   "tunisia",
+   "Tunisia",
+   "africa",
+   1956.22,
+   null
+  ],
+  [
+   "turkey",
+   "Turkey",
+   "mideast",
+   1923.83,
+   null
+  ],
+  [
+   "uk",
+   "United Kingdom",
+   "europe",
+   1801.0,
+   null
+  ],
+  [
+   "ukraine",
+   "Ukraine",
+   "europe",
+   1991.65,
+   null
+  ],
+  [
+   "usa",
+   "United States",
+   "americas",
+   1776.0,
+   null
+  ],
+  [
+   "venezuela",
+   "Venezuela",
+   "americas",
+   1830.0,
+   null
+  ],
+  [
+   "ww2",
+   "Second World War",
+   "global",
+   1939.667,
+   1945.67
+  ]
+ ],
+ "entities": [
+  {
+   "description": "third planet from the Sun in the Solar System",
+   "facts": {
+    "P31": [
+     "Q3504248"
+    ],
+    "P571": "-454000000",
+    "P576": "http://www"
+   },
+   "kind": "concept",
+   "label": "Earth",
+   "qid": "Q2",
+   "relations": {
+    "P361": [
+     "Q544",
+     "Q18589965"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "island country in East Asia",
+   "facts": {
+    "P17": [
+     "Q17"
+    ],
+    "P297": "JP",
+    "P31": [
+     "Q6256",
+     "Q112099",
+     "Q3624078"
+    ],
+    "P571": "1947-05-03"
+   },
+   "kind": "polity",
+   "label": "Japan",
+   "qid": "Q17",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Northwestern Europe",
+   "facts": {
+    "P17": [
+     "Q27"
+    ],
+    "P297": "IE",
+    "P31": [
+     "Q6256",
+     "Q112099",
+     "Q3624078",
+     "Q127693126"
+    ],
+    "P571": "1937-12-29"
+   },
+   "kind": "polity",
+   "label": "Ireland",
+   "qid": "Q27",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in southwestern Europe with territories in Africa",
+   "facts": {
+    "P17": [
+     "Q29"
+    ],
+    "P297": "ES",
+    "P31": [
+     "Q6256",
+     "Q179671",
+     "Q1250464",
+     "Q3624078",
+     "Q51576574"
+    ],
+    "P571": "1516-03-24"
+   },
+   "kind": "polity",
+   "label": "Spain",
+   "qid": "Q29",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country located primarily in North America",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P297": "US",
+    "P31": [
+     "Q6256",
+     "Q3624078"
+    ],
+    "P571": "1784-05-12"
+   },
+   "kind": "polity",
+   "label": "United States",
+   "qid": "Q30",
+   "relations": {
+    "P1365": [
+     "Q81931",
+     "Q7887623"
+    ],
+    "P361": [
+     "Q49"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "country in western Europe",
+   "facts": {
+    "P17": [
+     "Q31"
+    ],
+    "P297": "BE",
+    "P31": [
+     "Q6256",
+     "Q3624078"
+    ],
+    "P571": "1830-10-04"
+   },
+   "kind": "polity",
+   "label": "Belgium",
+   "qid": "Q31",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Central Europe",
+   "facts": {
+    "P17": [
+     "Q36"
+    ],
+    "P297": "PL",
+    "P31": [
+     "Q6256",
+     "Q3624078"
+    ],
+    "P571": "1918-11-11"
+   },
+   "kind": "polity",
+   "label": "Poland",
+   "qid": "Q36",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in northeastern Europe",
+   "facts": {
+    "P17": [
+     "Q37"
+    ],
+    "P297": "LT",
+    "P31": [
+     "Q6256",
+     "Q179164",
+     "Q3624078",
+     "Q63791824"
+    ],
+    "P571": "1990-03-11"
+   },
+   "kind": "polity",
+   "label": "Lithuania",
+   "qid": "Q37",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in southern Europe",
+   "facts": {
+    "P17": [
+     "Q38"
+    ],
+    "P297": "IT",
+    "P31": [
+     "Q6256",
+     "Q3624078"
+    ],
+    "P571": "1946-06-18"
+   },
+   "kind": "polity",
+   "label": "Italy",
+   "qid": "Q38",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Central Europe",
+   "facts": {
+    "P17": [
+     "Q40"
+    ],
+    "P297": "AT",
+    "P31": [
+     "Q6256",
+     "Q123480",
+     "Q3624078",
+     "Q4209223",
+     "Q127693126"
+    ],
+    "P571": "1918-11-12"
+   },
+   "kind": "polity",
+   "label": "Austria",
+   "qid": "Q40",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in West Asia and Southeast Europe",
+   "facts": {
+    "P17": [
+     "Q43"
+    ],
+    "P297": "TR",
+    "P31": [
+     "Q6256",
+     "Q339834",
+     "Q619610",
+     "Q859563",
+     "Q1323642",
+     "Q3624078",
+     "Q51576574",
+     "Q127693126"
+    ],
+    "P571": "1923-10-29"
+   },
+   "kind": "polity",
+   "label": "Turkey",
+   "qid": "Q43",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Southwestern Europe",
+   "facts": {
+    "P17": [
+     "Q45"
+    ],
+    "P297": "PT",
+    "P31": [
+     "Q6256",
+     "Q3624078"
+    ],
+    "P571": "1128-07-01"
+   },
+   "kind": "polity",
+   "label": "Portugal",
+   "qid": "Q45",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "one of the four autonomous countries of the Kingdom of the Netherlands; with territories in the Caribbean",
+   "facts": {
+    "P131": [
+     "Q29999"
+    ],
+    "P17": [
+     "Q29999"
+    ],
+    "P31": [
+     "Q6256",
+     "Q15304003"
+    ],
+    "P571": "1795-01-19"
+   },
+   "kind": "polity",
+   "label": "Netherlands",
+   "qid": "Q55",
+   "relations": {
+    "P1365": [
+     "Q15864"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "country in Northeast Africa and Southwest Asia",
+   "facts": {
+    "P17": [
+     "Q79"
+    ],
+    "P297": "EG",
+    "P31": [
+     "Q6256",
+     "Q1323642",
+     "Q3624078",
+     "Q51576574"
+    ],
+    "P571": "1922-02-28"
+   },
+   "kind": "polity",
+   "label": "Egypt",
+   "qid": "Q79",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Western Europe and other continents (through its overseas territories in America, Africa and Oceania)",
+   "facts": {
+    "P17": [
+     "Q142"
+    ],
+    "P297": "FR",
+    "P31": [
+     "Q6256",
+     "Q7270",
+     "Q3624078"
+    ],
+    "P571": "1792-01-01"
+   },
+   "kind": "polity",
+   "label": "France",
+   "qid": "Q142",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "island country in north-west Europe",
+   "facts": {
+    "P17": [
+     "Q145"
+    ],
+    "P297": "GB",
+    "P31": [
+     "Q6256",
+     "Q112099",
+     "Q3624078",
+     "Q20181813"
+    ],
+    "P571": "1921-12-06"
+   },
+   "kind": "polity",
+   "label": "United Kingdom",
+   "qid": "Q145",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in South America",
+   "facts": {
+    "P17": [
+     "Q155"
+    ],
+    "P297": "BR",
+    "P31": [
+     "Q6256",
+     "Q859563",
+     "Q3624078"
+    ],
+    "P571": "1822-09-07"
+   },
+   "kind": "polity",
+   "label": "Brazil",
+   "qid": "Q155",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Eastern Europe and Northern Asia, the largest in the world by area",
+   "facts": {
+    "P17": [
+     "Q159"
+    ],
+    "P297": "RU",
+    "P31": [
+     "Q6256",
+     "Q859563",
+     "Q1323642",
+     "Q3624078",
+     "Q127693126"
+    ],
+    "P571": "1263-01-01"
+   },
+   "kind": "polity",
+   "label": "Russia",
+   "qid": "Q159",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Central Europe",
+   "facts": {
+    "P17": [
+     "Q183"
+    ],
+    "P297": "DE",
+    "P31": [
+     "Q6256",
+     "Q3624078"
+    ],
+    "P571": "1949-05-23"
+   },
+   "kind": "polity",
+   "label": "Germany",
+   "qid": "Q183",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Eastern Europe",
+   "facts": {
+    "P17": [
+     "Q184"
+    ],
+    "P297": "BY",
+    "P31": [
+     "Q6256",
+     "Q123480",
+     "Q179164",
+     "Q619610",
+     "Q3624078"
+    ],
+    "P571": "1991-08-25"
+   },
+   "kind": "polity",
+   "label": "Belarus",
+   "qid": "Q184",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Eastern Europe",
+   "facts": {
+    "P17": [
+     "Q212"
+    ],
+    "P297": "UA",
+    "P31": [
+     "Q6256",
+     "Q7270",
+     "Q179164",
+     "Q619610",
+     "Q3624078",
+     "Q4209223",
+     "Q4835091"
+    ],
+    "P571": "1991-08-24"
+   },
+   "kind": "polity",
+   "label": "Ukraine",
+   "qid": "Q212",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Central Europe",
+   "facts": {
+    "P17": [
+     "Q213"
+    ],
+    "P297": "CZ",
+    "P31": [
+     "Q6256",
+     "Q7270",
+     "Q123480",
+     "Q3624078",
+     "Q127693126"
+    ],
+    "P571": "1993-01-01"
+   },
+   "kind": "polity",
+   "label": "Czech Republic",
+   "qid": "Q213",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Central Europe",
+   "facts": {
+    "P17": [
+     "Q215"
+    ],
+    "P297": "SI",
+    "P31": [
+     "Q6256",
+     "Q3624078",
+     "Q22909549",
+     "Q51576574"
+    ],
+    "P571": "1991-06-25"
+   },
+   "kind": "polity",
+   "label": "Slovenia",
+   "qid": "Q215",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in southeastern Europe",
+   "facts": {
+    "P17": [
+     "Q221"
+    ],
+    "P297": "MK",
+    "P31": [
+     "Q6256",
+     "Q123480",
+     "Q3624078"
+    ],
+    "P571": "1991-01-01"
+   },
+   "kind": "polity",
+   "label": "North Macedonia",
+   "qid": "Q221",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Central Europe",
+   "facts": {
+    "P17": [
+     "Q224"
+    ],
+    "P297": "HR",
+    "P31": [
+     "Q6256",
+     "Q179164",
+     "Q3624078",
+     "Q51576574"
+    ],
+    "P571": "1991-06-25"
+   },
+   "kind": "polity",
+   "label": "Croatia",
+   "qid": "Q224",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in Southeast Europe",
+   "facts": {
+    "P17": [
+     "Q225"
+    ],
+    "P297": "BA",
+    "P31": [
+     "Q6256",
+     "Q3624078",
+     "Q51576574"
+    ],
+    "P571": "1992-03-06"
+   },
+   "kind": "polity",
+   "label": "Bosnia and Herzegovina",
+   "qid": "Q225",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in southeastern Europe",
+   "facts": {
+    "P17": [
+     "Q236"
+    ],
+    "P297": "ME",
+    "P31": [
+     "Q6256",
+     "Q3624078",
+     "Q51576574",
+     "Q127693126"
+    ],
+    "P571": "2006-06-03"
+   },
+   "kind": "polity",
+   "label": "Montenegro",
+   "qid": "Q236",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in North Africa",
+   "facts": {
+    "P17": [
+     "Q262"
+    ],
+    "P297": "DZ",
+    "P31": [
+     "Q6256",
+     "Q3624078",
+     "Q51576574"
+    ],
+    "P571": "1962-07-03"
+   },
+   "kind": "polity",
+   "label": "Algeria",
+   "qid": "Q262",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "1939–1945 global conflict",
+   "facts": {
+    "P17": [
+     "Q17"
+    ],
+    "P31": [
+     "Q103495",
+     "Q11514315"
+    ],
+    "P580": "1939-09-01",
+    "P582": "1945-09-02"
+   },
+   "kind": "event",
+   "label": "World War II",
+   "qid": "Q362",
+   "relations": {
+    "P155": [
+     "Q361",
+     "Q154611"
+    ],
+    "P279": [
+     "Q198"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "country in Southeast Europe",
+   "facts": {
+    "P17": [
+     "Q403"
+    ],
+    "P297": "RS",
+    "P31": [
+     "Q6256",
+     "Q7270",
+     "Q123480",
+     "Q3624078",
+     "Q127693126"
+    ],
+    "P571": "2006-01-01"
+   },
+   "kind": "polity",
+   "label": "Serbia",
+   "qid": "Q403",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "island country in the southwest Pacific Ocean",
+   "facts": {
+    "P17": [
+     "Q664"
+    ],
+    "P297": "NZ",
+    "P31": [
+     "Q6256",
+     "Q112099",
+     "Q202686",
+     "Q3624078"
+    ],
+    "P571": "1907-09-26"
+   },
+   "kind": "polity",
+   "label": "New Zealand",
+   "qid": "Q664",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in South America",
+   "facts": {
+    "P297": "VE",
+    "P31": [
+     "Q6256",
+     "Q3624078"
+    ],
+    "P571": "1811-07-05"
+   },
+   "kind": "polity",
+   "label": "Venezuela",
+   "qid": "Q717",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in the Caribbean Sea",
+   "facts": {
+    "P17": [
+     "Q790"
+    ],
+    "P297": "HT",
+    "P31": [
+     "Q6256",
+     "Q112099",
+     "Q3624078"
+    ],
+    "P571": "1804-01-01"
+   },
+   "kind": "polity",
+   "label": "Haiti",
+   "qid": "Q790",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "sovereign state in Central America",
+   "facts": {
+    "P17": [
+     "Q792"
+    ],
+    "P297": "SV",
+    "P31": [
+     "Q6256",
+     "Q3624078"
+    ],
+    "P571": "1841-02-02"
+   },
+   "kind": "polity",
+   "label": "El Salvador",
+   "qid": "Q792",
+   "relations": {
+    "P1365": [
+     "Q65182752"
+    ],
+    "P361": [
+     "Q12585"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "country in Western Asia",
+   "facts": {
+    "P17": [
+     "Q794"
+    ],
+    "P297": "IR",
+    "P31": [
+     "Q6256",
+     "Q3624078",
+     "Q127693126"
+    ],
+    "P571": "1979-04-01"
+   },
+   "kind": "polity",
+   "label": "Iran",
+   "qid": "Q794",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in West Asia",
+   "facts": {
+    "P17": [
+     "Q801"
+    ],
+    "P297": "IL",
+    "P31": [
+     "Q6256",
+     "Q82794",
+     "Q3624078",
+     "Q10711424",
+     "Q51576574"
+    ],
+    "P571": "1948-05-14"
+   },
+   "kind": "polity",
+   "label": "Israel",
+   "qid": "Q801",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in West Asia",
+   "facts": {
+    "P17": [
+     "Q810"
+    ],
+    "P297": "JO",
+    "P31": [
+     "Q6256",
+     "Q41614",
+     "Q3624078"
+    ],
+    "P571": "1946-01-01"
+   },
+   "kind": "polity",
+   "label": "Jordan",
+   "qid": "Q810",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "state of the United States of America",
+   "facts": {
+    "P131": [
+     "Q30"
+    ],
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q35657"
+    ],
+    "P571": "1845-03-03"
+   },
+   "kind": "polity",
+   "label": "Florida",
+   "qid": "Q812",
+   "relations": {
+    "P1365": [
+     "Q1187087"
+    ],
+    "P361": [
+     "Q578170",
+     "Q2261430"
+    ],
+    "is_a": [
+     "Q10864048"
+    ]
+   },
+   "relations_read": true
+  },
+  {
+   "description": "country in West Asia",
+   "facts": {
+    "P17": [
+     "Q822"
+    ],
+    "P297": "LB",
+    "P31": [
+     "Q6256",
+     "Q3624078",
+     "Q51576574"
+    ],
+    "P571": "1943-11-22"
+   },
+   "kind": "polity",
+   "label": "Lebanon",
+   "qid": "Q822",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "North America and South America taken together as a single continent or landmass",
+   "facts": {
+    "P31": [
+     "Q5107",
+     "Q55833",
+     "Q2418896"
+    ]
+   },
+   "kind": "place",
+   "label": "Americas",
+   "qid": "Q828",
+   "relations": {
+    "P361": [
+     "Q2",
+     "Q1349417"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "country in West Asia",
+   "facts": {
+    "P17": [
+     "Q858"
+    ],
+    "P297": "SY",
+    "P31": [
+     "Q6256",
+     "Q3624078",
+     "Q51576574"
+    ],
+    "P571": "1920-03-08"
+   },
+   "kind": "polity",
+   "label": "Syria",
+   "qid": "Q858",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in South Asia",
+   "facts": {
+    "P17": [
+     "Q902"
+    ],
+    "P297": "BD",
+    "P31": [
+     "Q6256",
+     "Q3624078"
+    ],
+    "P571": "1971-03-26"
+   },
+   "kind": "polity",
+   "label": "Bangladesh",
+   "qid": "Q902",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in North Africa",
+   "facts": {
+    "P17": [
+     "Q948"
+    ],
+    "P297": "TN",
+    "P31": [
+     "Q6256",
+     "Q7270",
+     "Q3624078",
+     "Q51576574"
+    ],
+    "P571": "1956-03-20"
+   },
+   "kind": "polity",
+   "label": "Tunisia",
+   "qid": "Q948",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "sovereign state in North Africa",
+   "facts": {
+    "P17": [
+     "Q1016"
+    ],
+    "P297": "LY",
+    "P31": [
+     "Q6256",
+     "Q3624078",
+     "Q51576574"
+    ],
+    "P571": "1951-12-24"
+   },
+   "kind": "polity",
+   "label": "Libya",
+   "qid": "Q1016",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "sovereign state in Africa",
+   "facts": {
+    "P17": [
+     "Q1045"
+    ],
+    "P297": "SO",
+    "P31": [
+     "Q6256",
+     "Q7270",
+     "Q512187",
+     "Q3624078"
+    ],
+    "P571": "1960-01-01"
+   },
+   "kind": "polity",
+   "label": "Somalia",
+   "qid": "Q1045",
+   "relations": {
+    "P1365": [
+     "Q1477220"
+    ],
+    "P155": [
+     "Q1106857"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "country in Northeast Africa",
+   "facts": {
+    "P17": [
+     "Q1049"
+    ],
+    "P297": "SD",
+    "P31": [
+     "Q6256",
+     "Q7270",
+     "Q1088391",
+     "Q3624078"
+    ],
+    "P571": "1956-01-01"
+   },
+   "kind": "polity",
+   "label": "Sudan",
+   "qid": "Q1049",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "state of the United States of America",
+   "facts": {
+    "P131": [
+     "Q30"
+    ],
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q35657"
+    ],
+    "P571": "1837-01-26"
+   },
+   "kind": "polity",
+   "label": "Michigan",
+   "qid": "Q1166",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "country in southeastern Europe",
+   "facts": {
+    "P17": [
+     "Q1246"
+    ],
+    "P297": "XK",
+    "P31": [
+     "Q6256",
+     "Q123480",
+     "Q179164",
+     "Q3624078",
+     "Q10711424"
+    ],
+    "P571": "2008-02-17"
+   },
+   "kind": "polity",
+   "label": "Kosovo",
+   "qid": "Q1246",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "state of the United States of America",
+   "facts": {
+    "P131": [
+     "Q30"
+    ],
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q35657"
+    ],
+    "P571": "1788-01-02"
+   },
+   "kind": "polity",
+   "label": "Georgia",
+   "qid": "Q1428",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "sea between Europe, Africa and Asia",
+   "facts": {
+    "P17": [
+     "Q29",
+     "Q38",
+     "Q41",
+     "Q43",
+     "Q79",
+     "Q142",
+     "Q215",
+     "Q222",
+     "Q224",
+     "Q225",
+     "Q229",
+     "Q233",
+     "Q235",
+     "Q236",
+     "Q262",
+     "Q801",
+     "Q822",
+     "Q858",
+     "Q948",
+     "Q1016"
+    ],
+    "P31": [
+     "Q166620",
+     "Q1973404"
+    ]
+   },
+   "kind": "concept",
+   "label": "Mediterranean Sea",
+   "qid": "Q4918",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "administrative subdivision in France",
+   "facts": {
+    "P131": [
+     "Q142"
+    ],
+    "P17": [
+     "Q142"
+    ],
+    "P31": [
+     "Q20667921"
+    ],
+    "P571": "1790-03-04"
+   },
+   "kind": "concept",
+   "label": "department of France",
+   "qid": "Q6465",
+   "relations": {
+    "P279": [
+     "Q192611",
+     "Q583865",
+     "Q643589",
+     "Q12357832",
+     "Q12357920",
+     "Q41773366"
+    ],
+    "P361": [
+     "Q36784"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "geopolitical conflict in the Middle East and North Africa between Israel and its Arab neighbours",
+   "facts": {
+    "P31": [
+     "Q766875",
+     "Q11422542"
+    ],
+    "P580": "1948-05-15"
+   },
+   "kind": "event",
+   "label": "Arab–Israeli conflict",
+   "qid": "Q8669",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "overseas possessions of England and later the United Kingdom (1607–1997)",
+   "facts": {
+    "P17": [
+     "Q8680"
+    ],
+    "P31": [
+     "Q1620908",
+     "Q1790360"
+    ],
+    "P571": "1583-01-01",
+    "P576": "1997-01-01"
+   },
+   "kind": "place",
+   "label": "British Empire",
+   "qid": "Q8680",
+   "relations": {
+    "P1365": [
+     "Q617219"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "1947–1991 tension between the Soviet Union and the United States and their respective allies",
+   "facts": {
+    "P31": [
+     "Q864113",
+     "Q1469686",
+     "Q4176199",
+     "Q11514315"
+    ],
+    "P580": "1945-01-01",
+    "P582": "1991-12-25"
+   },
+   "kind": "event",
+   "label": "Cold War",
+   "qid": "Q8683",
+   "relations": {
+    "P155": [
+     "Q362"
+    ],
+    "P279": [
+     "Q369799",
+     "Q11422542"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "bicameral legislature of the United States",
+   "facts": {
+    "P131": [
+     "Q61"
+    ],
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q189445"
+    ],
+    "P571": "1789-03-04"
+   },
+   "kind": "concept",
+   "label": "United States Congress",
+   "qid": "Q11268",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "lower house of the United States Congress",
+   "facts": {
+    "P131": [
+     "Q61"
+    ],
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q471855",
+     "Q2145277",
+     "Q110315658",
+     "Q115456878"
+    ],
+    "P571": "1789-04-01"
+   },
+   "kind": "concept",
+   "label": "United States House of Representatives",
+   "qid": "Q11701",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "multi-ethnic complex of territories in Western and Central Europe (800/962–1806)",
+   "facts": {
+    "P17": [
+     "Q12548"
+    ],
+    "P31": [
+     "Q3024240"
+    ],
+    "P571": "0962-02-07",
+    "P576": "1806-08-06"
+   },
+   "kind": "polity",
+   "label": "Holy Roman Empire",
+   "qid": "Q12548",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "region of the Americas where Romance languages are primarily spoken",
+   "facts": {
+    "P31": [
+     "Q3502482",
+     "Q137186904"
+    ]
+   },
+   "kind": "concept",
+   "label": "Latin America",
+   "qid": "Q12585",
+   "relations": {
+    "P361": [
+     "Q72829598"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "Kingdom of the Netherlands from 1815 to 1839",
+   "facts": {
+    "P31": [
+     "Q3024240"
+    ],
+    "P571": "1815-01-01",
+    "P576": "1839-04-19"
+   },
+   "kind": "polity",
+   "label": "United Kingdom of the Netherlands",
+   "qid": "Q15864",
+   "relations": {
+    "P1365": [
+     "Q3044803"
+    ],
+    "P155": [
+     "Q774783"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "geographic region in West Asia",
+   "facts": {
+    "P17": [
+     "Q801",
+     "Q810",
+     "Q219060"
+    ],
+    "P31": [
+     "Q82794",
+     "Q1200957",
+     "Q1620908",
+     "Q2577883",
+     "Q3502482",
+     "Q5284036"
+    ]
+   },
+   "kind": "place",
+   "label": "Palestine",
+   "qid": "Q23792",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "American political party",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q7278"
+    ],
+    "P571": "1854-03-20"
+   },
+   "kind": "org",
+   "label": "Republican Party",
+   "qid": "Q29468",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "American political party",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q7278"
+    ],
+    "P571": "1828-01-08"
+   },
+   "kind": "org",
+   "label": "Democratic Party",
+   "qid": "Q29552",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "constituent political entity of the United States of America",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q28872924",
+     "Q135236673"
+    ]
+   },
+   "kind": "concept",
+   "label": "U.S. state",
+   "qid": "Q35657",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "Palestinian territory on the western bank of the Jordan River, occupied by Israel",
+   "facts": {
+    "P131": [
+     "Q219060",
+     "Q513200"
+    ],
+    "P17": [
+     "Q801",
+     "Q810",
+     "Q219060"
+    ],
+    "P31": [
+     "Q82794"
+    ],
+    "P571": "1949-01-01"
+   },
+   "kind": "place",
+   "label": "West Bank",
+   "qid": "Q36678",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "Palestinian Islamist political and military organization",
+   "facts": {
+    "P17": [
+     "Q23792"
+    ],
+    "P31": [
+     "Q138796",
+     "Q1530022",
+     "Q6762254",
+     "Q7210356",
+     "Q15627509",
+     "Q17127659"
+    ],
+    "P571": "1987-12-10"
+   },
+   "kind": "org",
+   "label": "Hamas",
+   "qid": "Q38799",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "self-governing Palestinian territory next to Egypt and Israel",
+   "facts": {
+    "P131": [
+     "Q219060"
+    ],
+    "P17": [
+     "Q42620",
+     "Q170468",
+     "Q219060",
+     "Q575187",
+     "Q7075778"
+    ],
+    "P31": [
+     "Q82794",
+     "Q933394",
+     "Q1078001",
+     "Q2577883",
+     "Q15239622",
+     "Q45220060"
+    ],
+    "P571": "1949-01-01"
+   },
+   "kind": "place",
+   "label": "Gaza Strip",
+   "qid": "Q39760",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "interim government in Western Asia, governing West Bank Areas A and B since 1994 and, until 2006, the Gaza Strip",
+   "facts": {
+    "P17": [
+     "Q219060"
+    ],
+    "P31": [
+     "Q35798",
+     "Q59281"
+    ],
+    "P571": "1994-01-01"
+   },
+   "kind": "concept",
+   "label": "Palestinian National Authority",
+   "qid": "Q42620",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "intergovernmental organization and international tribunal",
+   "facts": {
+    "P131": [
+     "Q36600"
+    ],
+    "P17": [
+     "Q55"
+    ],
+    "P31": [
+     "Q245065",
+     "Q1262438"
+    ],
+    "P571": "2002-07-01"
+   },
+   "kind": "org",
+   "label": "International Criminal Court",
+   "qid": "Q47488",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "ancient Levantine metropolis and modern city in Gaza Strip",
+   "facts": {
+    "P131": [
+     "Q762573"
+    ],
+    "P17": [
+     "Q219060"
+    ],
+    "P31": [
+     "Q515",
+     "Q1549591",
+     "Q136721998"
+    ],
+    "P571": "-1500-01-0"
+   },
+   "kind": "place",
+   "label": "Gaza City",
+   "qid": "Q47492",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "cultural region in the southeastern and south-central United States",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q518261",
+     "Q57766005",
+     "Q123615496"
+    ]
+   },
+   "kind": "concept",
+   "label": "Southern United States",
+   "qid": "Q49042",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "port in Libya",
+   "facts": {
+    "P17": [
+     "Q1016"
+    ],
+    "P31": [
+     "Q44782"
+    ]
+   },
+   "kind": "place",
+   "label": "Port of Benghazi",
+   "qid": "Q58196",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "combined military forces of Israel",
+   "facts": {
+    "P17": [
+     "Q801"
+    ],
+    "P31": [
+     "Q772547"
+    ],
+    "P571": "1948-05-26"
+   },
+   "kind": "concept",
+   "label": "Israel Defense Forces",
+   "qid": "Q58967",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "upper house of the United States Congress",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q471855",
+     "Q2570643",
+     "Q110315658",
+     "Q115456878"
+    ],
+    "P571": "1789-01-01"
+   },
+   "kind": "concept",
+   "label": "United States Senate",
+   "qid": "Q66096",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "empire of Napoleon I of France, from 1804 to 1815",
+   "facts": {
+    "P17": [
+     "Q71084"
+    ],
+    "P31": [
+     "Q48349",
+     "Q3024240",
+     "Q5589178"
+    ],
+    "P571": "1804-05-18",
+    "P576": "1815-07-07"
+   },
+   "kind": "polity",
+   "label": "First French Empire",
+   "qid": "Q71084",
+   "relations": {
+    "P1365": [
+     "Q58296",
+     "Q508488",
+     "Q659312"
+    ],
+    "P155": [
+     "Q212278",
+     "Q877619"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "colonial empire governed by Spain between 1492 and 1976",
+   "facts": {
+    "P17": [
+     "Q29"
+    ],
+    "P31": [
+     "Q3024240"
+    ],
+    "P571": "1402-01-01",
+    "P576": "1976-02-26"
+   },
+   "kind": "polity",
+   "label": "Spanish Empire",
+   "qid": "Q80702",
+   "relations": {
+    "P1365": [
+     "Q204920",
+     "Q217196"
+    ],
+    "P361": [
+     "Q377350"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "ongoing military and political conflict in the Levant",
+   "facts": {
+    "P31": [
+     "Q108809873"
+    ],
+    "P580": "1948-05-14"
+   },
+   "kind": "event",
+   "label": "Israeli–Palestinian conflict",
+   "qid": "Q151622",
+   "relations": {
+    "P155": [
+     "Q2992527"
+    ],
+    "P361": [
+     "Q8669",
+     "Q16125891"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "constitutional monarchy in Western Europe (1707–1800)",
+   "facts": {
+    "P17": [
+     "Q161885"
+    ],
+    "P31": [
+     "Q417175",
+     "Q3024240",
+     "Q3624078"
+    ],
+    "P571": "1707-05-12",
+    "P576": "1801-01-01"
+   },
+   "kind": "polity",
+   "label": "Kingdom of Great Britain",
+   "qid": "Q161885",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "viceroyalty of the Spanish Empire (1535-1821)",
+   "facts": {
+    "P131": [
+     "Q80702"
+    ],
+    "P17": [
+     "Q29",
+     "Q80702"
+    ],
+    "P31": [
+     "Q20203507"
+    ],
+    "P571": "1521-08-28",
+    "P576": "1820-05-31"
+   },
+   "kind": "concept",
+   "label": "New Spain",
+   "qid": "Q170603",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "USA-led campaign against illegal drug use and trade",
+   "facts": {
+    "P31": [
+     "Q6056746"
+    ],
+    "P585": "1971-06-18"
+   },
+   "kind": "event",
+   "label": "war on drugs",
+   "qid": "Q185517",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "Ethnic group native to the Palestine region in Southwest Asia",
+   "facts": {
+    "P17": [
+     "Q219060"
+    ],
+    "P27": [
+     "Q219060"
+    ],
+    "P31": [
+     "Q33829",
+     "Q41710",
+     "Q122973425"
+    ]
+   },
+   "kind": "person",
+   "label": "Palestinians",
+   "qid": "Q201190",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "centre-right political party in New Zealand",
+   "facts": {
+    "P17": [
+     "Q664"
+    ],
+    "P31": [
+     "Q7278"
+    ],
+    "P571": "1936-05-14"
+   },
+   "kind": "org",
+   "label": "New Zealand National Party",
+   "qid": "Q204716",
+   "relations": {
+    "P1365": [
+     "Q1132236",
+     "Q2495287"
+    ],
+    "is_a": [
+     "Q7278"
+    ]
+   },
+   "relations_read": true
+  },
+  {
+   "description": "political entity that enjoys incomplete recognition as a state, located in West Asia",
+   "facts": {
+    "P17": [
+     "Q219060"
+    ],
+    "P297": "PS",
+    "P31": [
+     "Q6256",
+     "Q82794",
+     "Q3624078",
+     "Q10711424",
+     "Q51576574"
+    ],
+    "P571": "1988-11-15"
+   },
+   "kind": "polity",
+   "label": "Palestine",
+   "qid": "Q219060",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "exploding artillery projectile",
+   "facts": {
+    "P31": [
+     "Q124078422"
+    ]
+   },
+   "kind": "concept",
+   "label": "shell",
+   "qid": "Q318028",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "Italian possession in East Africa between 1936 and 1941",
+   "facts": {
+    "P17": [
+     "Q3348640"
+    ],
+    "P31": [
+     "Q133156"
+    ],
+    "P571": "1936-01-01",
+    "P576": "1941-01-01"
+   },
+   "kind": "concept",
+   "label": "Italian East Africa",
+   "qid": "Q328478",
+   "relations": {
+    "P1365": [
+     "Q1232988"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "use of military forces applied selectively and with restraint to enforce compliance with the policies or objectives of the political body controlling the military force",
+   "facts": {
+    "P31": [
+     "Q125092269"
+    ]
+   },
+   "kind": "concept",
+   "label": "low-intensity conflict",
+   "qid": "Q369799",
+   "relations": {
+    "P279": [
+     "Q180684"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "centrist political party in Bangladesh",
+   "facts": {
+    "P17": [
+     "Q902"
+    ],
+    "P31": [
+     "Q7278"
+    ],
+    "P571": "1978-09-01"
+   },
+   "kind": "org",
+   "label": "Bangladesh Nationalist Party",
+   "qid": "Q496810",
+   "relations": {
+    "is_a": [
+     "Q7278"
+    ]
+   },
+   "relations_read": true
+  },
+  {
+   "description": "armed conflict between armed forces of Israel and armed forces of Gaza",
+   "facts": {
+    "P17": [
+     "Q801",
+     "Q219060",
+     "Q130463380"
+    ],
+    "P31": [
+     "Q350604"
+    ],
+    "P580": "1948-05-15"
+   },
+   "kind": "event",
+   "label": "Gaza–Israel conflict",
+   "qid": "Q553184",
+   "relations": {
+    "P361": [
+     "Q151622"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "former Spanish possession in North America (1513–1763, 1783–1821)",
+   "facts": {
+    "P131": [
+     "Q170603",
+     "Q2039931"
+    ],
+    "P17": [
+     "Q80702"
+    ],
+    "P31": [
+     "Q17259945"
+    ],
+    "P571": "1513-01-01",
+    "P576": "1818-01-01"
+   },
+   "kind": "concept",
+   "label": "Spanish Florida",
+   "qid": "Q555528",
+   "relations": {
+    "P1365": [
+     "Q6024708"
+    ],
+    "P361": [
+     "Q2039931"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "the 48 states of the United States (all but Alaska and Hawaii) and the District of Columbia",
+   "facts": {
+    "P131": [
+     "Q30"
+    ],
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q1140140",
+     "Q4835091",
+     "Q15642541",
+     "Q55612464"
+    ]
+   },
+   "kind": "concept",
+   "label": "contiguous United States",
+   "qid": "Q578170",
+   "relations": {
+    "P361": [
+     "Q828",
+     "Q55416584"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "Italian trust territory",
+   "facts": {
+    "P17": [
+     "Q319984"
+    ],
+    "P31": [
+     "Q985073"
+    ],
+    "P571": "1950-01-01",
+    "P576": "1960-07-01"
+   },
+   "kind": "concept",
+   "label": "Trust Territory of Somalia",
+   "qid": "Q616221",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "former British protectorate",
+   "facts": {
+    "P17": [
+     "Q145"
+    ],
+    "P31": [
+     "Q164142",
+     "Q3024240"
+    ],
+    "P571": "1884-01-01",
+    "P576": "1960-06-26"
+   },
+   "kind": "polity",
+   "label": "British Somaliland",
+   "qid": "Q662653",
+   "relations": {
+    "P1365": [
+     "Q328478"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "major part of the Southern Netherlands region between 1714 and 1797",
+   "facts": {
+    "P17": [
+     "Q12548"
+    ],
+    "P31": [
+     "Q26830017"
+    ],
+    "P571": "1714-01-01",
+    "P576": "1797-01-01"
+   },
+   "kind": "concept",
+   "label": "Austrian Netherlands",
+   "qid": "Q700283",
+   "relations": {
+    "P1365": [
+     "Q622783"
+    ],
+    "is_a": [
+     "Q10864048"
+    ]
+   },
+   "relations_read": true
+  },
+  {
+   "description": "precursor of the United Kingdom of the Netherlands from 1813 to 1815",
+   "facts": {
+    "P17": [
+     "Q55"
+    ],
+    "P31": [
+     "Q3024240"
+    ],
+    "P571": "1813-11-21",
+    "P576": "1815-03-16"
+   },
+   "kind": "polity",
+   "label": "Sovereign Principality of the United Netherlands",
+   "qid": "Q774783",
+   "relations": {
+    "P155": [
+     "Q71084"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "position of the head of the government of a state of the United States",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q136649946"
+    ]
+   },
+   "kind": "concept",
+   "label": "governor",
+   "qid": "Q889821",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "American politician (born 1963)",
+   "facts": {
+    "P27": [
+     "Q30"
+    ],
+    "P31": [
+     "Q5"
+    ]
+   },
+   "kind": "person",
+   "label": "Mike Rogers",
+   "qid": "Q970515",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "former sovereign state in Africa",
+   "facts": {
+    "P17": [
+     "Q34754"
+    ],
+    "P31": [
+     "Q3024240"
+    ],
+    "P571": "1960-06-26",
+    "P576": "1960-07-01"
+   },
+   "kind": "polity",
+   "label": "State of Somaliland",
+   "qid": "Q1106857",
+   "relations": {
+    "P1365": [
+     "Q662653"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "political party",
+   "facts": {
+    "P17": [
+     "Q664"
+    ],
+    "P31": [
+     "Q7278"
+    ],
+    "P571": "1909-01-01",
+    "P576": "1936-01-01"
+   },
+   "kind": "org",
+   "label": "New Zealand Reform Party",
+   "qid": "Q1132236",
+   "relations": {
+    "is_a": [
+     "Q7278"
+    ]
+   },
+   "relations_read": true
+  },
+  {
+   "description": "organized incorporated territory of the United States (1822—1845)",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q1352230",
+     "Q19953632"
+    ],
+    "P571": "1822-01-01",
+    "P576": "1845-01-01"
+   },
+   "kind": "concept",
+   "label": "Florida Territory",
+   "qid": "Q1187087",
+   "relations": {
+    "P1365": [
+     "Q555528",
+     "Q1425202"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "term for the surface of the Earth",
+   "facts": {
+    "P31": [
+     "Q2627400",
+     "Q7201252"
+    ]
+   },
+   "kind": "concept",
+   "label": "Earth's surface",
+   "qid": "Q1349417",
+   "relations": {
+    "P361": [
+     "Q2",
+     "Q2627400"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "political division that is directly overseen by the United States federal government",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q28872924"
+    ]
+   },
+   "kind": "concept",
+   "label": "territory of the United States",
+   "qid": "Q1352230",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "maritime warfare branch of Libya's military",
+   "facts": {
+    "P17": [
+     "Q1016"
+    ],
+    "P31": [
+     "Q4508"
+    ],
+    "P571": "1962-11-01"
+   },
+   "kind": "concept",
+   "label": "Libyan Navy",
+   "qid": "Q1366319",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "requirement for something else to happen and to generate some effects or results",
+   "facts": {
+    "P31": [
+     "Q151885",
+     "Q130459448"
+    ]
+   },
+   "kind": "concept",
+   "label": "precondition",
+   "qid": "Q1413450",
+   "relations": {
+    "P279": [
+     "Q813912"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "European colony in North America (1763–1821)",
+   "facts": {
+    "P131": [
+     "Q2039931"
+    ],
+    "P17": [
+     "Q80702"
+    ],
+    "P31": [
+     "Q17147964"
+    ],
+    "P571": "1783-11-25",
+    "P576": "1821-02-22"
+   },
+   "kind": "concept",
+   "label": "West Florida",
+   "qid": "Q1425202",
+   "relations": {
+    "P1365": [
+     "Q4971241"
+    ],
+    "P361": [
+     "Q8680",
+     "Q80702"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "military wing of the Palestinian Hamas organization",
+   "facts": {
+    "P17": [
+     "Q219060"
+    ],
+    "P31": [
+     "Q207320",
+     "Q113000769"
+    ],
+    "P571": "1992-01-01"
+   },
+   "kind": "concept",
+   "label": "Izz ad-Din al-Qassam Brigades",
+   "qid": "Q1475112",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "former country in Africa",
+   "facts": {
+    "P17": [
+     "Q1045"
+    ],
+    "P31": [
+     "Q3024240"
+    ],
+    "P571": "1969-10-21",
+    "P576": "1991-01-26"
+   },
+   "kind": "polity",
+   "label": "Somali Democratic Republic",
+   "qid": "Q1477220",
+   "relations": {
+    "P1365": [
+     "Q7559152"
+    ],
+    "P155": [
+     "Q7559152"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "general elections in the United States that are held two years after the quadrennial elections",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q1076105"
+    ]
+   },
+   "kind": "concept",
+   "label": "United States midterm election",
+   "qid": "Q1570656",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "Land warfare branch of the Israel Defense Forces",
+   "facts": {
+    "P17": [
+     "Q801"
+    ],
+    "P31": [
+     "Q37726",
+     "Q104907539"
+    ],
+    "P571": "1948-01-01"
+   },
+   "kind": "concept",
+   "label": "Israeli Ground Forces",
+   "qid": "Q1674702",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "first New Zealand liberal political party",
+   "facts": {
+    "P17": [
+     "Q664"
+    ],
+    "P31": [
+     "Q7278",
+     "Q23702035"
+    ],
+    "P571": "1891-01-01",
+    "P576": "1928-01-01"
+   },
+   "kind": "org",
+   "label": "New Zealand Liberal Party",
+   "qid": "Q1793808",
+   "relations": {
+    "is_a": [
+     "Q7278"
+    ]
+   },
+   "relations_read": true
+  },
+  {
+   "description": "military conflicts in the former Soviet Union",
+   "facts": {
+    "P31": [
+     "Q180684"
+    ]
+   },
+   "kind": "event",
+   "label": "post-Soviet conflicts",
+   "qid": "Q1975306",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "Spanish 1607–1898 possession in the Caribbean",
+   "facts": {
+    "P17": [
+     "Q80702"
+    ],
+    "P31": [
+     "Q133156",
+     "Q5036886"
+    ],
+    "P571": "1607-01-01",
+    "P576": "1898-01-01"
+   },
+   "kind": "concept",
+   "label": "Captaincy General of Cuba",
+   "qid": "Q2039931",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "geographic census division of the United States Census Bureau",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q139666046"
+    ]
+   },
+   "kind": "concept",
+   "label": "South Atlantic states",
+   "qid": "Q2261430",
+   "relations": {
+    "P361": [
+     "Q49042"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "event in which aircraft are used to attack targets on land or at sea",
+   "facts": {
+    "P31": [
+     "Q11613868",
+     "Q125092269"
+    ]
+   },
+   "kind": "concept",
+   "label": "airstrike",
+   "qid": "Q2380335",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "New Zealand political party",
+   "facts": {
+    "P17": [
+     "Q664"
+    ],
+    "P31": [
+     "Q7278"
+    ],
+    "P571": "1927-01-01",
+    "P576": "1936-01-01"
+   },
+   "kind": "org",
+   "label": "United Party",
+   "qid": "Q2495287",
+   "relations": {
+    "P155": [
+     "Q1793808"
+    ],
+    "is_a": [
+     "Q7278"
+    ]
+   },
+   "relations_read": true
+  },
+  {
+   "description": "religion in an area",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q12075477"
+    ]
+   },
+   "kind": "concept",
+   "label": "Islam in the United States",
+   "qid": "Q2735001",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "Palestinian refugee camp in the Gaza Strip",
+   "facts": {
+    "P131": [
+     "Q762573"
+    ],
+    "P17": [
+     "Q219060"
+    ],
+    "P31": [
+     "Q124571059"
+    ],
+    "P571": "1949-01-01"
+   },
+   "kind": "concept",
+   "label": "Al-Shati refugee camp",
+   "qid": "Q2829277",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "1920–1948 conflict between Arabs and Jews in Palestine",
+   "facts": {
+    "P17": [
+     "Q8680"
+    ],
+    "P31": [
+     "Q766875",
+     "Q5153967"
+    ],
+    "P580": "1920-03-01",
+    "P582": "1948-05-15",
+    "P585": "2000-01-01"
+   },
+   "kind": "event",
+   "label": "Intercommunal conflict in Mandatory Palestine",
+   "qid": "Q2992527",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "French departments of the Austrian Netherlands and the Province of Liège (1795-1814)",
+   "facts": {
+    "P17": [
+     "Q58296"
+    ],
+    "P31": [
+     "Q161243"
+    ],
+    "P571": "1795-08-31",
+    "P576": "1814-01-01"
+   },
+   "kind": "polity",
+   "label": "United Departments",
+   "qid": "Q3044803",
+   "relations": {
+    "P1365": [
+     "Q700283"
+    ],
+    "P279": [
+     "Q6465"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "list of Middle Eastern conflicts since 1914",
+   "facts": {
+    "P31": [
+     "Q13406463"
+    ]
+   },
+   "kind": "concept",
+   "label": "list of modern conflicts in the Middle East",
+   "qid": "Q4116408",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "vehicle that operates on the surface of the water without a crew and is remotely operated",
+   "facts": {
+    "P31": [
+     "Q140329636",
+     "Q140424465"
+    ]
+   },
+   "kind": "concept",
+   "label": "unmanned surface vehicle",
+   "qid": "Q4419860",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "American pastor and politician (born 1964)",
+   "facts": {
+    "P27": [
+     "Q30"
+    ],
+    "P31": [
+     "Q5"
+    ]
+   },
+   "kind": "person",
+   "label": "Adam Hamilton",
+   "qid": "Q4679181",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "Election for President, Congress, and state positions in Brazil in 2014",
+   "facts": {
+    "P17": [
+     "Q155"
+    ],
+    "P31": [
+     "Q76853179"
+    ],
+    "P585": "2014-10-05"
+   },
+   "kind": "event",
+   "label": "2014 Brazilian general election",
+   "qid": "Q4958898",
+   "relations": {
+    "P155": [
+     "Q1045449"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "colony of Great Britain from 1763 to 1783",
+   "facts": {
+    "P17": [
+     "Q161885"
+    ],
+    "P31": [
+     "Q1351282"
+    ],
+    "P571": "1763-01-01",
+    "P576": "1783-01-01"
+   },
+   "kind": "concept",
+   "label": "West Florida",
+   "qid": "Q4971241",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "non-voting (except for in committee) member of the United States House of Representatives",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q294414"
+    ]
+   },
+   "kind": "concept",
+   "label": "non-voting member of the U.S. House of Representatives",
+   "qid": "Q5253588",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "head of state and of government of the U.S. state of Texas",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q4164871"
+    ],
+    "P571": "1846-02-19"
+   },
+   "kind": "concept",
+   "label": "Governor of Texas",
+   "qid": "Q5589725",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "administrative division of New Spain",
+   "facts": {
+    "P17": [
+     "Q80702"
+    ],
+    "P31": [
+     "Q5918768"
+    ],
+    "P571": "1785-09-17",
+    "P576": "1821-01-01"
+   },
+   "kind": "concept",
+   "label": "San Salvador Intendancy",
+   "qid": "Q5918737",
+   "relations": {
+    "P1365": [
+     "Q5664014"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "Indigenous population of Florida, United States",
+   "facts": {
+    "P31": [
+     "Q3117863"
+    ]
+   },
+   "kind": "concept",
+   "label": "indigenous peoples of Florida",
+   "qid": "Q6024708",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "province of the Spanish Empire and then of the United Provinces of Central America",
+   "facts": {
+    "P17": [
+     "Q9063401"
+    ],
+    "P31": [
+     "Q34876",
+     "Q7252696"
+    ],
+    "P571": "1821-05-08",
+    "P576": "1824-03-14"
+   },
+   "kind": "concept",
+   "label": "Province of San Salvador",
+   "qid": "Q6088881",
+   "relations": {
+    "P1365": [
+     "Q5918737"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "bilateral relations between United States and Venezuela",
+   "facts": {
+    "P17": [
+     "Q30",
+     "Q717"
+    ],
+    "P31": [
+     "Q15221623"
+    ]
+   },
+   "kind": "concept",
+   "label": "United States–Venezuela relations",
+   "qid": "Q6350649",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "Wikimedia list article",
+   "facts": {
+    "P31": [
+     "Q13406463"
+    ]
+   },
+   "kind": "concept",
+   "label": "list of special elections to the United States Senate",
+   "qid": "Q6640291",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "American reporting on current events",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q74817647"
+    ]
+   },
+   "kind": "concept",
+   "label": "news media in the United States",
+   "qid": "Q7019528",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "newly independent Somali state (1960–1969)",
+   "facts": {
+    "P17": [
+     "Q1045"
+    ],
+    "P31": [
+     "Q3024240"
+    ],
+    "P571": "1960-07-01",
+    "P576": "1969-10-21"
+   },
+   "kind": "polity",
+   "label": "Somali Republic",
+   "qid": "Q7559152",
+   "relations": {
+    "P1365": [
+     "Q616221",
+     "Q1106857"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "American election",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q15261477"
+    ],
+    "P585": "1990-11-06"
+   },
+   "kind": "event",
+   "label": "1990 Texas gubernatorial election",
+   "qid": "Q7708264",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "complications businesses and governments may face as a result of political decisions",
+   "facts": {},
+   "kind": "concept",
+   "label": "political risk",
+   "qid": "Q7885121",
+   "relations": {
+    "P279": [
+     "Q944806",
+     "Q6725147"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "dispute between nations",
+   "facts": {
+    "P31": [
+     "Q125092269"
+    ]
+   },
+   "kind": "concept",
+   "label": "international conflict",
+   "qid": "Q11422542",
+   "relations": {
+    "P279": [
+     "Q5791104",
+     "Q17091170"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "2013–2014 pro-european protests in Ukraine",
+   "facts": {
+    "P131": [
+     "Q212",
+     "Q1899"
+    ],
+    "P17": [
+     "Q212"
+    ],
+    "P31": [
+     "Q45382",
+     "Q175331",
+     "Q273120",
+     "Q686984"
+    ],
+    "P580": "2013-11-21",
+    "P582": "2014-02-23",
+    "P585": "2010-01-01"
+   },
+   "kind": "event",
+   "label": "Euromaidan",
+   "qid": "Q15224558",
+   "relations": {
+    "P361": [
+     "Q16918333"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "armed conflict between Russia and Ukraine since 2014",
+   "facts": {
+    "P17": [
+     "Q159",
+     "Q184",
+     "Q212",
+     "Q16150196",
+     "Q16746854"
+    ],
+    "P31": [
+     "Q198"
+    ],
+    "P580": "2014-02-20",
+    "P585": "2100-01-01"
+   },
+   "kind": "event",
+   "label": "Russo-Ukrainian war",
+   "qid": "Q15860072",
+   "relations": {
+    "P155": [
+     "Q15224558",
+     "Q18125620"
+    ],
+    "P361": [
+     "Q1975306",
+     "Q17510383"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "bilateral relations between Palestine and Israel",
+   "facts": {
+    "P17": [
+     "Q801",
+     "Q219060"
+    ],
+    "P31": [
+     "Q15221623"
+    ]
+   },
+   "kind": "concept",
+   "label": "Israel–Palestine relations",
+   "qid": "Q16125891",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "2013–2014 turbulence in the Eastern European country",
+   "facts": {
+    "P17": [
+     "Q212"
+    ],
+    "P31": [
+     "Q3002772"
+    ],
+    "P580": "2013-11-21"
+   },
+   "kind": "event",
+   "label": "2013–2014 Ukrainian political crisis",
+   "qid": "Q16918333",
+   "relations": {
+    "P361": [
+     "Q2101490"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "time period after the Cold War in the 1990s and early 21st century",
+   "facts": {
+    "P31": [
+     "Q1201472",
+     "Q6428674"
+    ],
+    "P580": "1989-12-01"
+   },
+   "kind": "event",
+   "label": "post–Cold War era",
+   "qid": "Q17152871",
+   "relations": {
+    "P155": [
+     "Q8683"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "term referring to heightened tensions in the 21st century",
+   "facts": {
+    "P31": [
+     "Q4176199"
+    ],
+    "P580": "2010-01-01"
+   },
+   "kind": "event",
+   "label": "Second Cold War",
+   "qid": "Q17510383",
+   "relations": {
+    "P155": [
+     "Q17152871"
+    ],
+    "P279": [
+     "Q7885121"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "factors contributing to the 2014 pro-Russian unrest",
+   "facts": {
+    "P17": [
+     "Q212"
+    ],
+    "P31": [
+     "Q17524420"
+    ],
+    "P585": "2014-01-01"
+   },
+   "kind": "event",
+   "label": "historical background of the 2014 pro-Russian unrest in Ukraine",
+   "qid": "Q18125620",
+   "relations": {
+    "P279": [
+     "Q1413450"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "United States Senate election in Texas",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q112727425"
+    ],
+    "P585": "1988-11-08"
+   },
+   "kind": "event",
+   "label": "1988 United States Senate election in Texas",
+   "qid": "Q18217584",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "American politician and epidemiologist (born 1984)",
+   "facts": {
+    "P27": [
+     "Q30"
+    ],
+    "P31": [
+     "Q5"
+    ]
+   },
+   "kind": "person",
+   "label": "Abdul El-Sayed",
+   "qid": "Q25752879",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "Election in Brazil",
+   "facts": {
+    "P17": [
+     "Q155"
+    ],
+    "P31": [
+     "Q76853179"
+    ],
+    "P585": "2018-10-07"
+   },
+   "kind": "event",
+   "label": "2018 Brazilian general election",
+   "qid": "Q28220142",
+   "relations": {
+    "P155": [
+     "Q4958898"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "Governor-elect of Texas (born 1973)",
+   "facts": {
+    "P27": [
+     "Q30"
+    ],
+    "P31": [
+     "Q5"
+    ]
+   },
+   "kind": "person",
+   "label": "Gina Hinojosa",
+   "qid": "Q28314533",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "Governor-elect of Georgia (born 1970)",
+   "facts": {
+    "P27": [
+     "Q30"
+    ],
+    "P31": [
+     "Q5"
+    ]
+   },
+   "kind": "person",
+   "label": "Keisha Lance Bottoms",
+   "qid": "Q42770663",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "umbrella term for parts of the United States located on the main landmass of North America (i.e., 49 states excluding Hawaii, plus the District of Columbia)",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q1140140",
+     "Q4835091"
+    ]
+   },
+   "kind": "concept",
+   "label": "continental United States",
+   "qid": "Q55416584",
+   "relations": {
+    "P361": [
+     "Q30"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "ongoing political and social crisis in Haiti",
+   "facts": {
+    "P17": [
+     "Q790"
+    ],
+    "P31": [
+     "Q273120",
+     "Q112683179"
+    ],
+    "P580": "2019-02-07"
+   },
+   "kind": "event",
+   "label": "Haitian crisis (2019–present)",
+   "qid": "Q61742338",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "general election held in Brazil",
+   "facts": {
+    "P17": [
+     "Q155"
+    ],
+    "P31": [
+     "Q76853179"
+    ],
+    "P585": "2022-10-02"
+   },
+   "kind": "event",
+   "label": "2022 Brazilian general election",
+   "qid": "Q65053343",
+   "relations": {
+    "P155": [
+     "Q28220142"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "political transition to democracy following the overthrow of Omar Bashir in 2019",
+   "facts": {
+    "P17": [
+     "Q1049"
+    ],
+    "P31": [
+     "Q11514315"
+    ],
+    "P580": "2019-07-05",
+    "P582": "2021-10-25"
+   },
+   "kind": "event",
+   "label": "Sudanese transition to democracy",
+   "qid": "Q65122495",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "former state of the Federal Repúblic of Central America",
+   "facts": {
+    "P17": [
+     "Q190025"
+    ],
+    "P31": [
+     "Q19953632"
+    ],
+    "P571": "1824-03-14",
+    "P576": "1841-02-02"
+   },
+   "kind": "concept",
+   "label": "State of El Salvador",
+   "qid": "Q65182752",
+   "relations": {
+    "P1365": [
+     "Q6088881"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "subregion of the Americas",
+   "facts": {
+    "P31": [
+     "Q137186904"
+    ]
+   },
+   "kind": "concept",
+   "label": "Latin America and the Caribbean",
+   "qid": "Q72829598",
+   "relations": {
+    "P361": [
+     "Q828"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "2020 Steregushchiy-class corvette",
+   "facts": {
+    "P31": [
+     "Q170013"
+    ],
+    "P576": "2026-11-22"
+   },
+   "kind": "concept",
+   "label": "Merkuriy",
+   "qid": "Q97189333",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "American politician and United States Senator elected from Texas (born in 1989)",
+   "facts": {
+    "P27": [
+     "Q30"
+    ],
+    "P31": [
+     "Q5"
+    ]
+   },
+   "kind": "person",
+   "label": "James Talarico",
+   "qid": "Q100742942",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "part of the U.S. elections held November 3, 2026",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q24333627"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 United States Senate elections",
+   "qid": "Q104902179",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q112727393"
+    ],
+    "P585": "1932-11-08"
+   },
+   "kind": "event",
+   "label": "1932 United States Senate election in Kansas",
+   "qid": "Q104949088",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "Russian preparation for the invasion since March 2021",
+   "facts": {
+    "P17": [
+     "Q159",
+     "Q184",
+     "Q212"
+    ],
+    "P31": [
+     "Q5791104",
+     "Q19833559"
+    ],
+    "P580": "2021-03-03",
+    "P582": "2022-02-24",
+    "P585": "2020-01-01"
+   },
+   "kind": "event",
+   "label": "prelude to the Russian invasion of Ukraine",
+   "qid": "Q110254389",
+   "relations": {
+    "P155": [
+     "Q111442416"
+    ],
+    "P361": [
+     "Q15860072"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "full-scale invasion of Ukraine by Russia starting on 24 February 2022, part of Russo-Ukrainian War",
+   "facts": {
+    "P17": [
+     "Q159",
+     "Q184",
+     "Q212",
+     "Q16150196",
+     "Q16746854",
+     "Q114318324",
+     "Q114318415"
+    ],
+    "P31": [
+     "Q198",
+     "Q154605",
+     "Q467011",
+     "Q474138",
+     "Q645883",
+     "Q2001676",
+     "Q7883019",
+     "Q11422542",
+     "Q123458523"
+    ],
+    "P580": "2022-02-24",
+    "P585": "2022-02-24"
+   },
+   "kind": "event",
+   "label": "full-scale Russo-Ukrainian war",
+   "qid": "Q110999040",
+   "relations": {
+    "P155": [
+     "Q110254389"
+    ],
+    "P361": [
+     "Q1975306",
+     "Q15860072"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "involvement of Russian military resources and forces in Ukraine, in particular the invasion of volunteers and regular units of Russia, the supply of weapons from Russian warehouses and the shelling of Ukraine from Russia",
+   "facts": {
+    "P31": [
+     "Q198",
+     "Q467011"
+    ],
+    "P580": "2014-02-20",
+    "P582": "2015-02-20"
+   },
+   "kind": "event",
+   "label": "2014 Russian invasion of Ukraine",
+   "qid": "Q111442416",
+   "relations": {
+    "P361": [
+     "Q15860072"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "general election held in Brazil",
+   "facts": {
+    "P17": [
+     "Q155"
+    ],
+    "P31": [
+     "Q76853179"
+    ],
+    "P585": "2026-10-04"
+   },
+   "kind": "event",
+   "label": "2026 Brazilian general election",
+   "qid": "Q115632178",
+   "relations": {
+    "P155": [
+     "Q65053343"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "midterm elections in the United States in 2026",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q1570656",
+     "Q18340514"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 United States elections",
+   "qid": "Q115857612",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "gubernatorial elections in the United States",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q15261477"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 United States gubernatorial elections",
+   "qid": "Q115862480",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "civil conflict over control of Port-au-Prince",
+   "facts": {
+    "P17": [
+     "Q790"
+    ],
+    "P31": [
+     "Q467033",
+     "Q686984"
+    ],
+    "P580": "2020-05-24"
+   },
+   "kind": "event",
+   "label": "Gang war in Haiti",
+   "qid": "Q116291120",
+   "relations": {
+    "P361": [
+     "Q61742338"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "ongoing military conflict in Sudan since 2023",
+   "facts": {
+    "P17": [
+     "Q1049"
+    ],
+    "P31": [
+     "Q8465",
+     "Q25906438"
+    ],
+    "P580": "2023-04-15",
+    "P585": "2023-01-01"
+   },
+   "kind": "event",
+   "label": "Sudanese civil war",
+   "qid": "Q117716414",
+   "relations": {
+    "P361": [
+     "Q65122495"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "2027–2029 meeting of U.S. legislature",
+   "facts": {
+    "P31": [
+     "Q15238777"
+    ],
+    "P580": "2027-01-03",
+    "P582": "2029-01-03"
+   },
+   "kind": "event",
+   "label": "120th United States Congress",
+   "qid": "Q118213730",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q15261477"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 Georgia gubernatorial election",
+   "qid": "Q118902595",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "election for Governor of Texas",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q15261477"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 Texas gubernatorial election",
+   "qid": "Q122761097",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "class II election for U.S. senator from Texas",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q112727425"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 United States Senate election in Texas",
+   "qid": "Q122790705",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "maritime engagements during the conflict",
+   "facts": {
+    "P31": [
+     "Q718893"
+    ]
+   },
+   "kind": "concept",
+   "label": "naval warfare in the Russo-Ukrainian war",
+   "qid": "Q122902719",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "armed conflict around the Gaza Strip that started on 7 October 2023",
+   "facts": {
+    "P131": [
+     "Q801",
+     "Q39760"
+    ],
+    "P17": [
+     "Q794",
+     "Q801",
+     "Q805",
+     "Q822",
+     "Q858",
+     "Q219060"
+    ],
+    "P31": [
+     "Q198"
+    ],
+    "P580": "2023-10-07",
+    "P585": "2020-01-01"
+   },
+   "kind": "event",
+   "label": "Gaza War",
+   "qid": "Q122962941",
+   "relations": {
+    "P155": [
+     "Q125750364"
+    ],
+    "P361": [
+     "Q553184",
+     "Q124373310"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "terrorist attack and massacre in southern Israel on October 7, 2023 carried out by the Islamic Fundamentalist Terrorist Group Hamas",
+   "facts": {
+    "P131": [
+     "Q188781"
+    ],
+    "P17": [
+     "Q801"
+    ],
+    "P31": [
+     "Q476807",
+     "Q2001676",
+     "Q3199915",
+     "Q25917186",
+     "Q42750320"
+    ],
+    "P580": "2023-10-07",
+    "P582": "2023-10-09",
+    "P585": "2023-10-01"
+   },
+   "kind": "event",
+   "label": "October 7 attacks",
+   "qid": "Q122976243",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "agency in the Gaza Strip under the jurisdiction of the territory's Hamas government",
+   "facts": {
+    "P17": [
+     "Q219060"
+    ],
+    "P31": [
+     "Q1519799"
+    ]
+   },
+   "kind": "concept",
+   "label": "Gaza Health Ministry",
+   "qid": "Q123152753",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "series of conflicts in the Middle East beginning on 7 October 2023",
+   "facts": {
+    "P17": [
+     "Q794",
+     "Q801",
+     "Q805",
+     "Q822",
+     "Q858",
+     "Q219060"
+    ],
+    "P31": [
+     "Q5791104",
+     "Q124373322"
+    ],
+    "P580": "2023-10-07"
+   },
+   "kind": "event",
+   "label": "Middle Eastern crisis (2023–present)",
+   "qid": "Q124373310",
+   "relations": {
+    "P361": [
+     "Q4116408"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "military conflict between Iran and Israel",
+   "facts": {
+    "P31": [
+     "Q180684"
+    ],
+    "P576": "2024-10-26",
+    "P580": "2024-04-01",
+    "P582": "2024-10-26"
+   },
+   "kind": "event",
+   "label": "2024 Iran–Israel conflict",
+   "qid": "Q125465957",
+   "relations": {
+    "P361": [
+     "Q15059994",
+     "Q124373310",
+     "Q138772633"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "series of clashes between Israelis and Palestinians in the occupied territories of the West Bank and East Jerusalem, in Israel & in the Gaza Strip",
+   "facts": {
+    "P31": [
+     "Q5791104"
+    ],
+    "P580": "2023-01-26",
+    "P582": "2023-10-07"
+   },
+   "kind": "event",
+   "label": "2023 Israeli–Palestinian crisis",
+   "qid": "Q125750364",
+   "relations": {
+    "P361": [
+     "Q151622"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "26 October 2024 Israeli retaliation on Iran",
+   "facts": {
+    "P17": [
+     "Q794",
+     "Q858"
+    ],
+    "P31": [
+     "Q2380335"
+    ],
+    "P585": "2024-10-26"
+   },
+   "kind": "event",
+   "label": "October 2024 Israeli strikes on Iran",
+   "qid": "Q130647458",
+   "relations": {
+    "P361": [
+     "Q125465957"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "election to replace JD Vance as U.S. Senator from Ohio",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q1057954",
+     "Q112727415"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 United States Senate special election in Ohio",
+   "qid": "Q131293430",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "class III election to replace Marco Rubio as U.S. senator from Florida",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q1057954",
+     "Q112727384"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 United States Senate special election in Florida",
+   "qid": "Q131325097",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q112727393"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 United States Senate election in Kansas",
+   "qid": "Q131384513",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q40231"
+    ]
+   },
+   "kind": "event",
+   "label": "2026 United States state legislative elections",
+   "qid": "Q131573177",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "class II election for U.S. senator from Michigan",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q112727403"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 United States Senate election in Michigan",
+   "qid": "Q132234342",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "house elections for the 120th U.S. Congress",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q40231"
+    ]
+   },
+   "kind": "event",
+   "label": "2026 United States House of Representatives elections",
+   "qid": "Q132767622",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "2025 armed conflict in the Middle East",
+   "facts": {
+    "P17": [
+     "Q794",
+     "Q801"
+    ],
+    "P31": [
+     "Q198"
+    ],
+    "P580": "2025-06-13",
+    "P582": "2025-06-24",
+    "P585": "2025-06-01"
+   },
+   "kind": "event",
+   "label": "Twelve-Day War",
+   "qid": "Q134900605",
+   "relations": {
+    "P155": [
+     "Q130647458"
+    ],
+    "P361": [
+     "Q124373310",
+     "Q138772633"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "US President Donald Trump's proposal to end the war in Gaza",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q49848",
+     "Q1371819",
+     "Q1456892"
+    ],
+    "P571": "2025-09-01"
+   },
+   "kind": "concept",
+   "label": "Gaza peace plan",
+   "qid": "Q136402196",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "worldwide political activities by Generation Z, teenagers, denarians and early vicenarians",
+   "facts": {
+    "P31": [
+     "Q124734",
+     "Q273120",
+     "Q1886460"
+    ],
+    "P580": "2020-01-01",
+    "P585": "2020-01-01"
+   },
+   "kind": "event",
+   "label": "Gen Z protests",
+   "qid": "Q136430456",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q40231"
+    ]
+   },
+   "kind": "event",
+   "label": "2026 United States local elections",
+   "qid": "Q136871701",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "2025–2026 US military anti-drug trafficking operation",
+   "facts": {
+    "P31": [
+     "Q645883"
+    ],
+    "P580": "2025-11-13"
+   },
+   "kind": "event",
+   "label": "Operation Southern Spear",
+   "qid": "Q136889101",
+   "relations": {
+    "P361": [
+     "Q185517",
+     "Q17152871",
+     "Q137673069"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "",
+   "facts": {
+    "P17": [
+     "Q30",
+     "Q717"
+    ],
+    "P31": [
+     "Q180684"
+    ],
+    "P580": "2025-01-01"
+   },
+   "kind": "event",
+   "label": "United States–Venezuela conflict",
+   "qid": "Q137673069",
+   "relations": {
+    "P361": [
+     "Q6350649"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "attacks on vessels circumventing sanctions",
+   "facts": {
+    "P31": [
+     "Q1546073"
+    ],
+    "P580": "2025-11-28"
+   },
+   "kind": "event",
+   "label": "Ukrainian attacks on the Russian shadow fleet",
+   "qid": "Q137703814",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "unmanned aerial vehicle designed for direct impact strikes",
+   "facts": {},
+   "kind": "concept",
+   "label": "One-way attack drone",
+   "qid": "Q138427189",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "ongoing armed conflict in West Asia",
+   "facts": {
+    "P131": [
+     "Q3616",
+     "Q36529",
+     "Q42053",
+     "Q80053",
+     "Q170570",
+     "Q170573",
+     "Q174010",
+     "Q1131727"
+    ],
+    "P17": [
+     "Q794"
+    ],
+    "P31": [
+     "Q645883",
+     "Q3496097",
+     "Q4698343",
+     "Q71266556"
+    ],
+    "P580": "2026-02-28",
+    "P585": "2026-01-01"
+   },
+   "kind": "event",
+   "label": "2026 Iran War",
+   "qid": "Q138503695",
+   "relations": {
+    "P155": [
+     "Q134900605"
+    ],
+    "P361": [
+     "Q124373310",
+     "Q138772633"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "American businessman and political candidate",
+   "facts": {
+    "P31": [
+     "Q5"
+    ]
+   },
+   "kind": "person",
+   "label": "Rick Jackson",
+   "qid": "Q138543331",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "geopolitical conflict in the Middle East",
+   "facts": {
+    "P31": [
+     "Q180684"
+    ],
+    "P580": "1979-02-18"
+   },
+   "kind": "event",
+   "label": "Iran–Israel conflict",
+   "qid": "Q138772633",
+   "relations": {
+    "P361": [
+     "Q8669"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "Navajo Nation presidential election",
+   "facts": {
+    "P17": [
+     "Q30"
+    ],
+    "P31": [
+     "Q858439"
+    ],
+    "P585": "2026-11-03"
+   },
+   "kind": "event",
+   "label": "2026 Navajo Nation presidential election",
+   "qid": "Q139906521",
+   "relations": {},
+   "relations_read": false
+  },
+  {
+   "description": "student riots in France",
+   "facts": {
+    "P17": [
+     "Q142"
+    ],
+    "P31": [
+     "Q49773",
+     "Q780417",
+     "Q1679887"
+    ],
+    "P580": "2026-09-17",
+    "P585": "2026-01-01"
+   },
+   "kind": "org",
+   "label": "2026 French civil unrest",
+   "qid": "Q141615137",
+   "relations": {
+    "P361": [
+     "Q141774890"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "",
+   "facts": {
+    "P17": [
+     "Q142"
+    ],
+    "P31": [
+     "Q4071928"
+    ],
+    "P585": "2026-10-12"
+   },
+   "kind": "event",
+   "label": "2026 European cold chain hacks",
+   "qid": "Q141724007",
+   "relations": {
+    "is_a": []
+   },
+   "relations_read": true
+  },
+  {
+   "description": "",
+   "facts": {
+    "P17": [
+     "Q27",
+     "Q29",
+     "Q31",
+     "Q32",
+     "Q36",
+     "Q37",
+     "Q38",
+     "Q39",
+     "Q40",
+     "Q41",
+     "Q45",
+     "Q55",
+     "Q142",
+     "Q183",
+     "Q213",
+     "Q222",
+     "Q403"
+    ],
+    "P31": [
+     "Q7897387"
+    ]
+   },
+   "kind": "concept",
+   "label": "2026 European unrest",
+   "qid": "Q141774890",
+   "relations": {
+    "P361": [
+     "Q136430456"
+    ],
+    "is_a": []
+   },
+   "relations_read": true
+  }
+ ],
+ "recorded": "the first ingestion run (November 26, 2026): 844 candidates, 682 clusters",
+ "signals": [
+  "Q1045",
+  "Q110999040",
+  "Q115632178",
+  "Q116291120",
+  "Q117716414",
+  "Q122962941",
+  "Q124373310",
+  "Q136889101",
+  "Q138503695",
+  "Q141615137",
+  "Q141724007",
+  "Q204716",
+  "Q47488",
+  "Q496810",
+  "Q55",
+  "Q792",
+  "Q812"
+ ],
+ "stories": {
+  "gaza_war": [
+   {
+    "details": {
+     "category": "Armed conflicts and attacks",
+     "date": "2026-11-15",
+     "external": [
+      {
+       "domain": "middleeasteye.net",
+       "label": "Middle East Eye",
+       "url": "https://www.middleeasteye.net/live-blog/live-blog-update/hamas-commander-samir-abu-younis-killed-israeli-strike-khan-younis"
+      }
+     ],
+     "links": [
+      "Israel Defense Forces",
+      "Al-Qassam Brigades",
+      "October 7 attacks",
+      "Israel",
+      "Gaza Strip",
+      "Hamas"
+     ],
+     "roles": {
+      "Q122962941": "topic",
+      "Q122976243": "item",
+      "Q124373310": "topic",
+      "Q1475112": "item",
+      "Q38799": "item",
+      "Q39760": "item",
+      "Q58967": "item",
+      "Q801": "item"
+     },
+     "source": "portal",
+     "topic": "Gaza war",
+     "topic_qid": "Q122962941",
+     "topics": [
+      "Middle Eastern crisis (2023–present)",
+      "Gaza war"
+     ]
+    },
+    "entities": [
+     "Q122962941",
+     "Q122976243",
+     "Q124373310",
+     "Q1475112",
+     "Q38799",
+     "Q39760",
+     "Q58967",
+     "Q801"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-15:f16ddc48a16a2593",
+    "summary": "Israeli military says that Al-Qassam Brigades commander Samir Abu Younis of the Rafah brigade, who helped plan and oversaw the October 7 attacks on Israel, was killed in a airstrike in the southern area of Gaza Strip, with Hamas confirming his death and plans for a funeral.",
+    "title": "Israeli military says that Al-Qassam Brigades commander Samir Abu Younis of the Rafah brigade, who helped plan and oversaw the October 7 attacks on Israel, was killed in a airstrike in the southern …",
+    "when_text": "November 15, 2026",
+    "y_guess": 2026.871
+   },
+   {
+    "details": {
+     "category": "Armed conflicts and attacks",
+     "date": "2026-11-15",
+     "external": [
+      {
+       "domain": "aa.com.tr",
+       "label": "AA",
+       "url": "https://www.aa.com.tr/en/middle-east/3-palestinians-killed-in-israeli-attacks-across-gaza-medical-sources/4126079"
+      }
+     ],
+     "links": [
+      "Palestinians",
+      "Shell (projectile)",
+      "Israel",
+      "Israel Defense Forces",
+      "Gaza Strip",
+      "Gaza peace plan"
+     ],
+     "roles": {
+      "Q122962941": "topic",
+      "Q124373310": "topic",
+      "Q136402196": "item",
+      "Q201190": "item",
+      "Q318028": "item",
+      "Q39760": "item",
+      "Q58967": "item",
+      "Q801": "item"
+     },
+     "source": "portal",
+     "topic": "Gaza war",
+     "topic_qid": "Q122962941",
+     "topics": [
+      "Middle Eastern crisis (2023–present)",
+      "Gaza war"
+     ]
+    },
+    "entities": [
+     "Q122962941",
+     "Q124373310",
+     "Q136402196",
+     "Q201190",
+     "Q318028",
+     "Q39760",
+     "Q58967",
+     "Q801"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-15:0c698acc05d49277",
+    "summary": "Three Palestinians are killed and others are injured in shelling and shooting attacks by Israeli troops in various areas of the Gaza Strip, in a continuation of the violation of the ceasefire agreement signed in October 2025.",
+    "title": "Three Palestinians are killed and others are injured in shelling and shooting attacks by Israeli troops in various areas of the Gaza Strip, in a continuation of the violation of the ceasefire …",
+    "when_text": "November 15, 2026",
+    "y_guess": 2026.871
+   },
+   {
+    "details": {
+     "category": "Armed conflicts and attacks",
+     "date": "2026-11-18",
+     "external": [
+      {
+       "domain": "bbc.com",
+       "label": "BBC News",
+       "url": "https://www.bbc.com/news/articles/cw8r7510degno"
+      }
+     ],
+     "links": [
+      "Israel",
+      "Israeli army",
+      "Gaza Strip",
+      "Gaza peace plan"
+     ],
+     "roles": {
+      "Q122962941": "topic",
+      "Q136402196": "item",
+      "Q1674702": "item",
+      "Q39760": "item",
+      "Q801": "item"
+     },
+     "source": "portal",
+     "topic": "Gaza war",
+     "topic_qid": "Q122962941",
+     "topics": [
+      "Gaza war"
+     ]
+    },
+    "entities": [
+     "Q122962941",
+     "Q136402196",
+     "Q1674702",
+     "Q39760",
+     "Q801"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-18:afb9edfb6ef4179b",
+    "summary": "The Israeli army launches its first operation in central Gaza Strip amid the displacement of families from the area, for the first time since the ceasefire agreement signed in October 2025 came into effect.",
+    "title": "The Israeli army launches its first operation in central Gaza Strip amid the displacement of families from the area, for the first time since the ceasefire agreement signed in October 2025 came into …",
+    "when_text": "November 18, 2026",
+    "y_guess": 2026.879
+   },
+   {
+    "details": {
+     "category": "Armed conflicts and attacks",
+     "date": "2026-11-19",
+     "external": [
+      {
+       "domain": "aje.news",
+       "label": "Al Jazeera",
+       "url": "https://aje.news/r003u9?update=5168071"
+      }
+     ],
+     "links": [
+      "Gaza Strip",
+      "Ministry of Health (Gaza)"
+     ],
+     "roles": {
+      "Q122962941": "topic",
+      "Q123152753": "item",
+      "Q124373310": "topic",
+      "Q39760": "item"
+     },
+     "source": "portal",
+     "topic": "Gaza war",
+     "topic_qid": "Q122962941",
+     "topics": [
+      "Middle Eastern crisis (2023–present)",
+      "Gaza war"
+     ]
+    },
+    "entities": [
+     "Q122962941",
+     "Q123152753",
+     "Q124373310",
+     "Q39760"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-19:9045a8f6c13cadae",
+    "summary": "Gaza's health ministry reports that two people have been killed by recent Israeli attacks and two others died from their wounds over the past day.",
+    "title": "Gaza's health ministry reports that two people have been killed by recent Israeli attacks and two others died from their wounds over the past day.",
+    "when_text": "November 19, 2026",
+    "y_guess": 2026.882
+   },
+   {
+    "details": {
+     "category": "Armed conflicts and attacks",
+     "date": "2026-11-24",
+     "external": [
+      {
+       "domain": "washingtonpost.com",
+       "label": "The Washington Post",
+       "url": "https://www.washingtonpost.com/world/2026/11/24/israel-kills-hamas-internal-security-chief-gaza/"
+      }
+     ],
+     "links": [
+      "Israel",
+      "Hamas",
+      "Airstrike",
+      "Gaza Strip"
+     ],
+     "roles": {
+      "Q122962941": "topic",
+      "Q124373310": "topic",
+      "Q2380335": "item",
+      "Q38799": "item",
+      "Q39760": "item",
+      "Q801": "item"
+     },
+     "source": "portal",
+     "topic": "Gaza war",
+     "topic_qid": "Q122962941",
+     "topics": [
+      "Middle Eastern crisis (2023–present)",
+      "Gaza war"
+     ]
+    },
+    "entities": [
+     "Q122962941",
+     "Q124373310",
+     "Q2380335",
+     "Q38799",
+     "Q39760",
+     "Q801"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-24:41992d1b0ac76a6b",
+    "summary": "Israel kills Hamas security official Naeem Abu Nahel in an airstrike in the Gaza Strip.",
+    "title": "Israel kills Hamas security official Naeem Abu Nahel in an airstrike in the Gaza Strip.",
+    "when_text": "November 24, 2026",
+    "y_guess": 2026.896
+   },
+   {
+    "details": {
+     "category": "Armed conflicts and attacks",
+     "date": "2026-11-25",
+     "external": [
+      {
+       "domain": "aljazeera.com",
+       "label": "Al Jazeera",
+       "url": "https://www.aljazeera.com/news/2026/11/25/israeli-strike-kills-hamas-official-his-wife-and-children"
+      },
+      {
+       "domain": "aje.news",
+       "label": "Al Jazeera 2",
+       "url": "https://aje.news/0x4p9q?update=5187000"
+      }
+     ],
+     "links": [
+      "Hamas",
+      "Israel",
+      "Airstrike",
+      "Al-Shati refugee camp",
+      "Gaza City",
+      "Palestinians"
+     ],
+     "roles": {
+      "Q122962941": "topic",
+      "Q124373310": "topic",
+      "Q201190": "item",
+      "Q2380335": "item",
+      "Q2829277": "item",
+      "Q38799": "item",
+      "Q47492": "item",
+      "Q801": "item"
+     },
+     "source": "portal",
+     "topic": "Gaza war",
+     "topic_qid": "Q122962941",
+     "topics": [
+      "Middle Eastern crisis (2023–present)",
+      "Gaza war"
+     ]
+    },
+    "entities": [
+     "Q122962941",
+     "Q124373310",
+     "Q201190",
+     "Q2380335",
+     "Q2829277",
+     "Q38799",
+     "Q47492",
+     "Q801"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-25:0a8fdcde75b26761",
+    "summary": "A Hamas security official, his wife, and two daughters, are killed in an Israeli airstrike on the Al-Shati refugee camp near Gaza City. Seven more Palestinians are also killed and several injured in more Israeli airstrikes.",
+    "title": "A Hamas security official, his wife, and two daughters, are killed in an Israeli airstrike on the Al-Shati refugee camp near Gaza City.",
+    "when_text": "November 25, 2026",
+    "y_guess": 2026.899
+   }
+  ],
+  "shadow_fleet": [
+   {
+    "details": {
+     "category": "Armed conflicts and attacks",
+     "date": "2026-11-22",
+     "external": [
+      {
+       "domain": "reuters.com",
+       "label": "Reuters",
+       "url": "https://www.reuters.com/world/middle-east/libyas-eastern-government-suspects-drone-attack-caused-explosion-russian-ship-2026-11-22/"
+      }
+     ],
+     "links": [
+      "Russian corvette Merkury",
+      "Ukraine",
+      "Unmanned surface vehicle",
+      "One-way attack drone",
+      "Port of Benghazi",
+      "Libya"
+     ],
+     "roles": {
+      "Q1016": "item",
+      "Q110999040": "topic",
+      "Q122902719": "topic",
+      "Q137703814": "topic",
+      "Q138427189": "item",
+      "Q212": "item",
+      "Q4419860": "item",
+      "Q58196": "item",
+      "Q97189333": "item"
+     },
+     "source": "portal",
+     "topic": "Ukrainian attacks on the Russian shadow fleet",
+     "topic_qid": "Q137703814",
+     "topics": [
+      "Russo-Ukrainian war (2022–present)",
+      "Naval warfare in the Russo-Ukrainian war (2022–present)",
+      "Ukrainian attacks on the Russian shadow fleet"
+     ]
+    },
+    "entities": [
+     "Q1016",
+     "Q110999040",
+     "Q122902719",
+     "Q137703814",
+     "Q138427189",
+     "Q212",
+     "Q4419860",
+     "Q58196",
+     "Q97189333"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-22:d1af36b7fa50dc72",
+    "summary": "Ten people are injured after the Russian corvette Merkury is struck by a Ukrainian naval drone attack while docked at the Port of Benghazi, Libya. The Merkury later capsizes and sinks.",
+    "title": "Ten people are injured after the Russian corvette Merkury is struck by a Ukrainian naval drone attack while docked at the Port of Benghazi, Libya.",
+    "when_text": "November 22, 2026",
+    "y_guess": 2026.89
+   },
+   {
+    "details": {
+     "category": "Armed conflicts and attacks",
+     "date": "2026-11-22",
+     "external": [
+      {
+       "domain": "npr.org",
+       "label": "NPR",
+       "url": "https://www.npr.org/2026/11/23/g-s1-155017/ukraine-attack-russian-warship-libya"
+      }
+     ],
+     "links": [
+      "Russia",
+      "Mediterranean Sea"
+     ],
+     "roles": {
+      "Q110999040": "topic",
+      "Q122902719": "topic",
+      "Q137703814": "topic",
+      "Q159": "item",
+      "Q4918": "item"
+     },
+     "source": "portal",
+     "topic": "Ukrainian attacks on the Russian shadow fleet",
+     "topic_qid": "Q137703814",
+     "topics": [
+      "Russo-Ukrainian war (2022–present)",
+      "Naval warfare in the Russo-Ukrainian war (2022–present)",
+      "Ukrainian attacks on the Russian shadow fleet"
+     ]
+    },
+    "entities": [
+     "Q110999040",
+     "Q122902719",
+     "Q137703814",
+     "Q159",
+     "Q4918"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-22:61a65a598e8dc090",
+    "summary": "The M/V Angara, a Russian-flagged cargo ship, is also struck by naval drones off the coast of Benghazi in the Mediterranean Sea.",
+    "title": "The M/V Angara, a Russian-flagged cargo ship, is also struck by naval drones off the coast of Benghazi in the Mediterranean Sea.",
+    "when_text": "November 22, 2026",
+    "y_guess": 2026.89
+   },
+   {
+    "details": {
+     "category": "Armed conflicts and attacks",
+     "date": "2026-11-24",
+     "external": [
+      {
+       "domain": "apnews.com",
+       "label": "AP",
+       "url": "https://apnews.com/article/russia-ukraine-war-libya-drone-attack-warship-officers-5719d6750c0619695c7f23a373cecd7b"
+      }
+     ],
+     "links": [
+      "Libyan Navy",
+      "Ukraine",
+      "Unmanned surface vehicle",
+      "One-way attack drone",
+      "Russian corvette Merkury",
+      "Port of Benghazi",
+      "Libya"
+     ],
+     "roles": {
+      "Q1016": "item",
+      "Q110999040": "topic",
+      "Q122902719": "topic",
+      "Q1366319": "item",
+      "Q137703814": "topic",
+      "Q138427189": "item",
+      "Q212": "item",
+      "Q4419860": "item",
+      "Q58196": "item",
+      "Q97189333": "item"
+     },
+     "source": "portal",
+     "topic": "Ukrainian attacks on the Russian shadow fleet",
+     "topic_qid": "Q137703814",
+     "topics": [
+      "Russo-Ukrainian war (2022–present)",
+      "Naval warfare in the Russo-Ukrainian war (2022–present)",
+      "Ukrainian attacks on the Russian shadow fleet"
+     ]
+    },
+    "entities": [
+     "Q1016",
+     "Q110999040",
+     "Q122902719",
+     "Q1366319",
+     "Q137703814",
+     "Q138427189",
+     "Q212",
+     "Q4419860",
+     "Q58196",
+     "Q97189333"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-24:2f7f394024b6f216",
+    "summary": "Two Libyan naval officers dies of their wounds sustained in the Ukrainian naval drone attack against the Russian corvette Merkury in the Port of Benghazi, two days ago. Libya announces it will respond.",
+    "title": "Two Libyan naval officers dies of their wounds sustained in the Ukrainian naval drone attack against the Russian corvette Merkury in the Port of Benghazi, two days ago.",
+    "when_text": "November 24, 2026",
+    "y_guess": 2026.896
+   }
+  ],
+  "us_elections": [
+   {
+    "details": {
+     "category": "Politics and elections",
+     "date": "2026-11-03",
+     "external": [
+      {
+       "domain": "theguardian.com",
+       "label": "The Guardian",
+       "url": "https://www.theguardian.com/us-news/2026/nov/02/what-are-midterm-elections"
+      }
+     ],
+     "links": [
+      "United States",
+      "United States midterm election",
+      "2026 United States House of Representatives elections",
+      "Non-voting members of the United States House of Representatives",
+      "United States House of Representatives",
+      "2026 United States Senate elections",
+      "United States Senate",
+      "List of special elections to the United States Senate",
+      "2026 United States Senate special election in Florida",
+      "2026 United States Senate special election in Ohio",
+      "U.S. state",
+      "Territories of the United States",
+      "2026 United States gubernatorial elections",
+      "2026 United States state legislative elections",
+      "2026 Navajo Nation presidential election",
+      "2026 United States local elections"
+     ],
+     "roles": {
+      "Q104902179": "item",
+      "Q115857612": "topic",
+      "Q115862480": "item",
+      "Q11701": "item",
+      "Q131293430": "item",
+      "Q131325097": "item",
+      "Q131573177": "item",
+      "Q132767622": "item",
+      "Q1352230": "item",
+      "Q136871701": "item",
+      "Q139906521": "item",
+      "Q1570656": "item",
+      "Q30": "item",
+      "Q35657": "item",
+      "Q5253588": "item",
+      "Q66096": "item",
+      "Q6640291": "item"
+     },
+     "source": "portal",
+     "topic": "2026 United States elections",
+     "topic_qid": "Q115857612",
+     "topics": [
+      "2026 United States elections"
+     ]
+    },
+    "entities": [
+     "Q104902179",
+     "Q115857612",
+     "Q115862480",
+     "Q11701",
+     "Q131293430",
+     "Q131325097",
+     "Q131573177",
+     "Q132767622",
+     "Q1352230",
+     "Q136871701",
+     "Q139906521",
+     "Q1570656",
+     "Q30",
+     "Q35657",
+     "Q5253588",
+     "Q66096",
+     "Q6640291"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-03:d58aeac0737399de",
+    "summary": "The United States holds midterm elections for 435 members and five non-voting delegates of the House of Representatives, 35 members of the Senate (including special elections in Florida and Ohio), 39 state and territorial governors, and numerous other state, territorial, tribal, and local officials.",
+    "title": "The United States holds midterm elections for 435 members and five non-voting delegates of the House of Representatives, 35 members of the Senate (including special elections in Florida and Ohio), 39 …",
+    "when_text": "November 3, 2026",
+    "y_guess": 2026.838
+   },
+   {
+    "details": {
+     "category": "Politics and elections",
+     "date": "2026-11-03",
+     "external": [
+      {
+       "domain": "reuters.com",
+       "label": "Reuters",
+       "url": "https://www.reuters.com/world/us/democrats-projected-win-majority-control-us-house-us-media-project-2026-11-04/"
+      },
+      {
+       "domain": "theguardian.com",
+       "label": "The Guardian",
+       "url": "https://www.theguardian.com/us-news/2026/nov/03/democrats-senate-republicans-midterms-trump"
+      }
+     ],
+     "links": [
+      "News media in the United States",
+      "Democratic Party (United States)",
+      "120th United States Congress",
+      "Republican Party (United States)",
+      "United States Congress"
+     ],
+     "roles": {
+      "Q11268": "item",
+      "Q115857612": "topic",
+      "Q118213730": "item",
+      "Q29468": "item",
+      "Q29552": "item",
+      "Q7019528": "item"
+     },
+     "source": "portal",
+     "topic": "2026 United States elections",
+     "topic_qid": "Q115857612",
+     "topics": [
+      "2026 United States elections"
+     ]
+    },
+    "entities": [
+     "Q11268",
+     "Q115857612",
+     "Q118213730",
+     "Q29468",
+     "Q29552",
+     "Q7019528"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-03:c6caa8f6eacc53a0",
+    "summary": "U.S. news organizations project that the Democratic Party will control the House of Representatives and the Senate in the upcoming 120th Congress, ending the Republican Party's majority in both chambers.",
+    "title": "U.S.",
+    "when_text": "November 3, 2026",
+    "y_guess": 2026.838
+   },
+   {
+    "details": {
+     "category": "Politics and elections",
+     "date": "2026-11-03",
+     "external": [
+      {
+       "domain": "nbcnews.com",
+       "label": "NBC News",
+       "url": "https://www.nbcnews.com/politics/2026-election/adam-hamilton-kansas-senate-democrat-winner-upset-roger-marshall-rcna603310"
+      },
+      {
+       "domain": "axios.com",
+       "label": "Axios",
+       "url": "https://www.axios.com/local/san-antonio/2026/11/04/texas-governor-race-results-hinojosa-abbott"
+      }
+     ],
+     "links": [
+      "U.S. state",
+      "Adam Hamilton (American politician)",
+      "2026 United States Senate election in Kansas",
+      "1932 United States Senate election in Kansas",
+      "James Talarico",
+      "2026 United States Senate election in Texas",
+      "1988 United States Senate election in Texas",
+      "Gina Hinojosa",
+      "Governor of Texas",
+      "2026 Texas gubernatorial election",
+      "1990 Texas gubernatorial election"
+     ],
+     "roles": {
+      "Q100742942": "item",
+      "Q104949088": "item",
+      "Q115857612": "topic",
+      "Q122761097": "item",
+      "Q122790705": "item",
+      "Q131384513": "item",
+      "Q18217584": "item",
+      "Q28314533": "item",
+      "Q35657": "item",
+      "Q4679181": "item",
+      "Q5589725": "item",
+      "Q7708264": "item"
+     },
+     "source": "portal",
+     "topic": "2026 United States elections",
+     "topic_qid": "Q115857612",
+     "topics": [
+      "2026 United States elections"
+     ]
+    },
+    "entities": [
+     "Q100742942",
+     "Q104949088",
+     "Q115857612",
+     "Q122761097",
+     "Q122790705",
+     "Q131384513",
+     "Q18217584",
+     "Q28314533",
+     "Q35657",
+     "Q4679181",
+     "Q5589725",
+     "Q7708264"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-03:bea89ba6a8200557",
+    "summary": "Several states elect their first Democratic representatives in decades, including: Adam Hamilton, the first Democrat to win a Kansas Senate seat since 1932; James Talarico, the first Democrat to win a Texas Senate seat since 1988; and Gina Hinojosa, the first Democrat to become governor of Texas since 1990.",
+    "title": "Several states elect their first Democratic representatives in decades, including: Adam Hamilton, the first Democrat to win a Kansas Senate seat since 1932; James Talarico, the first Democrat to win …",
+    "when_text": "November 3, 2026",
+    "y_guess": 2026.838
+   },
+   {
+    "details": {
+     "category": "Politics and elections",
+     "date": "2026-11-03",
+     "external": [
+      {
+       "domain": "washingtonpost.com",
+       "label": "The Washington Post",
+       "url": "https://www.washingtonpost.com/elections/results/2026/11/03/michigan-senate-el-sayed-rogers-live-updates/"
+      },
+      {
+       "domain": "time.com",
+       "label": "Time",
+       "url": "https://time.com/article/2026/11/03/abdul-el-sayed-michigan-senate-2026-midterm-elections-mike-rogers/"
+      }
+     ],
+     "links": [
+      "Abdul El-Sayed",
+      "Mike Rogers (Michigan politician)",
+      "United States Senate",
+      "2026 United States Senate election in Michigan",
+      "Michigan",
+      "Islam in the United States"
+     ],
+     "roles": {
+      "Q115857612": "topic",
+      "Q1166": "item",
+      "Q132234342": "item",
+      "Q25752879": "item",
+      "Q2735001": "item",
+      "Q66096": "item",
+      "Q970515": "item"
+     },
+     "source": "portal",
+     "topic": "2026 United States elections",
+     "topic_qid": "Q115857612",
+     "topics": [
+      "2026 United States elections"
+     ]
+    },
+    "entities": [
+     "Q115857612",
+     "Q1166",
+     "Q132234342",
+     "Q25752879",
+     "Q2735001",
+     "Q66096",
+     "Q970515"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-03:af71effd5ae6c6aa",
+    "summary": "Abdul El-Sayed defeats Mike Rogers in the United States Senate election in Michigan, making him the first Muslim to be elected to the U.S. Senate.",
+    "title": "Abdul El-Sayed defeats Mike Rogers in the United States Senate election in Michigan, making him the first Muslim to be elected to the U.S.",
+    "when_text": "November 3, 2026",
+    "y_guess": 2026.838
+   },
+   {
+    "details": {
+     "category": "Politics and elections",
+     "date": "2026-11-03",
+     "external": [
+      {
+       "domain": "apnews.com",
+       "label": "AP",
+       "url": "https://apnews.com/article/georgia-governor-lance-bottom-jackson-midterm-election-67c22a38b9a6e4cad5584aa44acf106f"
+      }
+     ],
+     "links": [
+      "Keisha Lance Bottoms",
+      "Rick Jackson (businessman)",
+      "2026 Georgia gubernatorial election",
+      "Georgia (U.S. state)",
+      "Governor (United States)"
+     ],
+     "roles": {
+      "Q115857612": "topic",
+      "Q118902595": "item",
+      "Q138543331": "item",
+      "Q1428": "item",
+      "Q42770663": "item",
+      "Q889821": "item"
+     },
+     "source": "portal",
+     "topic": "2026 United States elections",
+     "topic_qid": "Q115857612",
+     "topics": [
+      "2026 United States elections"
+     ]
+    },
+    "entities": [
+     "Q115857612",
+     "Q118902595",
+     "Q138543331",
+     "Q1428",
+     "Q42770663",
+     "Q889821"
+    ],
+    "precision": "day",
+    "source_key": "portal:2026-11-03:01feeee68e71b46f",
+    "summary": "Keisha Lance Bottoms defeats Rick Jackson in the gubernatorial election in Georgia, becoming the first black woman to be elected governor in U.S. history.",
+    "title": "Keisha Lance Bottoms defeats Rick Jackson in the gubernatorial election in Georgia, becoming the first black woman to be elected governor in U.S.",
+    "when_text": "November 3, 2026",
+    "y_guess": 2026.838
+   }
+  ]
+ }
+}

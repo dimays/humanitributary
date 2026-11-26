@@ -20,10 +20,10 @@ from infra.alerts import consecutive_failures
 from ingest import jobs, store
 from ingest.models import Document, FetchRun
 from publish import gates
-from publish.content import dumps, legacy_view
+from publish.content import dumps, without_derived
 from publish.legacy import import_content
 from publish.models import Release
-from publish.release import publish, pull_release, rollback
+from publish.release import check, publish, pull_release, rollback
 from revisions import revising
 from timeline import services
 from timeline.models import Event, Status
@@ -159,18 +159,32 @@ class ReleaseTests(FreshStorage, TestCase):
         r, created = self._publish()
         self.assertTrue(created)
 
-    def test_the_legacy_dump_must_match_until_the_cutover(self):
-        tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, tmp)
-        (tmp / "legacy.json").write_text(dumps(small()))
-        r, created = self._publish(legacy=tmp / "legacy.json")
-        self.assertTrue(created)
-        data = small()
-        data["events"][1]["title"] = "The Punic Wars"
-        (tmp / "legacy.json").write_text(dumps(data))
-        with self.assertRaises(gates.PublishRefused) as ctx:
-            self._publish(legacy=tmp / "legacy.json", force=True)
-        self.assertIn("roundtrip", ctx.exception.problems)
+    def test_an_export_that_is_not_deterministic_is_refused(self):
+        from publish import export
+
+        real = export.build_content
+        calls = []
+
+        def flaky():
+            calls.append(1)
+            out = real()
+            if len(calls) % 2 == 0:
+                out["events"] = list(reversed(out["events"]))
+            return out
+
+        with mock.patch("publish.release.build_content", flaky), self.assertRaises(gates.PublishRefused) as ctx:
+            self._publish()
+        self.assertEqual(list(ctx.exception.problems), ["deterministic"])
+        self.assertFalse(Release.objects.exists())
+
+    def test_check_runs_the_gates_and_reports_changes_without_writing(self):
+        r1, _ = self._publish()
+        with revising("job:test"):
+            services.save_event("an-punic-wars", title="The Punic Wars")
+        rep = check(today=D, skip_gates=("build",))
+        self.assertEqual((rep["from"], rep["total"]), (r1.version, {"added": 0, "changed": 1, "retracted": 0}))
+        self.assertEqual(Release.objects.count(), 1)
+        self.assertEqual(storage.read_pointer()["version"], r1.version)
 
     @skipUnless(shutil.which("node"), "needs Node")
     def test_the_build_gate_builds_the_page_and_reads_the_snapshot_back(self):
@@ -180,7 +194,7 @@ class ReleaseTests(FreshStorage, TestCase):
         body = storage.read(storage.RELEASES, r.snapshot_path)
         build = gates.node_build(body, D.isoformat())
         self.assertEqual(build.redump, body)
-        self.assertEqual(json.loads(dumps(legacy_view(json.loads(body)))), small())
+        self.assertEqual(json.loads(dumps(without_derived(json.loads(body)))), small())
 
     @skipUnless(shutil.which("node"), "needs Node")
     def test_a_snapshot_the_site_rejects_is_refused(self):

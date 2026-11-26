@@ -1,4 +1,8 @@
-"""Legacy import: the static site's resolved content (`node site/build.mjs --dump-json`) → Postgres.
+"""The loader: content in the snapshot shape → Postgres. Since the cutover (ADR 0020) it runs only when asked:
+`import_legacy --archive` (the frozen legacy files in archive/site-data/, read by `node site/build.mjs --archive
+--dump-json`) or `import_legacy <content.json>` (a release snapshot, e.g. to fill a fresh database). Loading a
+snapshot that this database exported writes nothing: export and load are exact inverses (tests/
+test_import_and_roundtrip.py). Keys the export derives (publish/content.py ADDITIVE) are ignored.
 
 Idempotent upsert by slug: every row is compared with what's there and written only if it differs, so re-running on
 unchanged input writes nothing and leaves no Revision. For each entry in the dump its owned rows (links, citations,
@@ -10,7 +14,11 @@ an entry's status, a publisher's rating and notes, a citation's check results, a
 check fields. Claim status and confidence are recomputed from the evidence (evidence/confidence.py).
 """
 
+import hashlib
 from collections import Counter
+from pathlib import Path
+
+from django.conf import settings
 
 from evidence.sweep import reassess
 from evidence.models import Citation, Claim, Evidence, Publisher
@@ -21,6 +29,20 @@ from timeline.ordering import reconcile
 from timeline.services import apply_changes, branch_date_fields, event_date_fields
 
 ACTOR = "job:import_legacy"
+
+# The legacy content, frozen at the cutover (ADR 0020). ARCHIVE_SHA256 is archive_hash() of it then; a test fails if
+# a file there changes, is added or removed: content changes go into Postgres now.
+ARCHIVE_DIR = Path(settings.BASE_DIR) / "archive" / "site-data"
+ARCHIVE_SHA256 = "c7c9a06554112c6bef626642ec4d17f1237b5577406218f6f9509e0b893a706e"
+
+
+def archive_hash(directory: Path = ARCHIVE_DIR) -> str:
+    """sha256 over the archive's file names and bytes, in name order."""
+    h = hashlib.sha256()
+    for f in sorted(directory.iterdir()):
+        if f.is_file():
+            h.update(f.name.encode() + b"\0" + hashlib.sha256(f.read_bytes()).hexdigest().encode() + b"\n")
+    return h.hexdigest()
 
 # The page's lanes, in its order (site/template.html REGIONS).
 REGIONS = [

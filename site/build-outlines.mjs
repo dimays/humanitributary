@@ -1,6 +1,8 @@
 // Builds outlines.js: simplified polity outlines for the details-pane globe (loaded lazily by timeline.html).
 //   node build-outlines.mjs            match branches/events to shapes, write outlines.js, print a report
 //   node build-outlines.mjs --verbose  also list every branch match and the unmatched polity-like branches
+//   --from-json content.json           the snapshot to read (default ../var/releases/latest/content.json: make
+//                                      release-pull mirrors it). The content comes from releases since the cutover.
 // Rerunnable: new branches and events are picked up; matches are never guessed (ambiguous -> no outline).
 //
 // Sources (downloaded once into the gitignored .outline-cache/):
@@ -18,10 +20,8 @@
 //     own pin or circle) when the event's point lies inside the polity. A region event whose label exactly names a
 //     Cliopatria polity existing that year (and lies inside it) gets that polity in full.
 //   * Shapes under MIN_SHAPE_KM2 are skipped (a pin reads better at globe size).
-import { collector, applyRestructure } from "./restructure.mjs";
 import fs from "node:fs";
 import path from "node:path";
-import vm from "node:vm";
 import readline from "node:readline";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -149,14 +149,12 @@ const TABLE = {
 
 // ---------- data ----------
 function loadTimeline() {
-  const branches = [], events = [], geos = [], ops = [];
-  for (const f of fs.readdirSync(path.join(here, "data")).filter((f) => f.endsWith(".js")).sort()) {
-    const TL = { add(o) { branches.push(...(o.branches || [])); events.push(...(o.events || [])); }, cite() {}, enrich() {}, geo(id, o) { geos.push({ id, ...o }); }, image() {}, origin() {}, ...collector(ops, f) };
-    try { vm.runInNewContext(fs.readFileSync(path.join(here, "data", f), "utf8"), { TL }, { filename: f }); } catch (err) { console.warn(`! ${f}: ${err.message}`); }
-  }
-  // Apply moves/patches/merges (restructure.mjs) so outlines follow each event's final branch.
-  for (const e of applyRestructure({ branches, events, geos, images: [], origins: [], enrich: [], extraCites: [] }, ops)) console.warn("! " + e);
-  const geo = new Map(geos.map(({ id, ...o }) => [id, o]));
+  // A published snapshot: every entry already resolved (final branch, its location inline as `geo`).
+  const i = process.argv.indexOf("--from-json");
+  const file = i > 0 ? process.argv[i + 1] : path.join(here, "..", "var", "releases", "latest", "content.json");
+  if (!fs.existsSync(file)) throw new Error(`${file} not found: make release-pull, or name a snapshot with --from-json`);
+  const { branches, events } = JSON.parse(fs.readFileSync(file, "utf8"));
+  const geo = new Map([...branches, ...events].filter((x) => x.geo).map((x) => [x.id, x.geo]));
   return { branches, events, geo };
 }
 async function ensureDownloads() {

@@ -11,7 +11,7 @@ threshold in one dict, `governance/thresholds.py` (override with
 manage.py branches metrics                 # a BranchMetric snapshot per branch (only when it changed)
 manage.py branches review [--dry-run]      # run the rules → proposals + review_branch_proposal tasks
 manage.py branches list | show <id>
-manage.py branches apply <id> --ops final.json --agent agent:<you> [--task <id>] [--legacy-file site/data/99-….js]
+manage.py branches apply <id> --ops final.json --agent agent:<you> [--task <id>]
 manage.py branches reject <id> --note "why" --agent agent:<you>
 manage.py branches revert <id> --agent agent:<you>
 ```
@@ -131,19 +131,34 @@ other lanes by design).
 
 *Example:* Indigenous Andes, whose last event is 1781 (Túpac Amaru II), 0.85 s
 before now: its modern story moved to Indigenous rights movements in
-`data/91`.
+`archive/site-data/91-first-americans.js`.
 
-### NEW-BRANCH-v1: a branch nobody has yet
+### NEW-BRANCH-v2: a branch nobody has yet
 
-From ingestion's `new_branch_signal` candidates: an entity (state, movement,
-organization …) with no `BranchEntity` mapping that appears in ≥ 5 distinct
-story clusters over ≥ 7 days → a new branch named for it, under the branch
-its co-mentioned entities route to most (BranchEntity weights plus the
-candidates' branch scores), and a `map_entity` operation so new material
-routes to it.
+From ingestion's `new_branch_signal` candidates: an entity with no
+`BranchEntity` mapping that appears in ≥ 5 distinct story clusters over ≥ 7
+days, and that can be a branch (`ingest/branchable.py`): a sovereign state or
+historical polity, a people, a conflict or movement running ≥ 2 years, an
+international organization. Never a subnational unit (an instance, through
+any chain of subclasses, of a first-level administrative division) or a
+political party; those are counted as `NEW-BRANCH.not_a_branch`. → a new
+branch named for it and a `map_entity` operation so new material routes to it,
+under the parent its Wikidata relations name: what it replaces or follows
+(P1365, P155, up to 3 steps back), what it is part of (P361), its country
+(P17, unless it is a state), its class (P279, P31); the first that names
+exactly one branch. With none, no parent, and the proposal says it needs
+review. v1 chose the branch its co-mentioned entities routed to most, which
+put El Salvador under Haiti (ADR 0021).
 
-*Example:* none yet (no ingestion on this data); the test builds one from six
-documents over 16 days.
+*Example:* the first ingestion run (November 2026) signalled 17 entities. v2
+proposes nine: Somalia, the Netherlands, El Salvador, the International
+Criminal Court, the full-scale Russo-Ukrainian war, the Gaza War and the
+Middle Eastern crisis (2023–present) with no parent; the gang war in Haiti
+under `haiti` and the Sudanese civil war under `sudan` (by P17). It refuses
+Florida (subnational), the New Zealand National Party and the Bangladesh
+Nationalist Party (parties), and five one-off or short events (the 2026
+Brazilian general election, Operation Southern Spear, the 2026 Iran War, the
+2026 French civil unrest, the 2026 European cold chain hacks).
 
 ### THIN-v1: a fill-in task, not a change
 
@@ -175,9 +190,9 @@ dates, places), the operations and how to decide. Then:
 
 ## Applying and reverting
 
-Applying is mechanical: the operations are the static site's restructure
-operations (`site/restructure.mjs`: `move`, `patch`, `merge`, and
-`create_branch` for TL.add), run through the service layer in one
+Applying is mechanical: the operations have the semantics of the legacy
+files' restructure operations (`site/restructure.mjs`: `move`, `patch`,
+`merge`, and `create_branch` for TL.add), run through the service layer in one
 `revising()` block, in the site's order (creations, patches, merges, moves).
 `apply` refuses while any `needs_agent` field still holds a placeholder or a
 new branch has no cite. A merge points every reference to the old branch at
@@ -185,22 +200,21 @@ the survivor (events, event links, parents and into, connections, origin
 links; location and image if the survivor has none; citations it lacks) and
 retracts the old branch.
 
-`--legacy-file site/data/99-….js` also writes the change as a data file: until
-the cutover the legacy files are imported over Postgres (ADR 0001), and a
-change made only in Postgres would be undone by the next `make import`.
+Since the cutover (ADR 0020) nothing imports over Postgres, so an applied
+change stays applied until it is reverted.
 
 `revert` undoes exactly the rows the apply transaction changed, newest first,
 from their Revisions (before → after, via `jsonb_populate_record`), after
 releasing what non-canonical tables hold on created rows (metrics, tasks,
 routing). It refuses if any of those rows has changed since (`--force` to
 override). Tested: apply then revert gives back a byte-identical snapshot.
-Delete the legacy file too, if one was written.
 
 ## Validation
 
 `scripts/validate_branch_rules.sh` replays the rules on the content as it was
-before `data/90` and `data/91` (a legacy dump without those two files, in a
-scratch database) and compares the proposals with the owner's decisions:
+before `data/90` and `data/91` (a dump of the frozen legacy files in
+`archive/site-data/` without those two, in a scratch database) and compares
+the proposals with the owner's decisions:
 
 | | proposed | owner |
 |---|---|---|

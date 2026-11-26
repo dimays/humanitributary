@@ -9,10 +9,9 @@
                                                   "cites": [{"t": …, "u": …, "k": …}]}}
     {"op": "map_entity", "qid": "Q…", "branch": "…", "role": "…"}     (ingest routing, not canonical)
 
-These are the static site's restructure operations (site/restructure.mjs: move, patch, merge, plus TL.add for a new
-branch), with the same semantics, so `legacy_js()` can write the same change as a data file: until the cutover the
-legacy files are imported over Postgres (ADR 0001), and a change made only here would be undone by the next
-`make import`.
+These have the semantics of the legacy files' restructure operations (site/restructure.mjs: move, patch, merge, plus
+TL.add for a new branch). Since the cutover (ADR 0020) Postgres is the only record, so an applied change stays applied
+until it is reverted; nothing else writes it anywhere.
 
 `apply()` runs them in one `revising()` block and records its transaction id; `revert()` undoes exactly the rows that
 transaction changed, from their Revisions (before → after), refusing if any of those rows changed since.
@@ -35,7 +34,6 @@ from .rules import PLACEHOLDER
 
 BRANCH_FIELDS = {"name", "start", "end", "start_when", "end_when", "text", "region", "parents", "into"}
 EVENT_FIELDS = {"title", "when", "y", "end", "imp", "text", "link"}
-JS_NAMES = {"start_when": "startWhen", "end_when": "endWhen"}
 
 
 class OperationError(Exception):
@@ -317,31 +315,3 @@ def revert(proposal, *, actor: str, task=None, force: bool = False) -> dict:
     proposal.decision_note = (proposal.decision_note + "\n" if proposal.decision_note else "") + f"reverted by {actor}"
     proposal.save(update_fields=["payload", "status", "decided_by", "decided_at", "decision_note"])
     return reverted
-
-
-def _js(v) -> str:
-    return json.dumps(v, ensure_ascii=False)
-
-
-def legacy_js(proposal, ops: list[dict]) -> str:
-    """The same change as a site/data file (TL.add / TL.patch / TL.merge / TL.move), so the legacy import keeps it."""
-    lines = [f"// Branch proposal {proposal.pk} ({proposal.rule_id}), applied with `manage.py branches apply`: {proposal.summary[:200]}", ""]
-    for o in ops:
-        if o["op"] == "create_branch":
-            f = o["fields"]
-            b = {"id": o["id"], "name": f["name"], "region": f["region"], "start": f["start"], "end": f.get("end"), "startWhen": f["start_when"]}
-            if f.get("end_when") is not None:
-                b["endWhen"] = f["end_when"]
-            b |= {"parents": f.get("parents", []), "into": f.get("into", []), "text": f["text"],
-                  "cites": [{k: c[k] for k in ("t", "u", "k") if c.get(k)} for c in f.get("cites", [])]}
-            lines.append(f"TL.add({{ branches: [{_js(b)}] }});")
-    for o in ops:
-        if o["op"] == "patch":
-            lines.append(f"TL.patch({_js(o['id'])}, {_js({JS_NAMES.get(k, k): v for k, v in o['fields'].items()})});")
-    for o in ops:
-        if o["op"] == "merge":
-            lines.append(f"TL.merge({_js(o['from'])}, {_js(o['into'])});")
-    for o in ops:
-        if o["op"] == "move":
-            lines.append(f"TL.move({_js(o['event'])}, {_js(o['branch'])});")
-    return "\n".join(lines) + "\n"

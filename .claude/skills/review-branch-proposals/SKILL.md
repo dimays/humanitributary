@@ -47,7 +47,10 @@ Ask whether a reader would be better served by the change:
   that interact? Pick the survivor's name and start date.
 - **END-STALE**: did it end (then when, by a source), or does it continue with no events (then reject and leave
   it to the THIN fill-in tasks)?
-- **NEW-BRANCH**: is the entity a lasting state, movement or phenomenon, under the right parent?
+- **NEW-BRANCH**: is the entity a lasting state, people, conflict, movement or international body (the rule
+  only proposes those)? The parent comes from Wikidata relations (`evidence.parent_how`); when there is none
+  (`parents` is in `needs_agent`), choose it from the branches' own lineage, or leave it empty with a sourced
+  origin note. Never pick a parent because the stories mention it.
 
 Look things up as you would to write an event (`site/SCHEMA.md` citation rules: fetch and read every page you cite;
 never openstax.org; britannica.com only in a browser).
@@ -66,7 +69,7 @@ api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" -d '{"result": {"decision
 
 The API refuses (422) while a placeholder (`TODO`) or a cite-less new branch remains. An accepted proposal changes
 nothing yet: it is stored with your operations and status `accepted`, and the owner runs
-`manage.py branches apply <proposal>` (with `--legacy-file` until the cutover), because a structural change reaches
+`manage.py branches apply <proposal>`, because a structural change reaches
 the page at once.
 
 ## 3b. Reject

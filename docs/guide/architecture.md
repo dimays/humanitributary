@@ -26,7 +26,6 @@ flowchart LR
     T --> Q["4 Work queue<br/>AgentTask"]
     Q --> A["5 Agents<br/>skills over /api/agent/<br/>(the only LLM stage)"]
     A --> C["6 Canonical Postgres<br/>services, revising(), Revision"]
-    L["site/data/*.js<br/>(until the cutover)"] -- "make import" --> C
     C -- "facts sweep, link health,<br/>branches review" --> Q
     C --> P["7 Publish<br/>gates, Release in object storage"]
     P --> W["site/timeline.html"]
@@ -161,9 +160,8 @@ an accepted branch proposal stores the agent's operations for the owner's `manag
 the publishing rule (`manage.py facts publish`), and only `manage.py publish` makes a release. The CLI (`manage.py
 tasks`, `facts record`, `branches apply`) stays for the owner.
 
-Until the cutover, the next `make import` (it runs `import_legacy --retract-missing`) would retract a published
-event that exists only in Postgres, so the owner carries an agent's event into `site/data/*.js` when they publish
-it.
+Since the cutover ([ADR 0020](../adr/0020-the-cutover.md)) Postgres is the only record: an agent's event that the
+owner publishes reaches readers with the next release, and nothing imports over it.
 
 ## Stage 6: canonical Postgres and validation
 
@@ -195,30 +193,30 @@ the snapshot, the counts and the last Revision included. Nothing under `releases
 matches the newest release, nothing is written (unless `--force`). Same rows, same bytes:
 [ADR 0007](../adr/0007-one-snapshot-shape-byte-identical-both-ways.md), amended by
 [ADR 0018](../adr/0018-single-source-marker.md) for keys derived at publish time, such as `singleSource` on an
-event that rests on one independent witness.
+event that rests on one independent witness, and by [ADR 0020](../adr/0020-the-cutover.md): a snapshot loaded into
+an empty database exports to the same bytes again.
 
 `publish` refuses unless every release gate in `publish/gates.py` passes
-([ADR 0019](../adr/0019-processes-and-release-gates.md)): the site's own build accepts the snapshot and builds the
-page (build); no published entry has an unflagged contested record claim (contested); the site reads the snapshot
-back byte for byte, and equals `var/legacy.json` on every legacy key when `make publish` passes it (roundtrip); and
-the change report is in the store before the pointer moves (report). `publish --check` runs the gates and writes
-nothing.
+([ADR 0019](../adr/0019-processes-and-release-gates.md), [ADR 0020](../adr/0020-the-cutover.md)): two exports of
+the same rows are identical (deterministic); the site's own build checks the snapshot, reads it back byte for byte
+and builds the page (build); no published entry has an unflagged contested record claim (contested); and the change
+report against the live release is computed and in the store before the pointer moves (report). `publish --check`
+(`make roundtrip`) runs the gates, prints the change report's totals and writes nothing.
 
 `make release-pull` (`manage.py storage pull-release`) mirrors a release into `var/releases/<version>/` and points
-`var/releases/latest` at it; `make build-release` pulls, then builds the page, timeline.html in `site/`, from the
-mirror. Rolling back is a pointer write: `manage.py publish --rollback <version>` repoints `latest.json` after
+`var/releases/latest` at it; `make build` (`make build-release`) pulls, then builds the page, timeline.html in
+`site/`, from the mirror: the only way the page is built. Rolling back is a pointer write: `manage.py publish --rollback <version>` repoints `latest.json` after
 checking the snapshot's hash ([Operations](operations.md#restore-a-release)).
 
 Publishing is run by hand. Nothing deploys the page yet; the `releases` bucket is meant to be the CDN's origin.
 
-## The legacy path
+## The legacy files, frozen
 
-Until the cutover, `site/data/*.js` is still where most content is edited. `make import` dumps it
-(`node site/build.mjs --dump-json var/legacy.json`) and upserts it into Postgres as `job:import_legacy`,
-writing only what changed. The import never overwrites review state: an entry's status, a publisher's rating,
-check results, evidence stance. `make roundtrip` proves that the import and the export are exact inverses on
-every key the legacy dump has. See
-[ADR 0001](../adr/0001-postgres-is-the-truth-the-site-reads-snapshots.md) and [Publishing](publishing.md).
+The content was first written as `TL.*` calls in JavaScript files and imported into Postgres until the cutover
+([ADR 0020](../adr/0020-the-cutover.md)). The last import wrote nothing (the two held the same content), and the
+files moved to `archive/site-data/`, where a test holds them unchanged. They are read only on request: `manage.py
+import_legacy --archive` (`make import-archive`, for an empty database such as CI's), and
+`scripts/validate_branch_rules.sh`. See [Publishing](publishing.md#the-loader-and-the-archive).
 
 ## What is deterministic and what isn't
 
@@ -235,11 +233,11 @@ needs judgment becomes a task.
 
 | File | Role |
 |---|---|
-| `config/settings.py` | `SITE_NAME`; `ENVIRONMENT` (`dev`, or anything else for production safety); `DATABASE_URL` (required); `VAR_DIR` (default `var/`), with `LOG_DIR` and `RELEASES_MIRROR_DIR` under it; the `raw` and `releases` storages (`STORAGE_BACKEND`, the `S3_*` variables); `TASK_LEASE_MINUTES`; `WORKER_TICK_SECONDS`; `ALERT_AFTER_FAILURES`, `ALERT_EMAILS` and the mail settings; `AGENT_API_RATE_PER_MINUTE`; `INGEST_CONTACT` and `INGEST_USER_AGENT`; the two lookup keys. `INSTALLED_APPS` lists the apps in dependency order ([ADR 0002](../adr/0002-django-and-apps-by-responsibility.md)). |
+| `config/settings.py` | `SITE_NAME`; `ENVIRONMENT` (`dev`, or anything else for production safety); `DATABASE_URL` (required); `VAR_DIR` (default `var/`), with `LOG_DIR` and `RELEASES_MIRROR_DIR` under it; the `raw` and `releases` storages (`STORAGE_BACKEND`, the `S3_*` variables); `TASK_LEASE_MINUTES`; `WRITE_EVENT_TASKS_PER_DAY` (20: the `process` job's daily cap on new `write_event` tasks); `WORKER_TICK_SECONDS`; `ALERT_AFTER_FAILURES`, `ALERT_EMAILS` and the mail settings; `AGENT_API_RATE_PER_MINUTE`; `INGEST_CONTACT` and `INGEST_USER_AGENT`; the two lookup keys. `INSTALLED_APPS` lists the apps in dependency order ([ADR 0002](../adr/0002-django-and-apps-by-responsibility.md)). |
 | `config/urls.py` | The admin (the owner's review screen), the agent API under `/api/agent/` and `/healthz`. The public page never touches this server. |
 | `infra/` | `storage.py` (the one door to object storage), `manage.py storage`, `health.py` (`/healthz`) and `alerts.py`. No models. |
 | `ingest/job_defs.py` | Every scheduled job with its interval, in run order: set-up, sources, entities, processing, upkeep. |
-| `Makefile` | The commands (`make help`): database and storage, import, publish, build, round trip, tests, processes, jobs, schedule. |
+| `Makefile` | The commands (`make help`): database and storage, publish, build (from a release), the release gates (`roundtrip`), tests, processes, jobs, schedule; `import-archive` for an empty database. |
 | `docker-compose.yml` | The local services: Postgres 16 on host port 5433, and MinIO (the local S3) on `127.0.0.1:9000`, its console on 9001. |
 | `Procfile` | The processes: `release` runs migrations, `web` runs gunicorn (admin, agent API, `/healthz`), `worker` runs `manage.py run_jobs --loop`. `make up` runs `web` and `worker` locally with honcho. |
 | `.github/workflows/check.yml` | CI: `make check-pr` on every pull request and push to main, with a Postgres 16 service container and `STORAGE_BACKEND=local`, no secrets. |
@@ -252,7 +250,7 @@ The job order in `ingest/job_defs.py`:
 | Set-up | `seed_sources`, `seed_branch_entities` |
 | Sources | `portal`, `year_pages`, `rss`, `who_don`, `federal_register`, `gazette`, `nobel`, `historian_sync` |
 | Entities | `refresh_entities`, `pageviews` |
-| Processing | `process`, `enrich_tasks` |
+| Processing | `process`, `entity_relations`, `enrich_tasks` |
 | Upkeep | `link_health`, `facts_sweep`, `branches_review`, `second_source` |
 
 ## Environments
@@ -265,8 +263,9 @@ The job order in `ingest/job_defs.py`:
 | Scheduled jobs | The worker while `make up` runs, and launchd every 15 minutes if installed (`make schedule-install`); the locks keep them from overlapping | A `worker` dyno, or Heroku Scheduler running `run_jobs` (planned) |
 | The page | timeline.html in `site/`, built from the mirror in `var/releases/` | a CDN serving the `releases` bucket (planned) |
 
-There is no staging environment. CI (`.github/workflows/check.yml`) runs the gate with a throwaway Postgres and the
-local storage backend; the test suite always swaps both storages for temporary directories (`tests/runner.py`), so
+There is no staging environment. CI (`.github/workflows/check.yml`) runs the gate with a throwaway Postgres filled
+from the frozen legacy files (`make import-archive`: the real content is in Postgres, not in git) and the local
+storage backend; the test suite always swaps both storages for temporary directories (`tests/runner.py`), so
 it never reaches MinIO, S3 or the network.
 
 Nothing is deployed. The layout is Heroku-ready: the `Procfile`, whitenoise for the admin's static files,

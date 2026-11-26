@@ -141,18 +141,44 @@ class RuleTests(TestCase):
         self.assertIn(("THIN-v1", "sparse"), f)
         self.assertNotIn(("THIN-v1", "peer-0"), f)
 
+    def _signal(self, ent, others=(), n=6):
+        for i in range(n):
+            doc = Document.objects.create(canonical_url=f"https://example.org/{ent.qid}/{i}", url=f"https://example.org/{ent.qid}/{i}",
+                                          fetched_at=datetime(2026, 11, 1 + 3 * i, tzinfo=timezone.utc), content_hash=f"{ent.qid}{i}".ljust(64, "0"))
+            c = Candidate.objects.create(kind="new_branch_signal" if i == 0 else "new_event", title=f"story {i}", cluster_key=f"{ent.qid}-k{i}", y_guess=2026.8,
+                                         source_key=f"{ent.qid}-{i}")
+            c.entities.add(ent, *others)
+            c.documents.add(doc)
+
     def test_new_branch_from_signals(self):
-        ent = Entity.objects.create(qid="Q999001", label="New Movement", kind="org")
+        """A parent comes from the entity's Wikidata relations (here: part of), never from what it is mentioned with."""
         known = Entity.objects.create(qid="Q999002", label="Quiet Kingdom", kind="polity")
         BranchEntity.objects.create(branch=Branch.objects.get(slug="quiet"), entity=known)
-        for i in range(6):
-            doc = Document.objects.create(canonical_url=f"https://example.org/n{i}", url=f"https://example.org/n{i}", fetched_at=datetime(2026, 11, 1 + 3 * i, tzinfo=timezone.utc), content_hash=str(i) * 64)
-            c = Candidate.objects.create(kind="new_branch_signal" if i == 0 else "new_event", title=f"story {i}", cluster_key=f"k{i}", y_guess=2026.8)
-            c.entities.add(ent, known)
-            c.documents.add(doc)
-        f = self.findings()[("NEW-BRANCH-v1", None)]
+        bystander = Entity.objects.create(qid="Q999003", label="Twice-Told City", kind="polity")
+        BranchEntity.objects.create(branch=Branch.objects.get(slug="twice"), entity=bystander)
+        ent = Entity.objects.create(qid="Q999001", label="New Union", kind="org", facts={"P31": ["Q245065"]},  # intergovernmental organization
+                                    relations={"P361": ["Q999002"], "is_a": []}, relations_at=datetime(2026, 11, 20, tzinfo=timezone.utc))
+        self._signal(ent, others=[bystander])
+        f = self.findings()[("NEW-BRANCH-v2", None)]
         self.assertEqual((f.evidence["clusters"], f.evidence["days"], f.evidence["parent"]), (6, 16, "quiet"))
-        self.assertEqual(f.operations[1], {"op": "map_entity", "qid": "Q999001", "branch": "new-movement", "role": "org"})
+        self.assertIn("part of: P361 Q999002", f.evidence["parent_how"])
+        self.assertEqual(f.operations[1], {"op": "map_entity", "qid": "Q999001", "branch": "new-union", "role": "org"})
+
+    def test_no_relation_means_no_parent_and_parties_and_provinces_are_never_branches(self):
+        bystander = Entity.objects.create(qid="Q999003", label="Twice-Told City", kind="polity")
+        BranchEntity.objects.create(branch=Branch.objects.get(slug="twice"), entity=bystander)
+        state = Entity.objects.create(qid="Q999004", label="New Republic", kind="polity", facts={"P31": ["Q3624078"]}, relations={"is_a": []})
+        party = Entity.objects.create(qid="Q999005", label="Some Party", kind="org", facts={"P31": ["Q7278"]})
+        province = Entity.objects.create(qid="Q999006", label="Some State", kind="polity", facts={"P31": ["Q999999"]}, relations={"is_a": ["Q10864048"]})
+        for e in (state, party, province):
+            self._signal(e, others=[bystander])
+        out = review.review(TODAY)
+        new = [x for x in out["findings"] if x["rule"].startswith("NEW-BRANCH")]
+        self.assertEqual(sorted((x["result"], x["summary"].split(" (")[0]) for x in new),
+                         [("not_a_branch", "Some Party"), ("not_a_branch", "Some State"), ("proposed", "New Republic")])
+        p = BranchProposal.objects.get(rule_id="NEW-BRANCH-v2")
+        self.assertEqual(p.payload["operations"][0]["fields"]["parents"], [], "co-mentioned with Twice-Told City, but no relation: no parent")
+        self.assertIn("needs review", p.summary)
 
 
 @override_settings(BRANCH_RULES=SMALL_RULES)
@@ -211,7 +237,7 @@ class ProposalTests(TestCase):
         self.assertFalse(Branch.objects.filter(slug="people-north-america").exists())
         self.assertEqual(BranchProposal.objects.get(pk=p.pk).status, "withdrawn")
 
-    def test_apply_merge_and_legacy_file(self):
+    def test_apply_merge(self):
         review.review(TODAY)
         p = BranchProposal.objects.get(rule_id="MERGE-OVERLAP-v1")
         ops = self._filled(p)
@@ -221,9 +247,6 @@ class ProposalTests(TestCase):
         union = next(b for b in build_content()["branches"] if b["id"] == "union")
         self.assertEqual(union["start"], 1952)
         self.assertEqual([c["u"] for c in union["cites"]], [cite(s)["u"] for s in ("union", "coal", "market")])
-        js = operations.legacy_js(p, ops)
-        self.assertIn('TL.merge("coal", "union");', js)
-        self.assertIn('TL.patch("union", {', js)
 
     def test_revert_refuses_when_rows_changed_since(self):
         review.review(TODAY)

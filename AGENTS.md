@@ -21,22 +21,23 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 
 | Path | What |
 |---|---|
-| `site/` | The static site: `template.html`, `build.mjs` (builds `site/timeline.html` from `data/*.js`, or from a snapshot with `--from-json`; `--dump-json` writes the resolved content for import), `canonical.mjs` (the one content shape both directions share), `restructure.mjs`, `SCHEMA.md` (the content model and the citation rules), `images/` and `outlines.js` (inputs, kept beside the page), `globe-assets.json`, and the content tools (`build-outlines.mjs`, `fetch-images.mjs`, …). `data/*.js` is the legacy content, imported until the cutover (ADR 0001). |
+| `site/` | The static site: `template.html`, `build.mjs` (builds `site/timeline.html` from a release snapshot, `--from-json`, and nothing else; `--dump-json` writes it back for the build gate; `--archive` reads the frozen legacy files for `import_legacy --archive`), `canonical.mjs` (the one content shape), `restructure.mjs` (the legacy files' move / patch / merge), `SCHEMA.md` (the content model and the citation rules), `images/` and `outlines.js` (inputs, kept beside the page), `globe-assets.json`, and the globe tools (`build-globe.mjs`, `build-outlines.mjs`, `build-paleo-points.mjs`, reading a snapshot). |
+| `archive/` | Frozen at the cutover (ADR 0020): `site-data/` (the legacy `TL.*` content files, held unchanged by a test) and `site-tools/` (the retired tools that rewrote them), with a README. Never edited. |
 | `config/` | Settings (`SITE_NAME`, `DATABASE_URL`, `VAR_DIR`, the two object storages and `S3_*`, `TASK_LEASE_MINUTES`, `WORKER_TICK_SECONDS`, alerts, `AGENT_API_RATE_PER_MINUTE`), URLs (the admin, `/api/agent/`, `/healthz`), WSGI/ASGI. |
 | `timeline/` | Canonical content: `Region`, `Entry` (the shared id namespace) with `Branch` and `Event`, `BranchLink`, `EventLink`, `Connection`, `Location`, `PaleoPin`, `Image`. `services.py` is the write path (`save_branch`, `save_event`, `apply_changes`, `place`); `dates.py` derives precision and exact dates from date text; `ordering.py` is the snapshot order (`Entry.sort_key`, a fractional index: ADR 0008). |
 | `evidence/` | Canonical: `Publisher`, `Citation`, `Claim` (record claims and their atomic parts), `Evidence`. `confidence.py` computes status and confidence (independent witnesses: `independence.py`); `claims.py` splits entries into date, location, number and actor claims; `staleness.py` schedules rechecks; `conflicts.py` records disagreeing sources; `sweep.py` is `manage.py facts sweep`; `health.py` is `facts report`; `services.py` (`record_evidence`) and `publishing.py` (the publishing rule) are the agents' doors; every threshold is in `policy.py`. `publishers.py` holds the starting ratings for known publishers. See `docs/fact-checking.md`. |
 | `revisions/` | The audit log. `revising(actor, reason, task)` (`context.py`) is the only door to canonical tables; the trigger in `sql.py` refuses writes without it and records every changed row (ADR 0006). `admin_mixins.py` runs admin edits as `human:<username>`. |
-| `ingest/` | Collection, not canonical (ADR 0012): `Feed`, `FetchRun`, `Document` + `DocumentVersion`, `Entity` (Wikidata) + `WikiTitle`, `DocumentEntity`, `BranchEntity` (routing), `Candidate`, `LinkCheck`, `SuggestedSource`, `JobState`. `jobs.py` (registry, runner, lock) and `job_defs.py` (every job, in run order) behind `manage.py run_jobs` / `run_job`; `http.py` + `policy.py` (the one fetcher and the source policy, ADR 0013); `seed.py` (sources, terms verdicts); `sources_wiki.py` (Current events portal, "<Year> in X"), `sources_news.py` (WHO, Federal Register, Gazette, Nobel, permitted RSS, Office of the Historian); `wikidata.py`, `wikitext.py`, `extract.py`, `store.py`; `routing.py` (branch scores, BranchEntity seeding); `process.py` (duplicates, clusters, priority, write_event tasks, new-branch signals); `linkhealth.py`; `lookup.py` (open-API adapters) and `second_source.py`; `manage.py digest`. |
+| `ingest/` | Collection, not canonical (ADR 0012): `Feed`, `FetchRun`, `Document` + `DocumentVersion`, `Entity` (Wikidata) + `WikiTitle`, `DocumentEntity`, `BranchEntity` (routing), `Candidate`, `LinkCheck`, `SuggestedSource`, `JobState`. `jobs.py` (registry, runner, lock) and `job_defs.py` (every job, in run order) behind `manage.py run_jobs` / `run_job`; `http.py` + `policy.py` (the one fetcher and the source policy, ADR 0013); `seed.py` (sources, terms verdicts); `sources_wiki.py` (Current events portal, "<Year> in X"), `sources_news.py` (WHO, Federal Register, Gazette, Nobel, permitted RSS, Office of the Historian); `wikidata.py`, `wikitext.py`, `extract.py`, `store.py`; `routing.py` (branch scores by role, BranchEntity seeding and its `CORRECTIONS`); `process.py` (duplicates, clusters, priority, write_event tasks under a threshold and a daily cap, new-branch signals); `branchable.py` (whether a signal's entity can be a branch, and its parent from Wikidata relations); `linkhealth.py`; `lookup.py` (open-API adapters) and `second_source.py`; `manage.py digest`. |
 | `infra/` | The platform around the content, no models: `storage.py` (the one door to object storage: `raw` and `releases`, write-once, the `latest` pointer; ADR 0016), `migrate_local.py` and `manage.py storage init / status / migrate_local / pull-release`, `health.py` (`/healthz`), `alerts.py` (one email when a job fails N runs in a row; ADR 0019). |
 | `agentapi/` | The agents' HTTP door (ADR 0017): `AgentToken` (hashed, scoped; `manage.py agent_token create / list / revoke`), `auth.py` (bearer tokens, the per-token rate limit), `schemas.py` (a result schema per task kind), `apply.py` (results applied through the services into review), `views.py` (the endpoints). |
 | `work/` | The agents' queue: `AgentTask`, `queue.py` (leases under `FOR UPDATE SKIP LOCKED`), `manage.py tasks`. |
 | `governance/` | `BranchMetric`, `BranchProposal`, and `manage.py branches`: `metrics.py` (each branch's shape on the page's time scale), `rules.py` (SPLIT-PLACE, SPLIT-TIME, MERGE-OVERLAP, END-STALE, NEW-BRANCH, THIN), `thresholds.py` (every threshold), `review.py` (proposals, tasks, hysteresis), `operations.py` (apply and revert). See `docs/branch-rules.md`. |
-| `publish/` | `Release`; the snapshot format (`content.py`: key order and a writer byte-compatible with `JSON.stringify`), `export.py` (Postgres → content), `legacy.py` (dump → Postgres), `release.py` (immutable releases in the store, the `latest` pointer, rollback, the local mirror), `gates.py` (what must hold before a release: ADR 0019), `changes.py` (the change report), and the `import_legacy`, `publish` and `compare_content` commands. |
-| `tests/` | The suite: import idempotency, the round trip, entry order, revision enforcement, the queue, dates, the fact base, branch governance, the docs' checks and hooks (`test_guide.py`) and ingestion (`test_ingest.py` on recorded cassettes in `fixtures/ingest/`: `cassette.py` replays them, `record_fixtures.py` re-records). |
-| `var/` | Gitignored: `gate-receipt.json` (the gate's last pass), `legacy.json` dumps, `releases/<version>/` (a local mirror of a release from the store, `make release-pull`; `releases/latest` → it), `storage/` (the store itself with `STORAGE_BACKEND=local`), `logs/` (the scheduled runs). Raw documents and releases live in object storage (ADR 0016); an old `raw/` is copied there by `make storage-migrate`. |
+| `publish/` | `Release`; the snapshot format (`content.py`: key order and a writer byte-compatible with `JSON.stringify`), `export.py` (Postgres → content), `legacy.py` (the loader: content → Postgres, and the archive's hash), `release.py` (immutable releases in the store, the `latest` pointer, rollback, the local mirror), `gates.py` (what must hold before a release: ADR 0019, ADR 0020), `changes.py` (the change report), and the `import_legacy`, `publish` and `compare_content` commands. |
+| `tests/` | The suite: import idempotency, the round trip (DB → snapshot → DB), entry order, revision enforcement, the queue, dates, the fact base, branch governance, the docs' checks and hooks (`test_guide.py`) and ingestion (`test_ingest.py` on recorded cassettes in `fixtures/ingest/`: `cassette.py` replays them, `record_fixtures.py` re-records; `first_run.json`, the first real run's routing inputs, from `record_first_run.py`). |
+| `var/` | Gitignored: `gate-receipt.json` (the gate's last pass), `releases/<version>/` (a local mirror of a release from the store, `make release-pull`; `releases/latest` → it), `storage/` (the store itself with `STORAGE_BACKEND=local`), `logs/` (the scheduled runs). Raw documents and releases live in object storage (ADR 0016); an old `raw/` is copied there by `make storage-migrate`. |
 | `ops/` | The local schedule: `run-jobs.sh` (start Docker/Postgres and MinIO or skip, then `run_jobs`), `launchd/run-jobs.plist` (template), `schedule.sh` (install / uninstall / status). |
 | `docs/guide/` | The technical guide: a chapter per part of the platform, each stamped against the code it `covers` (`stamps.json`); `README.md` lists the chapters and says how to write one. `docs/architecture.md` points into it. |
-| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015, object storage: 0016, the agent API: 0017, the single-source marker: 0018, processes and release gates: 0019); the data model with an ER sketch; how claims are checked; the branch rules. |
+| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015, object storage: 0016, the agent API: 0017, the single-source marker: 0018, processes and release gates: 0019, the cutover: 0020, ingestion tuning: 0021); the data model with an ER sketch; how claims are checked; the branch rules. |
 | `guide/` | The guide's tools behind `manage.py guide check / stamp / status / covers / index`: `chapters.py`, `coverage.py` (what a chapter covers, its hash), `checks.py`. No models. |
 | `scripts/` | `make_env.py` (writes `.env`, or adds the keys it lacks, printing no values); `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
 | `.claude/settings.json`, `.claude/hooks/` | Hooks only: before `git commit`, the guide must be fresh; before `gh pr create`, the gate must have passed on the committed code; at the end of a turn, a reminder. |
@@ -50,9 +51,10 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
    store, mirrored to `var/releases/` by `make release-pull`), never from a
    live query. Never edit a snapshot (or `site/timeline.html`) by hand:
    change the rows, then `manage.py publish`, which refuses unless its gates
-   pass; roll back with `publish --rollback <version>`. (ADR 0019) Until the cutover, `site/data/*.js` is also
-   edited by the content agents; bring changes in with `make import`
-   (idempotent) rather than by editing rows to match. (ADR 0001)
+   pass; roll back with `publish --rollback <version>`. (ADR 0019) Since the
+   cutover Postgres is the only source: the legacy content files are frozen
+   in `archive/site-data/` and nothing imports them over the database; never
+   edit them, and never add content anywhere but the rows. (ADR 0020)
 2. **Every canonical write goes through the service layer and leaves a
    Revision.** Timeline and evidence tables accept writes only inside
    `revisions.revising("agent:<name>" | "human:<username>" | "job:<command>",
@@ -94,22 +96,25 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
    publisher is `forbidden`. Respect every publisher's `fetch_policy`: a
    `browser_only` site (Britannica, un.org, nobelprize.org …) is read in a
    browser by an agent, never by a job.
-7. **Review state belongs to review.** The legacy import never overwrites an
-   entry's status, a publisher's rating or notes, a citation's check results,
-   or evidence stance and excerpts. Keep it that way in any new import.
+7. **Review state belongs to review.** The loader (`import_legacy`) never
+   overwrites an entry's status, a publisher's rating or notes, a citation's
+   check results, or evidence stance and excerpts. Keep it that way in any new
+   import.
 8. **The snapshot format is one shape.** `site/canonical.mjs` and
-   `publish/content.py` `KEYS` must match (a test checks); a snapshot exported
-   from Postgres and a dump of the same content are byte-identical, and so are
-   the pages built from them. A new content field changes both, and
-   `SCHEMA.md`. (ADR 0007)
+   `publish/content.py` `KEYS` must match (a test checks); the site's build
+   reads a snapshot back byte for byte, and a snapshot loaded into an empty
+   database exports to the same bytes. A new content field changes both, and
+   `SCHEMA.md`. (ADR 0007, ADR 0020)
 9. **Raw documents and secrets stay out of git.** Raw fetched bytes live in
    the `raw` object store by content hash, written only through
    `infra/storage.py` (ADR 0016); `.env` holds the local passwords (Postgres,
    MinIO). Never commit either, never print a credential, and never point anything at port 5432 (Postgres.app's): the local
    database is Docker's, on 5433.
-10. **Don't run content-rewriting scripts casually.** `site/verify-geo.mjs
-    --apply`, `apply-fixes.mjs --apply`, `fetch-images.mjs` and friends
-    rewrite `site/data/`; run them only when that is the task.
+10. **Don't load files over the database casually.** `import_legacy`
+    (`--archive`, or a content file) overwrites content on every entry the
+    file has, and `--retract-missing` retracts the rest: it is for empty
+    databases; on a live one, `--dry-run` first. The old content-rewriting
+    scripts are retired in `archive/site-tools/`.
 
 11. **Publish through the rule.** An entry becomes `published` with
     `manage.py facts publish <slug>` (`evidence.publishing`): no contested
@@ -120,10 +125,9 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
     review` (a job) proposes splits, merges, end dates and new branches by
     fixed rules; an agent or the owner decides each with `branches apply`
     (the operations run through the services and can be reverted with
-    `branches revert`) or `branches reject`. Until the cutover apply with
-    `--legacy-file`, or the next import undoes it. Thresholds live in
+    `branches revert`) or `branches reject`. Thresholds live in
     `governance/thresholds.py`; changing one means bumping `RULES_VERSION`.
-    (ADR 0011)
+    (ADR 0011, ADR 0021)
 13. **Jobs fetch only what the source policy allows.** Every request goes
     through `ingest.http.Fetcher`, which refuses `NEVER_FETCH` hosts
     (`ingest/policy.py`: Britannica, OpenStax, the Guardian, BBC, NPR, AP,
@@ -159,12 +163,12 @@ make db           # Postgres 16 on localhost:5433 and MinIO on 127.0.0.1:9000 (c
 make storage-migrate  # once, on a checkout that has var/raw and var/releases: copy them into the store
 uv sync
 make migrate
-make import       # node site/build.mjs --dump-json var/legacy.json, then manage.py import_legacy
+make import-archive  # an EMPTY database only: load the frozen legacy files (or import_legacy <release content.json>)
 make publish      # a release in the store (gates first), latest → it; publish --rollback <version> repoints
-make build-release   # mirror the latest release (make release-pull), then site/timeline.html from it
-make roundtrip    # dump → import → publish → diff the JSON and both built pages (additive keys aside: ADR 0018)
+make build        # mirror the latest release (make release-pull), then site/timeline.html from it (= build-release)
+make roundtrip    # the release gates on your content, writing nothing (publish --check: deterministic, build, contested, report)
 make test         # uv run python manage.py test (needs the database)
-make check        # Django checks, missing migrations, the site's data validation
+make check        # Django checks and missing migrations
 make serve        # the admin at http://localhost:8000/admin/ (manage.py createsuperuser first)
 make up           # production's processes: web (gunicorn: admin, /api/agent/, /healthz) and worker (run_jobs --loop)
 
@@ -209,16 +213,16 @@ with revising("agent:claude-writer", reason="write_event from candidate 412", ta
 
 New entries start as `draft`; only `published` ones reach a snapshot.
 The tests run against the same Docker Postgres (Django creates a
-`test_<your database>` database); the suite takes about 15 seconds. The full round
-trip on the real content takes about 5 seconds when nothing changed (the
-first import into an empty database, about 20).
+`test_<your database>` database); the suite takes about 30 seconds. The release
+gates on the real content (`make roundtrip`) take about 5 seconds; loading the
+archive into an empty database (`make import-archive`), about 20.
 
 ### A change, start to finish
 
 1. **Branch.** Work on a branch, in a worktree when other sessions are at
    work: `git worktree add ../humanitributary-<name> -b <name>`. Give the
    worktree its own database when anything else is using the main one (an
-   ingestion run, another session's round trip): create
+   ingestion run, another session's work): create
    `humanitributary_<name>` on the same server and name it in that
    worktree's `.env` `DATABASE_URL`.
 2. **Change** the code, with tests.
@@ -227,9 +231,10 @@ first import into an empty database, about 20).
    CHAPTER=<name>` (rule 14). A real decision gets an ADR, or amends one
    (rule 15).
 4. **The gate.** `make check-pr` (`scripts/check_pr.py`): the guide's check
-   first, then the ADR check, Django's checks, missing migrations, the
-   site's data check (and ruff when configured) beside the test suite and
-   the round trip. CI runs the same command. A pass writes a receipt for the
+   first, then the ADR check, Django's checks and missing migrations (and
+   ruff when configured) beside the test suite and the release gates on your
+   database's content (`make roundtrip`). CI runs the same command, on the
+   archive's content. A pass writes a receipt for the
    exact code it checked.
 5. **Commit and open the PR** with the template
    (`.github/pull_request_template.md`): what changed and why, decisions,

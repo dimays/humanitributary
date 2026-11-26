@@ -1,4 +1,5 @@
-"""Legacy import is idempotent, and import → publish gives back exactly what went in."""
+"""The loader is idempotent, and since the cutover (ADR 0020) the round trip is DB → snapshot → DB: a snapshot loaded
+into an empty database exports to the same bytes, and loading it again writes nothing. The legacy files are frozen."""
 
 import json
 import shutil
@@ -8,18 +9,20 @@ from pathlib import Path
 from unittest import skipUnless
 
 from django.conf import settings
+from django.db import transaction
 from django.test import TestCase, override_settings
 
 from evidence.models import Citation, Claim, Evidence, Publisher
 from publish.compare import differences
-from publish.content import ADDITIVE, KEYS, dumps, js_number, legacy_view, read_js_keys
+from publish.content import ADDITIVE, KEYS, dumps, js_number, read_js_keys, without_derived
 from publish.export import build_content
-from publish.legacy import changes, import_content
+from publish.legacy import ARCHIVE_DIR, ARCHIVE_SHA256, archive_hash, changes, import_content
 from publish.models import Release
 from publish.release import publish
 from revisions import revising
 from revisions.models import Revision
-from timeline.models import Branch, BranchLink, Event, Location, Status
+from timeline import services
+from timeline.models import Branch, BranchLink, Entry, Event, Location, Status
 
 from .fixtures import small
 
@@ -98,13 +101,39 @@ class ImportTests(TestCase):
             Citation.objects.create(url="https://openstax.org/books/world-history/pages/1", title="x", publisher=Publisher.objects.first())
 
 
+class _Undo(Exception):
+    pass
+
+
 class RoundTripTests(TestCase):
+    def test_db_to_snapshot_to_db_is_exact(self):
+        """A database's snapshot, loaded into an empty database, exports to the same bytes (derived keys included),
+        and loading it again writes nothing. Content written in Postgres alone (after the cutover) comes back too."""
+        try:
+            with transaction.atomic():
+                import_content(small())
+                with revising("agent:writer", reason="written in Postgres alone"):
+                    services.save_event("an-sulla-dictator", branch="roman-republic", y=-82, when="82 BCE", title="Sulla becomes dictator",
+                                        text="Sulla takes the dictatorship.", imp=2, status="published")
+                first = dumps(build_content())
+                raise _Undo
+        except _Undo:
+            pass
+        self.assertFalse(Entry.objects.exists())
+        self.assertIn('"an-sulla-dictator"', first)
+        import_content(json.loads(first))
+        self.assertEqual(dumps(build_content()), first)
+        before = Revision.objects.count()
+        stats = import_content(json.loads(first))
+        self.assertEqual(changes(stats), 0, {k: v for k, v in stats.items() if not k.endswith("unchanged")})
+        self.assertEqual(Revision.objects.count(), before)
+
     def test_import_then_export_gives_back_the_input(self):
-        """Exact on every key the legacy dump has; the additive keys (ADR 0018) are the only difference."""
+        """The fixture comes back exact; the derived keys (ADR 0018) are the only difference."""
         import_content(small())
         out = build_content()
-        self.assertEqual(differences(small(), legacy_view(out)), [])
-        self.assertEqual(dumps(legacy_view(out)), dumps(small()))
+        self.assertEqual(differences(small(), without_derived(out)), [])
+        self.assertEqual(dumps(without_derived(out)), dumps(small()))
         extra = {k for e in out["events"] for k in e} - {k for e in small()["events"] for k in e}
         self.assertLessEqual(extra, set(ADDITIVE["event"]))
 
@@ -157,19 +186,24 @@ class RoundTripTests(TestCase):
         self.assertFalse(created2)
         self.assertEqual(r1.pk, r2.pk)
         body = storage.read(storage.RELEASES, r1.snapshot_path)
-        self.assertEqual(legacy_view(json.loads(body)), small())
+        self.assertEqual(without_derived(json.loads(body)), small())
         self.assertEqual(storage.read_pointer()["version"], r1.version)
         self.assertEqual(r1.counts["events"], 4)
         self.assertEqual(Release.objects.count(), 1)
 
+    def test_the_legacy_archive_is_frozen(self):
+        """archive/site-data/ is what the cutover imported; content changes go into Postgres (ADR 0020)."""
+        self.assertEqual(archive_hash(ARCHIVE_DIR), ARCHIVE_SHA256, "archive/site-data/ changed: it is frozen since the cutover")
+        self.assertFalse((settings.SITE_DIR / "data").exists(), "site/data/ is archived: the page is built from snapshots")
+
     @skipUnless(shutil.which("node"), "needs Node")
     def test_site_builds_from_the_snapshot_identically(self):
-        """The same content built from a dump and from a snapshot gives byte-identical pages."""
+        """The fixture and its snapshot (without derived keys) give byte-identical pages."""
         import_content(small())
         tmp = Path(tempfile.mkdtemp())
         try:
             (tmp / "a.json").write_text(dumps(small()))
-            (tmp / "b.json").write_text(dumps(legacy_view(build_content())))
+            (tmp / "b.json").write_text(dumps(without_derived(build_content())))
             pages = []
             for name in ("a", "b"):
                 subprocess.run(

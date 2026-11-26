@@ -71,6 +71,7 @@ class Context:
             if p.kind == "merge" and p.branch_id:
                 self.protected["merge-survivor"].add(p.branch.slug)
         self.signals = new_branch_signals(today, M)
+        self.not_branches = []  # (signal, why): NEW-BRANCH's refusals, counted in review()
 
     def event(self, slug):
         return self._events[slug]
@@ -82,18 +83,26 @@ class Context:
 
 def new_branch_signals(today: date, M: dict) -> list[dict]:
     """Entities behind ingestion's `new_branch_signal` candidates that no branch routes, with how often and how long
-    they have come up (distinct cluster keys, days between first and last document) and the likely parent branch."""
-    from ingest.models import BranchEntity, Candidate
+    they have come up (distinct cluster keys, days between first and last document), whether they can be a branch at
+    all, and the parent their Wikidata relations name (ingest/branchable.py; never co-occurrence)."""
+    from ingest import branchable
+    from ingest.models import BranchEntity, Candidate, Entity
+    from ingest.routing import Router
 
     mapped = set(BranchEntity.objects.values_list("entity_id", flat=True))
     sigs = Candidate.objects.filter(kind="new_branch_signal", status__in=["queued", "claimed"]).prefetch_related("entities")
     wanted = {e.pk: e for c in sigs for e in c.entities.all() if e.pk not in mapped}
     if not wanted:
         return []
-    route = defaultdict(Counter)
-    for entity_id, branch_slug, weight in BranchEntity.objects.values_list("entity_id", "branch__slug", "weight"):
-        route[entity_id][branch_slug] += weight
-    stats = {pk: {"clusters": set(), "dates": [], "ys": [], "parents": Counter(), "candidates": []} for pk in wanted}
+    by_qid = Router().by_qid
+    cache = {}
+
+    def lookup(qid):
+        if qid not in cache:
+            cache[qid] = Entity.objects.filter(qid=qid).first()
+        return cache[qid]
+
+    stats = {pk: {"clusters": set(), "dates": [], "ys": [], "candidates": []} for pk in wanted}
     for c in Candidate.objects.filter(entities__in=list(wanted)).distinct().prefetch_related("entities", "documents").order_by("pk"):
         ents = {e.pk for e in c.entities.all()}
         dates = [d.published_at or d.fetched_at for d in c.documents.all()] or [c.created_at]
@@ -104,19 +113,17 @@ def new_branch_signals(today: date, M: dict) -> list[dict]:
             if c.y_guess is not None:
                 st["ys"].append(c.y_guess)
             st["candidates"].append(c.pk)
-            for other in ents - {pk}:
-                st["parents"].update(route.get(other, {}))
-            for b, score in (c.branch_scores or {}).items():
-                st["parents"][b] += score
     out = []
     for pk, st in stats.items():
         e = wanted[pk]
-        parents = [(b, w) for b, w in st["parents"].most_common() if b in M]
+        ok, why = branchable.can_be_branch(e, today)
+        parent, how = branchable.parent(e, by_qid, lookup, today) if ok else (None, "")
         out.append({
             "qid": e.qid, "label": e.label, "kind": e.kind, "clusters": len(st["clusters"]),
             "days": ((max(st["dates"]) - min(st["dates"])).days + 1) if st["dates"] else 0,
             "first_y": min(st["ys"]) if st["ys"] else M_.now_year(today), "candidates": st["candidates"][:50],
-            "parent": parents[0][0] if parents else None, "parent_scores": dict(parents[:5]),
+            "branchable": ok, "branchable_why": why, "relations_read": e.relations_at is not None,
+            "parent": parent if parent in M else None, "parent_how": how,
         })
     return sorted(out, key=lambda s: s["qid"])
 
@@ -127,12 +134,16 @@ def compute(today: date):
     return M, Context(today, M, data)
 
 
-def findings(today: date | None = None) -> tuple[list[Finding], dict]:
-    today = today or date.today()
+def _findings(today: date) -> tuple[list[Finding], dict, Context]:
     M, ctx = compute(today)
     out = []
     for rule in RULES:
         out += rule(M, ctx)
+    return out, M, ctx
+
+
+def findings(today: date | None = None) -> tuple[list[Finding], dict]:
+    out, M, _ = _findings(today or date.today())
     return out, M
 
 
@@ -183,7 +194,7 @@ def _task_payload(p: BranchProposal, f: Finding, M: dict) -> dict:
 
 def review(today: date | None = None, *, actor: str = ACTOR, dry_run: bool = False) -> dict:
     today = today or date.today()
-    found, M = findings(today)
+    found, M, ctx = _findings(today)
     stats = Counter()
     report = []
     with transaction.atomic():
@@ -199,6 +210,10 @@ def review(today: date | None = None, *, actor: str = ACTOR, dry_run: bool = Fal
             r = _propose(f, today, actor, M)
             stats[f"{f.rule}.{r}"] += 1
             report.append((f, r))
+        for sig, why in ctx.not_branches:
+            stats["NEW-BRANCH.not_a_branch"] += 1
+            report.append((Finding(rule="NEW-BRANCH", kind="new", branch=None, others=[], strength=0.0,
+                                   summary=f"{sig['label']} ({sig['qid']}) is {why}: not proposed as a branch.", evidence={}), "not_a_branch"))
         # Withdraw open proposals whose rule no longer fires.
         for p in BranchProposal.objects.filter(status__in=OPEN, created_by=actor):
             if p.payload.get("key") not in seen:
@@ -234,11 +249,11 @@ def _propose(f: Finding, today: date, actor: str, M: dict) -> str:
     payload = {"key": f.key, "strength": f.strength, "operations": f.operations, "needs_agent": f.needs_agent, "rules_version": RULES_VERSION}
     if open_p is not None:
         p, result = open_p, "refreshed"
-        changed = p.summary != f.summary or p.evidence != f.evidence or {k: p.payload.get(k) for k in payload} != payload
+        changed = p.summary != f.summary or p.evidence != f.evidence or p.rule_id != f.rule or {k: p.payload.get(k) for k in payload} != payload
         if not changed:
             return "unchanged"
-        p.summary, p.evidence, p.payload = f.summary, f.evidence, {**p.payload, **payload}
-        p.save(update_fields=["summary", "evidence", "payload"])
+        p.summary, p.evidence, p.payload, p.rule_id = f.summary, f.evidence, {**p.payload, **payload}, f.rule
+        p.save(update_fields=["summary", "evidence", "payload", "rule_id"])
     else:
         p = BranchProposal.objects.create(kind=f.kind, branch=branch, rule_id=f.rule, summary=f.summary, evidence=f.evidence, payload=payload, created_by=actor)
         result = "proposed"

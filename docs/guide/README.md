@@ -21,7 +21,7 @@ guide-index` rewrites it):
 6. [Evidence and fact checking](evidence-and-fact-checking.md): How every statement on the timeline is tied to the pages that support it, how its status and confidence are computed, when it is re-read, and the daily sweep that keeps the whole base honest.
 7. [Branch governance](branch-governance.md): How fixed rules measure every branch and propose splits, merges, end dates and new branches, how a proposal is kept from flapping, and how an agent's decision is applied, rejected or reverted.
 8. [Revisions](revisions.md): How every change to canonical content is recorded with who made it, why and for which task, how the database refuses changes that skip that, and how to read the log.
-9. [Publishing](publishing.md): How published content leaves Postgres as a versioned static snapshot, how the page is built from it, how the legacy files are imported, and the round trip that proves nothing is lost either way.
+9. [Publishing](publishing.md): How published content leaves Postgres as a versioned static snapshot, the gates a release must pass, how the page is built from it, and the round trip (DB → snapshot → DB) that proves nothing is lost; the legacy files are frozen since the cutover.
 10. [Operations](operations.md): How to set the platform up on a laptop, run its jobs on a schedule, tell whether it is healthy, what is and isn't backed up, and what to do when something goes wrong.
 11. [How this guide stays true](this-guide.md): How the guide, the ADRs and the gate keep the docs in step with the code, and what blocks a commit or a pull request when they drift.
 12. [Glossary](glossary.md): Every term the guide uses, in a sentence or two, with the chapter that explains it.

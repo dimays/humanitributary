@@ -1,5 +1,6 @@
 """The `process` job: route, de-duplicate, cluster and prioritize queued candidates, queue `write_event` tasks for
-clusters over the threshold, keep candidates in step with their tasks, and raise new-branch signals.
+clusters over the threshold (WRITE_EVENT_THRESHOLD; at most settings.WRITE_EVENT_TASKS_PER_DAY new ones a day,
+highest priority first), keep candidates in step with their tasks, and raise new-branch signals.
 Deterministic throughout (docs/adr/0012-ingestion.md has the formulas).
 
 Clusters. A Wikipedia portal item's cluster is its story: the deepest context topic it sits under (an article such as
@@ -24,6 +25,7 @@ import math
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 
+from django.conf import settings
 from django.db import connection
 from django.utils import timezone
 
@@ -33,7 +35,7 @@ from work import queue
 from work.models import AgentTask
 
 from .models import Candidate, Entity
-from .routing import TOUCH_THRESHOLD, YEAR_PAGE_BOOST, Router, top_branch
+from .routing import TOUCH_THRESHOLD, YEAR_PAGE_BOOST, Router, suggested, top_branch
 from .wikidata import MOVEMENT_CLASSES, article_url
 
 ACTOR = "job:process"
@@ -43,7 +45,11 @@ CATEGORY_WEIGHT = {
     "business and economy": 0.6, "law and crime": 0.5, "arts and culture": 0.5, "sports": 0.4,
 }
 TIER_WEIGHT = {1: 1.0, 2: 0.8, 3: 0.6, 4: 0.3, None: 0.5}
-WRITE_EVENT_THRESHOLD = 45.0
+# A story becomes a write_event task at this priority. Chosen so that about the top 12.5% of clusters qualify (the
+# middle of the 10–15% the owner asked for): on the first real run (844 candidates, 682 clusters, routed as now)
+# the cluster at the 12.5th percentile from the top scored 64.86; rounded down, 64 lets 95 clusters (13.9%) through.
+# Re-derive it the same way when the formula changes (docs/adr/0021-ingestion-tuning.md).
+WRITE_EVENT_THRESHOLD = 64.0
 MAX_TASK_UPDATES = 150
 DUP_THRESHOLD = 0.5
 WINDOW_DAYS = 60
@@ -69,9 +75,17 @@ def load(window_days=WINDOW_DAYS):
 
 
 # Routing ---------------------------------------------------------------------------------------------------------
+def roles_of(c) -> dict:
+    """{qid: role} for a candidate: as its source recorded them, with the portal item's story article as "story"."""
+    roles = dict((c.details or {}).get("roles", {}))
+    if story := (c.details or {}).get("topic_qid"):
+        roles[story] = "story"
+    return roles
+
+
 def route(cands, router: Router):
     for c in cands:
-        roles = (c.details or {}).get("roles", {})
+        roles = roles_of(c)
         ents = [(e, roles.get(e.qid, "item")) for e in c.entities.all()]
         boost = {s: YEAR_PAGE_BOOST for s in (c.details or {}).get("branches", [])} if c.details.get("source") == "year_page" else None
         scores, hits = router.score(ents, c.y_guess, boost)
@@ -212,7 +226,7 @@ def build_payload(key, members, parts, *, dups, events, publishers) -> dict:
         for s, v in getattr(c, "_scores", {}).items():
             scores[s] += v
     branches = [{"slug": s, "name": Branch.objects.filter(slug=s).values_list("name", flat=True).first(), "score": round(v, 3)}
-                for s, v in sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))[:3]]
+                for s, v in suggested(scores)]
     sources, seen = [], set()
     for c in members:
         d = c.details
@@ -362,14 +376,23 @@ def run(ctx):
     qualifying = [(k, p) for k, p in ranked if p["priority"] >= threshold
                   and any(c.details.get("source") in ("portal", "year_page") for c in by_key[k])]
     counts["clusters_over_threshold"] = len(qualifying)
+    # The daily cap counts tasks this job created since local midnight, whatever their state now.
+    midnight = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+    room = max(0, int(ctx.opt("per_day", settings.WRITE_EVENT_TASKS_PER_DAY))
+               - AgentTask.objects.filter(kind="write_event", created_by=ACTOR, created_at__gte=midnight).count())
     for k, parts in qualifying[: int(ctx.opt("max_tasks", MAX_TASK_UPDATES))]:
         members = by_key[k]
+        is_open = AgentTask.objects.filter(kind="write_event", dedupe_key=f"cluster:{k}", status__in=["queued", "claimed"]).exists()
+        if not is_open and room <= 0:
+            counts["tasks_held_by_daily_cap"] += 1
+            continue
         payload = build_payload(k, members, parts, dups=dups, events=events, publishers=publishers)
         lead = Candidate.objects.get(pk=payload["items"][0]["candidate"])
         task, created = queue.enqueue("write_event", created_by=ACTOR, dedupe_key=f"cluster:{k}", priority=int(round(parts["priority"])),
                                       payload=payload, target_candidate=lead)
         if created:
             counts["tasks_created"] += 1
+            room -= 1
         elif task.status == "queued":
             old = {**(task.payload or {})}
             keep = {x: old[x] for x in ("suggested_sources",) if x in old}

@@ -1,12 +1,8 @@
 # Common commands. `make help` lists them.
 PY := uv run python
 M := $(PY) manage.py
-TODAY := $(shell date +%F)
 
-# A legacy dump the release must equal on every legacy key until the cutover (ADR 0007, amended by ADR 0018).
-LEGACY := var/legacy.json
-
-.PHONY: help env db db-stop psql migrate dump import publish release-pull build build-release roundtrip test check check-adr adr-index check-guide guide-stamp guide-status guide-index check-pr serve up worker jobs digest storage-init storage-status storage-migrate schedule-install schedule-uninstall schedule-status
+.PHONY: help env db db-stop psql migrate import-archive publish release-pull build build-release roundtrip test check check-adr adr-index check-guide guide-stamp guide-status guide-index check-pr serve up worker jobs digest storage-init storage-status storage-migrate schedule-install schedule-uninstall schedule-status
 
 help: ## List the commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -37,39 +33,29 @@ psql: ## A psql shell on the local database
 migrate: ## Apply migrations
 	$(M) migrate
 
-dump: ## Static site's resolved content -> var/legacy.json
-	@mkdir -p var
-	node site/build.mjs --dump-json var/legacy.json
+import-archive: ## Load the frozen legacy files (archive/site-data/) into an empty database (CI's corpus; ADR 0020)
+	$(M) import_legacy --archive
 
-import: dump ## Dump, then upsert it into Postgres (idempotent; leaves Revisions)
-	$(M) import_legacy var/legacy.json --retract-missing
-
-publish: ## A release in the object store (gates first; with var/legacy.json until the cutover), latest -> it
-	$(M) publish $$(test -f $(LEGACY) && echo --legacy $(LEGACY))
+publish: ## A release in the object store (gates first), latest -> it
+	$(M) publish
 
 release-pull: ## Mirror the latest release (or VERSION=…) from the store into var/releases/<version>/ (+ latest)
 	$(M) storage pull-release $(VERSION)
 
-build: ## site/timeline.html from data/*.js (the legacy path)
-	node site/build.mjs
+build: build-release ## site/timeline.html from the latest release (the only way the page is built)
 
 build-release: release-pull ## site/timeline.html from the latest release snapshot
 	node site/build.mjs --from-json var/releases/latest/content.json
 
-roundtrip: import publish release-pull ## Dump -> import -> publish, then diff the JSON and the pages (additive keys aside)
-	$(M) compare_content $(LEGACY) var/releases/latest/content.json --write-legacy-view var/release-legacy-view.json
-	node site/build.mjs --built $(TODAY) --out var/timeline-legacy.html
-	node site/build.mjs --from-json var/release-legacy-view.json --built $(TODAY) --out var/timeline-release.html
-	cmp var/timeline-legacy.html var/timeline-release.html && echo "timeline.html: byte-identical (without the additive keys)"
-	node site/build.mjs --from-json var/releases/latest/content.json --built $(TODAY) --out var/timeline-release-full.html >/dev/null && echo "the release itself builds: var/timeline-release-full.html"
+roundtrip: ## The release gates on your database's content, writing nothing: deterministic export, build --check and read-back, contested, change report
+	$(M) publish --check
 
 test: ## The Django test suite (needs `make db`)
 	$(M) test
 
-check: ## Django checks, missing migrations, and the site's data validation
+check: ## Django checks and missing migrations (the content is checked by the release gates: make roundtrip)
 	$(M) check
 	$(M) makemigrations --check --dry-run
-	node site/build.mjs --check | tail -1
 
 check-adr: ## The ADRs agree: names, numbers, Status lines, amendments both ways, the index
 	@python3 scripts/check_adr.py
@@ -90,7 +76,7 @@ guide-status: ## Every guide chapter, when it was reviewed, fresh or not
 guide-index: ## Rewrite docs/guide/README.md's chapter list
 	@$(M) guide index
 
-check-pr: ## The gate before a pull request (and CI): guide, ADRs, checks, tests, round trip; writes a receipt
+check-pr: ## The gate before a pull request (and CI): guide, ADRs, checks, tests, release gates; writes a receipt
 	@$(PY) scripts/check_pr.py
 
 serve: ## The admin (the owner's review screen) at http://localhost:8000/admin/ (runserver only)

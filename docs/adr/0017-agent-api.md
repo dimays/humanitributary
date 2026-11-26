@@ -1,6 +1,6 @@
 # 0017 — Agents work through an authenticated API, never the database
 
-**Status:** proposed (November 2026)
+**Status:** proposed (November 2026); amended by [0020](0020-the-cutover.md) (nothing imports over Postgres now)
 
 ## Context
 

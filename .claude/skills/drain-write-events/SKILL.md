@@ -88,8 +88,8 @@ api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" -d @/tmp/result.json
 The event is created with status `review`, with its record claim, one evidence row per cite (checked by you, with
 your excerpt), its location and link; every row leaves a Revision linked to the task. `geo` comes from the payload's
 entity coordinates (`src` is that entity's Wikipedia article). The owner reviews and publishes it (`manage.py facts
-publish <slug>`, under the publishing rule). Until the cutover (ADR 0001) the legacy files are the record for
-published content: the owner carries a published event into `site/data/` so the next import keeps it.
+publish <slug>`, under the publishing rule), and the next release carries it. Postgres is the only record of
+content (ADR 0020): nothing else needs to be edited.
 
 The `process` job reads `result.entry`: the story's candidates become accepted and point at the entry; a null entry
 rejects them. New items on the same story later get a new task that names your event as a possible duplicate.

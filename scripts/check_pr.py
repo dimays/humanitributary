@@ -6,8 +6,9 @@
 
 The guide's check runs first, since it's quick and names the chapters to
 review; then the quick checks one after another (the ADRs, Django's checks,
-missing migrations, the site's data, ruff when it's configured), and beside
-them the test suite and the round trip, each in its own lane. The gate takes
+missing migrations, ruff when it's configured), and beside them the test
+suite and the release gates on the database's content (`make roundtrip`:
+`manage.py publish --check`, which writes nothing), each in its own lane. The gate takes
 as long as its slowest lane. Each lane's output is printed when it finishes,
 a failing one's in full; the gate fails if any lane does.
 
@@ -51,14 +52,13 @@ def lanes() -> list[tuple[str, list[tuple[str, list[str]]]]]:
         ("check-adr", [sys.executable, "scripts/check_adr.py"]),
         ("django check", [*MANAGE, "check"]),
         ("makemigrations --check", [*MANAGE, "makemigrations", "--check", "--dry-run"]),
-        ("site data", ["node", "site/build.mjs", "--check"]),
     ]
     if ruff_configured():
         quick.append(("ruff", ["uv", "run", "ruff", "check", "."]))
     return [
         ("quick checks", quick),
         ("tests", [("tests", [*MANAGE, "test", "--noinput"])]),
-        ("roundtrip", [("roundtrip", ["make", "-s", "roundtrip"])]),
+        ("release gates", [("publish --check", ["make", "-s", "roundtrip"])]),
     ]
 
 

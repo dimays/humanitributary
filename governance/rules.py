@@ -315,26 +315,33 @@ def end_stale(M: dict, ctx) -> list[Finding]:
 
 def new_branch(M: dict, ctx) -> list[Finding]:
     """From ingestion's `new_branch_signal` candidates: an entity with no BranchEntity mapping that recurs in enough
-    distinct clusters over enough days → a new branch under the branch its co-mentioned entities route to most."""
+    distinct clusters over enough days, and that can be a branch at all (a state or historical polity, a people, a
+    long-running conflict or movement, an international organization; never a subnational unit or a political
+    party: ingest/branchable.py) → a new branch under the parent its Wikidata relations name, or with no parent
+    and a note that it needs review."""
     t = get("new_branch")
     out = []
     for sig in ctx.signals:
         if sig["clusters"] < t["min_clusters"] or sig["days"] < t["min_days"]:
             continue
+        if not sig["branchable"]:
+            ctx.not_branches.append((sig, sig["branchable_why"]))
+            continue
         parent = sig["parent"]
         region = M[parent]["region"] if parent in M else "global"
         slug = slugify(sig["label"])
+        under = f" under {parent} ({sig['parent_how']})." if parent else ". No parent: none of its Wikidata relations reaches a branch, so it needs review."
         out.append(Finding(
-            rule="NEW-BRANCH-v1", kind="new", branch=None, others=[parent] if parent else [], strength=round(min(sig["clusters"] / t["min_clusters"], sig["days"] / t["min_days"]), 3),
-            summary=f"{sig['label']} ({sig['qid']}) came up in {sig['clusters']} story clusters over {sig['days']} days with no branch to route it to. "
-                    f"Propose a new branch" + (f" under {parent}." if parent else "."),
+            rule="NEW-BRANCH-v2", kind="new", branch=None, others=[parent] if parent else [], strength=round(min(sig["clusters"] / t["min_clusters"], sig["days"] / t["min_days"]), 3),
+            summary=f"{sig['label']} ({sig['qid']}), {sig['branchable_why']}, came up in {sig['clusters']} story clusters over {sig['days']} days with no branch to route it to. "
+                    f"Propose a new branch{under}",
             evidence=sig,
             operations=[
                 {"op": "create_branch", "id": slug, "fields": {"name": sig["label"], "region": region, "start": sig["first_y"], "end": None,
                  "start_when": PLACEHOLDER, "end_when": None, "parents": [parent] if parent else [], "text": PLACEHOLDER, "cites": []}},
                 {"op": "map_entity", "qid": sig["qid"], "branch": slug, "role": sig.get("kind", "")},
             ],
-            needs_agent=[f"{slug}.name", f"{slug}.text", f"{slug}.cites", f"{slug}.start_when", f"{slug}.region"],
+            needs_agent=[f"{slug}.name", f"{slug}.text", f"{slug}.cites", f"{slug}.start_when", f"{slug}.region"] + ([] if parent else [f"{slug}.parents"]),
             key=f"NEW-BRANCH:{sig['qid']}",
         ))
     return out

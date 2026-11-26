@@ -1,6 +1,6 @@
 """The snapshot format, both ways: the canonical key order (mirroring site/canonical.mjs) and a JSON writer that
-produces the same bytes as the site's `JSON.stringify(content, null, 1)`, so a snapshot exported from Postgres and a
-dump from data/*.js of the same content are byte-identical and hash the same.
+produces the same bytes as the site's `JSON.stringify(content, null, 1)`, so the site's build reads a snapshot back
+byte for byte, and the same content always hashes the same.
 """
 
 import json
@@ -24,13 +24,13 @@ KEYS = {
 }
 
 
-# Keys Postgres derives at publish time that the legacy files never had (ADR 0018 amends ADR 0007): the round trip
-# compares a release with a legacy dump after dropping them, and must still be exact for every other key.
+# Keys the export derives at publish time from other rows (ADR 0018): never stored as content, ignored by the loader
+# (publish/legacy.py), so a snapshot loaded into Postgres and exported again comes back exact, these included.
 ADDITIVE = {"event": ["singleSource"]}
 
 
-def legacy_view(content: dict) -> dict:
-    """The snapshot as the legacy files would write it: the additive keys left out, everything else untouched."""
+def without_derived(content: dict) -> dict:
+    """The snapshot without its derived keys (ADDITIVE), everything else untouched."""
     drop = set(ADDITIVE["event"])
     return {**content, "events": [{k: v for k, v in e.items() if k not in drop} for e in content["events"]]}
 

@@ -5,7 +5,7 @@
     manage.py branches review [--today …] [--dry-run]        # run the rules; create / refresh proposals and tasks
     manage.py branches list [--status proposed]              # proposals
     manage.py branches show 12                               # one proposal, with its operations
-    manage.py branches apply 12 --agent agent:me [--ops final-ops.json] [--task 40] [--legacy-file site/data/99-….js]
+    manage.py branches apply 12 --agent agent:me [--ops final-ops.json] [--task 40]
     manage.py branches reject 12 --agent agent:me --note "why"
     manage.py branches revert 12 --agent agent:me [--force]
 """
@@ -49,7 +49,6 @@ class Command(BaseCommand):
             p.add_argument("--note", default="")
             if name == "apply":
                 p.add_argument("--ops", help="The final operations (JSON list), with the fields the proposal left to the agent written in.")
-                p.add_argument("--legacy-file", help="Also write the change as this site/data file, so `make import` keeps it (until the cutover).")
             if name == "revert":
                 p.add_argument("--force", action="store_true", help="Even if rows it changed have changed since.")
 
@@ -84,12 +83,6 @@ class Command(BaseCommand):
                 if action == "apply":
                     ops = json.loads(Path(o["ops"]).read_text()) if o["ops"] else None
                     out = operations.apply(p, ops, actor=agent, task=o["task"], note=o["note"])
-                    if o["legacy_file"]:
-                        path = Path(o["legacy_file"])
-                        path.write_text(operations.legacy_js(p, out["operations"]))
-                        p.payload = {**p.payload, "legacy_file": str(path)}
-                        p.save(update_fields=["payload"])
-                        out["legacy_file"] = str(path)
                     self.stdout.write(json.dumps({k: v for k, v in out.items() if k != "operations"}))
                 elif action == "reject":
                     if p.status not in ("proposed", "accepted"):  # an agent's accepted operations may still be turned down
@@ -99,9 +92,6 @@ class Command(BaseCommand):
                     self.stdout.write(json.dumps({"id": p.pk, "status": p.status}))
                 else:
                     out = operations.revert(p, actor=agent, task=o["task"], force=o["force"])
-                    legacy = p.payload.get("legacy_file")
-                    if legacy and Path(legacy).exists():
-                        out["legacy_file"] = f"{legacy}: delete it too, or the next `make import` re-applies the change"
                     self.stdout.write(json.dumps(out))
             except operations.OperationError as e:
                 raise CommandError(str(e)) from e

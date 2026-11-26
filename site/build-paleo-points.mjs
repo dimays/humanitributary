@@ -1,16 +1,16 @@
 // Where located entries lay at the age of the paleo map the globe shows for them. Adds `pts` to globe-assets.json.
 //   node build-paleo-points.mjs            query what is missing (cached in .paleo-cache.json, gitignored), then write
 //   node build-paleo-points.mjs --offline  use the cache only
+//   --from-json content.json               the snapshot to read (default ../var/releases/latest/content.json)
 // Uses the GPlates Web Service (https://gws.gplates.org, University of Sydney) with the PALEOMAP plate model, the same
 // model as the PaleoDEM textures. Points are batched (60 per request) with a pause between requests. Points the model
 // cannot place at that age (crust that did not exist yet) are stored as null, and the page then falls back to the
 // present-day location.
 //
 // globe-assets.json `pts`: { "<slice Ma>": { "<lat>,<lon>": [paleoLat, paleoLon] | null } }, keyed by the entry's
-// present-day TL.geo coordinates exactly as written in data/, so every entry at that place shares one lookup.
+// present-day coordinates exactly as the snapshot has them, so every entry at that place shares one lookup.
 import fs from "node:fs";
 import path from "node:path";
-import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -21,14 +21,12 @@ const assets = JSON.parse(fs.readFileSync(assetsPath, "utf8"));
 const SLICES = assets.slices;
 const cache = fs.existsSync(cachePath) ? JSON.parse(fs.readFileSync(cachePath, "utf8")) : {};
 
-// ----- collect entries (same reading of data/ as build.mjs) -----
-const branches = [], events = [], geos = [];
-for (const f of fs.readdirSync(path.join(here, "data")).filter((f) => f.endsWith(".js")).sort()) {
-  const TL = { add(o) { branches.push(...(o.branches || [])); events.push(...(o.events || [])); }, geo(id, o) { geos.push({ id, ...o }); },
-    cite() {}, enrich() {}, image() {}, origin() {}, move() {}, patch() {}, merge() {} };
-  vm.runInNewContext(fs.readFileSync(path.join(here, "data", f), "utf8"), { TL }, { filename: f });
-}
-const G = new Map(geos.map((g) => [g.id, g]));
+// ----- collect entries from a published snapshot (the content's only source since the cutover) -----
+const fi = process.argv.indexOf("--from-json");
+const snapFile = fi > 0 ? process.argv[fi + 1] : path.join(here, "..", "var", "releases", "latest", "content.json");
+if (!fs.existsSync(snapFile)) { console.error(`${snapFile} not found: make release-pull, or name a snapshot with --from-json`); process.exit(2); }
+const { branches, events } = JSON.parse(fs.readFileSync(snapFile, "utf8"));
+const G = new Map([...branches, ...events].filter((x) => x.geo).map((x) => [x.id, x.geo]));
 // The page's rule (template.html, Globe.plan): paleo maps for entries more than 12,000 years old and at most 540 Ma,
 // using the nearest slice. Slice 0 is the present day and needs no reconstruction.
 const nearest = (ma) => SLICES.reduce((a, b) => (Math.abs(b - ma) < Math.abs(a - ma) ? b : a));

@@ -1,14 +1,15 @@
-// Validates data/*.js and inlines it into template.html -> timeline.html.
-//   node build.mjs --check            validate only
-//   node build.mjs --check --file 3   validate, but report problems only for files whose name starts with "3"
-//   node build.mjs                    validate and build (refuses to build on errors)
-//   node build.mjs --dump-json f.json validate, then write the fully resolved content (after restructure ops: exactly
-//                                     what gets inlined, minus the build date) as JSON, for `manage.py import_legacy`
-//   node build.mjs --from-json f.json build from a published snapshot (`manage.py publish`) instead of data/*.js
+// Validates a published snapshot and inlines it into template.html -> timeline.html. Since the cutover (ADR 0020)
+// the page is built only from snapshots that `manage.py publish` writes from Postgres:
+//   node build.mjs --from-json f.json           validate and build (refuses to build on errors)
+//   node build.mjs --from-json f.json --check   validate only
+//   node build.mjs --from-json f.json --dump-json g.json   validate, then write the content back in the canonical shape
+//                                     (publish's build gate: the snapshot must come back byte for byte)
 //   --out path.html                   where to write the page (default timeline.html, next to this file)
 //   --built YYYY-MM-DD                the "Data compiled" date (default: today, or BUILT in the environment)
-// Content is written in one canonical key order (canonical.mjs), so a build from data/*.js and a build from a
-// snapshot of the same content are byte-identical.
+// The legacy content files are frozen in archive/site-data/. `--archive [dir]` reads them (applying their TL.* calls)
+// in place of a snapshot; it exists only for `manage.py import_legacy --archive` (with --dump-json), and `--file
+// prefix` limits the report to some of those files.
+// Content is written in one canonical key order (canonical.mjs), so the same content always gives the same bytes.
 import fs from "node:fs";
 import { collector, applyRestructure } from "./restructure.mjs";
 import { canonicalContent, dropped } from "./canonical.mjs";
@@ -23,15 +24,29 @@ const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null
 const onlyFile = opt("--file");
 const dumpJson = opt("--dump-json");
 const fromJson = opt("--from-json");
+const archiveArg = args.includes("--archive") ? (args[args.indexOf("--archive") + 1] || "") : null;
+const archiveDir = archiveArg === null ? null : path.resolve(archiveArg && !archiveArg.startsWith("--") ? archiveArg : path.join(here, "..", "archive", "site-data"));
 const outPath = opt("--out") || path.join(here, "timeline.html");
 const built = opt("--built") || process.env.BUILT || new Date().toISOString().slice(0, 10);
 if (args.some((a, i) => ["--dump-json", "--from-json", "--out", "--built", "--file"].includes(a) && !args[i + 1])) {
-  console.error("Usage: node build.mjs [--check] [--file prefix] [--dump-json out.json | --from-json content.json] [--out page.html] [--built YYYY-MM-DD]");
+  console.error("Usage: node build.mjs --from-json content.json [--check] [--dump-json out.json] [--out page.html] [--built YYYY-MM-DD]\n" +
+                "       node build.mjs --archive [dir] --dump-json out.json   (the frozen legacy files, for manage.py import_legacy --archive)");
+  process.exit(2);
+}
+if (!fromJson === (archiveDir === null)) {
+  console.error(fromJson
+    ? "Name one source: --from-json or --archive, not both."
+    : "build.mjs builds from a published snapshot: node site/build.mjs --from-json var/releases/latest/content.json (make build).\n" +
+      "The legacy data/*.js files are frozen in archive/site-data/ (ADR 0020); --archive reads them, for manage.py import_legacy --archive only.");
+  process.exit(2);
+}
+if (archiveDir !== null && !dumpJson && !checkOnly) {
+  console.error("--archive only dumps (--dump-json) or checks (--check): the page is built from snapshots (ADR 0020).");
   process.exit(2);
 }
 
 const REGIONS = ["cosmos", "life", "humans", "global", "faiths", "culture", "mideast", "europe", "africa", "southasia", "eastasia", "americas", "oceania"];
-const dataDir = path.join(here, "data");
+const dataDir = archiveDir;
 // From a snapshot, every entry is already resolved: there are no TL.* calls to apply, only the checks below.
 const files = fromJson ? [] : fs.readdirSync(dataDir).filter((f) => f.endsWith(".js")).sort();
 

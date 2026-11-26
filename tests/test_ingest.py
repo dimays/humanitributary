@@ -2,6 +2,7 @@
 lookups, the fetcher's policy and the job runner. Recorded fixtures only (tests/cassette.py): no network."""
 
 import json
+import re
 from collections import Counter
 from datetime import date, timedelta
 from unittest import mock
@@ -12,7 +13,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from evidence.models import Citation, Claim, Evidence, Publisher
-from ingest import jobs, lookup, policy, process, routing, seed, sources_news, sources_wiki, wikidata, wikitext
+from ingest import branchable, jobs, lookup, policy, process, routing, seed, sources_news, sources_wiki, wikidata, wikitext
 from ingest.candidates import AliasMatcher, decimal_year, when_text
 from ingest.http import Fetcher, Refused, looks_like_challenge
 from ingest.models import BranchEntity, Candidate, Document, Entity, Feed, FetchRun, JobState, LinkCheck, SuggestedSource, WikiTitle
@@ -209,6 +210,17 @@ class RoutingTests(TestCase):
         self.assertEqual(r.score([(self.q_sn, "item")], y=1400)[0], {"mali-empire": 0.5})
         self.assertEqual(routing.top_branch({"b": 1.0, "a": 1.0, "c": 0.2}), "a")
 
+    def test_strongest_mention_split_countries_and_passing_mentions(self):
+        dakar = entity("Q3718", "Dakar", kind="place", facts={"P17": ["Q1041"]})
+        sea = entity("Q4", "A sea", kind="concept", facts={"P17": ["Q1041", "Q5", "Q6", "Q7"]})
+        war = entity("Q8", "A war", kind="event", facts={"P17": ["Q1041", "Q5", "Q6", "Q7"]})
+        r = routing.Router()
+        self.assertEqual(r.score([(self.q_sn, "item"), (dakar, "item")], y=2026.9)[0], {"senegal": 1.01}, "a port and its country are one place")
+        self.assertEqual(r.score([(sea, "item")], y=2026.9)[0], {"senegal": round(0.5 * 0.6 / 4, 3)}, "a concept is a passing mention, its countries split")
+        self.assertEqual(r.score([(war, "item")], y=2026.9)[0], {"senegal": round(0.6 / 2, 3)}, "an event's countries split by the square root")
+        self.assertEqual(r.score([(war, "story")], y=2026.9)[0], r.score([(war, "item")], y=2026.9)[0])
+        self.assertEqual(routing.suggested({"a": 10.0, "b": 3.4, "c": 3.6}), [("a", 10.0), ("c", 3.6)], "a link needs 35% of the top")
+
     def test_year_page_boost(self):
         scores, hits = routing.Router().score([], y=2026.5, boost={"senegal": 1.5})
         self.assertEqual(scores, {"senegal": 1.5})
@@ -252,6 +264,114 @@ class BranchSeedingTests(TestCase):
         self.assertEqual(got, [("gulf", "Q817", "member"), ("gulf", "Q842", "member"), ("iran", "Q794", "polity")])
         self.assertTrue(AgentTask.objects.filter(kind="map_branch_entities", dedupe_key="branch:ubuntu").exists(),
                         "an uncited short name of a concept is not trusted")
+
+
+    def test_a_place_gives_way_to_its_state_and_a_predecessor_is_not_its_successors(self):
+        branch("eire", "Ireland", 1922.93, region_slug="europe")
+        branch("former-yugo", "Former Yugoslav states", 1991.48, region_slug="europe")
+        pages = {"Ireland": "Q22890", "Former Yugoslav states": "Q83286"}
+        facts = {"Q22890": {"P31": ["Q23442"], "P17": ["Q27", "Q145"]}, "Q27": {"P31": ["Q3624078"]}, "Q145": {"P31": ["Q3624078"]},
+                 "Q83286": {"P31": ["Q3024240"], "P576": "1992-04-26"}}
+        labels = {"Q22890": "Ireland", "Q27": "Ireland", "Q145": "United Kingdom", "Q83286": "Socialist Federal Republic of Yugoslavia"}
+
+        def handler(request):
+            q = dict(request.url.params)
+            if request.url.host == "en.wikipedia.org":
+                return httpx.Response(200, json={"query": {"pages": [{"title": t, **({"pageprops": {"wikibase_item": pages[t]}} if pages.get(t) else {"missing": True})}
+                                                                     for t in q["titles"].split("|")]}})
+            wanted = set(re.findall(r"wd:(Q\d+)", q["query"]))
+            rows = []
+            if "?p ?v" in q["query"]:
+                for qid in wanted & set(facts):
+                    for prop, vals in facts[qid].items():
+                        for v in ([vals] if isinstance(vals, str) else vals):
+                            rows.append({"item": {"value": f"http://www.wikidata.org/entity/{qid}"}, "p": {"value": f"http://www.wikidata.org/prop/direct/{prop}"},
+                                         "v": {"type": "literal", "value": v} if prop == "P576" else {"type": "uri", "value": f"http://www.wikidata.org/entity/{v}"}})
+            elif "rdfs:label" in q["query"]:
+                rows = [{"item": {"value": f"http://www.wikidata.org/entity/{qid}"}, "label": {"value": labels[qid]}} for qid in wanted & set(labels)]
+            return httpx.Response(200, json={"results": {"bindings": rows}})
+
+        r = run("seed_branch_entities", fetcher=Fetcher(transport=httpx.MockTransport(handler), sleep=lambda s: None), branches="eire,former-yugo")
+        self.assertEqual(r.status, "ok", r.error)
+        self.assertEqual(sorted(BranchEntity.objects.values_list("branch__slug", "entity__qid")), [("eire", "Q27")], "the state, not the island")
+        self.assertTrue(AgentTask.objects.filter(kind="map_branch_entities", dedupe_key="branch:former-yugo").exists(),
+                        "SFR Yugoslavia ended in 1992: it covers almost none of its successors' span")
+
+
+# The first real run, recorded (tests/record_first_run.py) ---------------------------------------------------------
+FIRST_RUN = json.loads((cassette.DIR / "first_run.json").read_text())
+FIRST_RUN_DAY = date(2026, 11, 26)
+
+
+class FirstRunTests(TestCase):
+    """Regression tests on the first ingestion run's own data: the stories it misrouted, and the new branches it
+    proposed (docs/adr/0021-ingestion-tuning.md)."""
+
+    def setUp(self):
+        now = timezone.now()
+        for slug, name, reg, start, end in FIRST_RUN["branches"]:
+            branch(slug, name, start, end, region_slug=reg)
+        for e in FIRST_RUN["entities"]:
+            Entity.objects.create(qid=e["qid"], label=e["label"], kind=e["kind"], description=e["description"], facts=e["facts"],
+                                  relations=e["relations"], relations_at=now if e["relations_read"] else None, resolved_at=now)
+        ents = {e.qid: e for e in Entity.objects.all()}
+        for slug, qid, role, weight in FIRST_RUN["branch_entities"]:
+            BranchEntity.objects.create(branch_id=services.Branch.objects.get(slug=slug).pk, entity=ents[qid], role=role, weight=weight)
+        # What the seeding job adds since the first run (routing.CORRECTIONS), without the network.
+        for slug, fix in routing.CORRECTIONS.items():
+            b = services.Branch.objects.filter(slug=slug).first()
+            if b:
+                BranchEntity.objects.filter(branch=b, entity__qid__in=fix.get("never", [])).delete()
+                for qid, role, weight in fix.get("use", []):
+                    if qid in ents:
+                        BranchEntity.objects.get_or_create(branch=b, entity=ents[qid], defaults={"role": role, "weight": weight})
+
+    def story(self, name) -> list[tuple[str, float]]:
+        ents = {e.qid: e for e in Entity.objects.all()}
+        cands = []
+        for row in FIRST_RUN["stories"][name]:
+            c = Candidate.objects.create(source_key=row["source_key"], title=row["title"], summary=row["summary"], when_text=row["when_text"],
+                                         y_guess=row["y_guess"], precision=row["precision"], details=row["details"], created_by="job:portal")
+            c.entities.set([ents[q] for q in row["entities"]])
+            cands.append(c)
+        process.route(cands, routing.Router())
+        total = Counter()
+        for c in cands:
+            total.update(c._scores)
+        return routing.suggested(total)
+
+    def test_shadow_fleet_attacks_route_to_ukraine_not_libya(self):
+        """Ukraine's drone attacks on Russian ships in a Libyan port: the first run put the story on Libya."""
+        got = [s for s, _ in self.story("shadow_fleet")]
+        self.assertEqual(got[0], "ukraine", got)
+        self.assertIn("russia", got)
+
+    def test_us_elections_route_to_the_us_alone(self):
+        """The first run added India (a candidate's parents) as a second branch at 2% of the score."""
+        self.assertEqual([s for s, _ in self.story("us_elections")], ["usa"])
+
+    def test_gaza_war_routes_to_israel_and_palestine_not_iran(self):
+        """The first run had Israel and Iran (the war's P17 lists six states) and no Palestine (only the PNA was mapped)."""
+        self.assertEqual(sorted(s for s, _ in self.story("gaza_war")), ["israel", "palestine"])
+
+    def test_new_branch_proposals(self):
+        """Which of the first run's 17 signals can be branches, and their parents: from Wikidata relations, never from
+        co-occurrence (El Salvador was put under Haiti, the Netherlands under Italy, the ICC under Sudan)."""
+        by_qid = routing.Router().by_qid
+        lookup = lambda q: Entity.objects.filter(qid=q).first()  # noqa: E731
+        got = {}
+        for qid in FIRST_RUN["signals"]:
+            e = Entity.objects.get(qid=qid)
+            ok, why = branchable.can_be_branch(e, FIRST_RUN_DAY)
+            got[e.label] = branchable.parent(e, by_qid, lookup, FIRST_RUN_DAY)[0] if ok else why.split(" that ")[0].split(" of ")[0]
+        self.assertEqual(got, {
+            "Somalia": None, "Netherlands": None, "El Salvador": None, "International Criminal Court": None,
+            "full-scale Russo-Ukrainian war": None, "Gaza War": None, "Middle Eastern crisis (2023–present)": None,
+            "Gang war in Haiti": "haiti", "Sudanese civil war": "sudan",
+            "Florida": "a subnational unit", "New Zealand National Party": "a political party", "Bangladesh Nationalist Party": "a political party",
+            "2026 Brazilian general election": "an event", "2026 Iran War": "an event", "Operation Southern Spear": "an event",
+            "2026 European cold chain hacks": "an event", "2026 French civil unrest": "a conflict or movement",
+        })
 
 
 # Sources ---------------------------------------------------------------------------------------------------------
@@ -378,7 +498,7 @@ class ProcessTests(TestCase):
         self.assertEqual(p.cluster_key, f"topic:Q2:{self.today:%Y-%m}")
         self.assertEqual(news.cluster_key, p.cluster_key, "joined by the URL the portal item cites")
         self.assertEqual(p.top_branch.slug, "nigeria")
-        self.assertEqual(p.branch_scores["nigeria"], 1.0 + 0.6 + 0.6)
+        self.assertEqual(p.branch_scores["nigeria"], 1.0 + 2 * routing.MORE_MENTIONS, "the strongest mention, not the sum")
         self.assertEqual(p.priority, news.priority)
         task = AgentTask.objects.get(kind="write_event")
         pl = task.payload
@@ -393,6 +513,16 @@ class ProcessTests(TestCase):
         run("process", threshold=10)
         p.refresh_from_db()
         self.assertEqual((p.status, p.result_entry.slug), ("accepted", "nigeria"))
+
+    def test_new_tasks_are_capped_per_day_highest_priority_first(self):
+        for i, views in enumerate((900_000, 9_000, 90)):
+            e = entity(f"Q5{i}", f"Story {i}", kind="event", facts={"P17": ["Q1033"]}, enwiki_title=f"Story {i}", pageviews_30d=views)
+            portal_candidate(f"portal:cap{i}", f"Story {i} in Nigeria.", day=self.today, ents=[self.q_ng, e], topic_qid=e.qid, topic=f"Story {i}")
+        r = run("process", threshold=1, per_day=2)
+        self.assertEqual((r.counts["tasks_created"], r.counts["tasks_held_by_daily_cap"]), (2, 1))
+        self.assertEqual(sorted(t.payload["suggested"]["title_hint"] for t in AgentTask.objects.filter(kind="write_event")), ["Story 0", "Story 1"])
+        r = run("process", threshold=1, per_day=2)
+        self.assertEqual((r.counts.get("tasks_created", 0), r.counts["tasks_held_by_daily_cap"]), (0, 1), "the cap counts today's tasks")
 
     def test_entity_overlap_joins_within_two_days(self):
         storm = entity("Q3", "Cyclone Test", kind="event")

@@ -35,9 +35,9 @@ You need Docker Desktop, [uv](https://docs.astral.sh/uv/) and Node (the site's b
 | 2 | `make db` | Starts Docker Desktop if it isn't running, then `docker compose up -d --wait db minio`: Postgres 16 on `127.0.0.1:5433` (volume `humanitributary-pg`) and MinIO on `127.0.0.1:9000`, its console on `127.0.0.1:9001` (volume `humanitributary-minio`). Then `make storage-init` creates the two buckets if they are missing. |
 | 3 | `uv sync` | Installs the Python dependencies into a .venv folder. |
 | 4 | `make migrate` | Applies migrations (they create `pg_trgm`, the audit triggers and every table). |
-| 5 | `make import` | Dumps `site/data/*.js` to `var/legacy.json` and imports it (idempotent: a second run writes nothing). |
+| 5 | `make import-archive`, or `uv run python manage.py import_legacy <content.json>` | Fills the empty database: with the frozen legacy files (`archive/site-data/`, the content as it was at the cutover), or with a release snapshot someone gives you (what readers have). Postgres is the source of truth, so the real content comes from the owner's database, not from git. Both are idempotent. |
 | 6 | `make publish` | Runs the release gates, then writes the first release to the `releases` store and points `releases/latest.json` at it. Needs Node (the build gate). |
-| 7 | `make build-release` | Mirrors the latest release into `var/releases/<version>/` (`make release-pull`), then builds the page, timeline.html in `site/`, from it. |
+| 7 | `make build` | Mirrors the latest release into `var/releases/<version>/` (`make release-pull`), then builds the page, timeline.html in `site/`, from it (the only way the page is built). |
 | 8 | `uv run python manage.py createsuperuser`, then `make up` | `web` (gunicorn on 127.0.0.1:8000: the admin at http://127.0.0.1:8000/admin/, the agent API, `/healthz`) and `worker` (`run_jobs --loop`), from the `Procfile`, via honcho. `make serve` is the admin alone, on Django's runserver. |
 
 A checkout made before object storage still has `var/raw/` and `var/releases/`. Run `make storage-migrate` once
@@ -151,6 +151,7 @@ that Feed's `next_run_at` has come; each run sets `next_run_at` to now plus the 
 | `refresh_entities` | Feed: 1,440 | feed |
 | `pageviews` | 360 | plain |
 | `process` | 15 | plain |
+| `entity_relations` | 60 | plain |
 | `enrich_tasks` | 60 | plain |
 | `link_health` | `DAY` (1,440) | plain |
 | `facts_sweep` | `DAY` | plain |
@@ -221,10 +222,10 @@ Say it plainly: **there is no backup system.** Here is what exists.
 | What | Where it lives | Survives |
 |---|---|---|
 | The database | The Docker volume `humanitributary-pg` | Stopping or recreating the container (`make db-stop`, `docker compose down`). It does not survive `docker compose down -v`, `docker volume rm` or losing the laptop. |
-| Content (branches, events, cites) | `site/data/*.js` in git | Anything git survives. `make import` rebuilds it into an empty database until the cutover. |
+| Content (branches, events, cites) | Postgres only, since the cutover ([ADR 0020](../adr/0020-the-cutover.md)) | Only what the volume survives. What was published is also in every release in the object store (`import_legacy <content.json>` loads one into an empty database), and the content as it was at the cutover is frozen in git (`archive/site-data/`), but anything written since and not yet released exists nowhere else. |
 | Review state, Revisions, evidence checks, ratings set in the admin, the queue, ingest state, agent tokens | Postgres only | Only what the volume survives. |
 | Raw documents and releases | The object store: the Docker volume `humanitributary-minio`, or `var/storage/` with `STORAGE_BACKEND=local` | The same as the database's volume. Nothing copies them elsewhere. Old `var/raw/` and `var/releases/` copies stay until you delete them. |
-| Logs, the release mirror, dumps | `var/`, gitignored | Nothing, but the mirror is rebuilt by `make release-pull` and the dumps by `make dump`. |
+| Logs, the release mirror | `var/`, gitignored | Nothing, but the mirror is rebuilt by `make release-pull`. |
 
 There is no `pg_dump` target, no scheduled dump and no copy off the machine. If you need a copy now, a one-off
 dump works while the database runs:
@@ -313,13 +314,13 @@ To serve an earlier release:
 
 ```bash
 uv run python manage.py publish --rollback <version>   # pick one from the admin's Release list
-make build-release                                     # make release-pull, then the page from that release
+make build                                             # make release-pull, then the page from that release
 ```
 
 `--rollback` refuses a version with no Release row, or whose snapshot is missing from the store or doesn't match
 the row's hash; otherwise it rewrites `releases/latest.json` (reason `rollback`, actor `job:publish` unless
 `--actor` says otherwise). `make release-pull` (`manage.py storage pull-release`) mirrors the pointer's version into
-`var/releases/<version>/` and repoints `var/releases/latest`; `make build-release` runs it first.
+`var/releases/<version>/` and repoints `var/releases/latest`; `make build` runs it first.
 
 This changes what readers get, not the database. The next `make publish` compares the database's content with the
 newest Release row, not with the pointer.
@@ -336,9 +337,10 @@ If the `releases` store is lost, the database still produces the same bytes: `ma
 the current content as a new version, and its hash matches the old Release row's if nothing changed since. After
 the database is reset, the day's counter starts again at 1, and `publish` skips any version already in the store.
 
-> **Note:** a refusal (`publish refused:` and the failing gates) writes nothing. The usual causes: `var/legacy.json`
-> is stale (run `make import`, which re-dumps), Node is missing (the build gate), or a published entry has a
-> contested record claim its text doesn't flag. `manage.py publish --check` runs the gates without writing.
+> **Note:** a refusal (`publish refused:` and the failing gates) writes nothing. The usual causes: Node is missing
+> (the build gate), the site's build rejects an entry (the build gate prints its `✗` lines: fix the row), or a
+> published entry has a contested record claim its text doesn't flag. `manage.py publish --check` (`make
+> roundtrip`) runs the gates without writing and prints what a release would add, change and retract.
 
 ## Changing it
 

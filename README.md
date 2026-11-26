@@ -9,14 +9,14 @@ An interactive, cited timeline of all history, from the Big Bang to today: about
 ## How it fits together
 
 ```
-site/data/*.js ──(build.mjs --dump-json)──▶ import_legacy ──▶ Postgres ◀── agents (work queue), jobs (ingest, governance)
+                                                    Postgres ◀── agents (work queue), jobs (ingest, governance)
                                                                  │
                                                               publish
                                                                  ▼
                        var/releases/<version>/content.json ──(build.mjs --from-json)──▶ site/timeline.html ──▶ CDN
 ```
 
-The public page never touches the database (ADR 0001). Every change to canonical content goes through `revisions.revising()` and leaves a Revision, enforced by a Postgres trigger (ADR 0006). The import and the export are exact inverses: a release built from Postgres is byte-identical to the page built from the files (ADR 0007).
+The public page never touches the database (ADR 0001). Every change to canonical content goes through `revisions.revising()` and leaves a Revision, enforced by a Postgres trigger (ADR 0006). Postgres is the only source of truth: the content files the site was first written in are frozen in `archive/site-data/` since the cutover, and the page is built only from releases (ADR 0020). A snapshot loaded into an empty database exports to the same bytes (ADR 0007).
 
 | App | What it does |
 |---|---|
@@ -26,7 +26,7 @@ The public page never touches the database (ADR 0001). Every change to canonical
 | `ingest` | Feeds, fetch runs, documents and their versions, Wikidata entities, routing to branches, and candidates. |
 | `work` | The agents' task queue, with leases (`manage.py tasks`). |
 | `governance` | Branch metrics and proposals (tables only, for now). |
-| `publish` | Releases, the legacy import and the snapshot export. |
+| `publish` | Releases, their gates, the snapshot export and the loader (`import_legacy`). |
 
 ## Running it
 
@@ -35,10 +35,10 @@ make env       # .env with a random local-only Postgres password
 make db        # Postgres 16 in Docker on localhost:5433 (Postgres.app keeps 5432)
 uv sync
 make migrate
-make import    # site/data → Postgres (idempotent)
-make publish   # Postgres → var/releases/<version>/content.json
-make build-release && open site/timeline.html
-make roundtrip # the whole loop, diffed
+make import-archive  # an empty database: the frozen legacy content (archive/site-data) → Postgres
+make publish   # Postgres → a release (releases/<version>/content.json in the object store)
+make build && open site/timeline.html   # from the latest release
+make roundtrip # the release gates on your content, writing nothing
 make test
 uv run python manage.py createsuperuser && make serve   # the admin, the review screen: http://localhost:8000/admin/
 ```
@@ -47,7 +47,7 @@ uv run python manage.py createsuperuser && make serve   # the admin, the review 
 
 ## The site (`site/`)
 
-A single, zoomable, cited timeline from the Big Bang to today. Build it (`make build`, or `make build-release` from the latest snapshot) and open **`site/timeline.html`** in any browser; it is self-contained and works offline (source links need a connection).
+A single, zoomable, cited timeline from the Big Bang to today. Build it from the latest release (`make build`) and open **`site/timeline.html`** in any browser; it is self-contained and works offline (source links need a connection).
 
 - Each colored line is a branch: a society, polity, lineage, faith or long-running movement. Curves show where branches split off, merge or turn into one another; dashed lines mark contact or blending between two branches.
 - Time is logarithmic (years before now + 40), so deep time compresses and the last century gets the most room. To keep that visible, the axis labels each gap between dates with the time it spans, a row under the overview gives the date at the left edge, center and right edge of the window, and a true-scale strip above it shows the current view at real proportions (the last century is about 1/120 millionth of all time).
@@ -56,13 +56,13 @@ A single, zoomable, cited timeline from the Big Bang to today. Build it (`make b
 
 ### Data and sources
 
-`site/data/*.js` holds the content, one file per era (schema and citation rules in `site/SCHEMA.md`). Every branch and event cites pages that were fetched and read when the entry was written; dates and wording follow the source, and contested dates are labeled as such.
+The content lives in Postgres (schema and citation rules in `site/SCHEMA.md`). It was first written as JavaScript files, one per era, now frozen in `archive/site-data/`; the file names below are those. Every branch and event cites pages that were fetched and read when the entry was written; dates and wording follow the source, and contested dates are labeled as such.
 
 A full audit (November 2026) checked all 905 entries against their cited pages: every date, every claim, every "grew out of / became" link. 835 were fully supported; 51 partly supported and 3 contradicted by a source were reworded to match their sources (for example the Sharpeville death toll, how the Falklands War ended, and Egypt's 1922 independence, which Britain declared); 16 could not be read by automated tools (un.org, nobelprize.org) and were checked by hand in a browser instead. The same audit added 60 missing entries (21 branches, 39 events) such as Stonehenge, dog and horse domestication, the Bantu expansion, the Hittites, the Renaissance, Sikhism, the Chola and Maratha empires, the Spanish Civil War, the Vietnam War, the Iraq and Afghanistan wars and the Cambodian genocide, each checked by a second auditor. An earlier spot-check of 56 random entries had found 51 supported and 5 partial (since fixed).
 
 Many reputable publishers (Britannica, UNESCO, World History Encyclopedia, several national archives) block automated fetching, so a large share of citations are Wikipedia articles; the rest are institutional sources such as the US Office of the Historian, NASA, the Smithsonian, the EU, the UN, WHO, the Nobel Prize site and the Stanford Encyclopedia of Philosophy.
 
-Landmark events were then given a second, non-Wikipedia source: each Britannica article was opened in a browser and the passages with the dates and key facts were read before it was added (`site/data/9-britannica.js`, which notes what each page states). 124 of the 126 landmark events now cite a non-Wikipedia source; the two exceptions (founder-crop domestication, Deng's 1978 reforms) had no Britannica page that stated the claim. Where Britannica differed from the original source the entry was reworded to fit both (siege of Constantinople "nearly two months"; Enabling Act vote) or the difference is shown (Rigveda date). Britannica sometimes gives different estimates for figures such as death tolls; those added citations back the event and its date, while the specific figure in the text rests on the first source.
+Landmark events were then given a second, non-Wikipedia source: each Britannica article was opened in a browser and the passages with the dates and key facts were read before it was added (`archive/site-data/9-britannica.js`, which notes what each page states). 124 of the 126 landmark events now cite a non-Wikipedia source; the two exceptions (founder-crop domestication, Deng's 1978 reforms) had no Britannica page that stated the claim. Where Britannica differed from the original source the entry was reworded to fit both (siege of Constantinople "nearly two months"; Enabling Act vote) or the difference is shown (Rigveda date). Britannica sometimes gives different estimates for figures such as death tolls; those added citations back the event and its date, while the specific figure in the text rests on the first source.
 
 ### Context, density and the 2026 expansion
 
@@ -73,7 +73,7 @@ Sources were widened beyond encyclopedias to primary documents (treaty and const
 ### The overnight expansion (November 2026)
 
 A third round filled the timeline backward from today in six waves (1925–now, 1800–1925, 1500–1800, 1000–1500,
-1000 BCE–1000 CE, 3500–1000 BCE), adding about 2,650 events in `site/data/79-culture-branches.js` and `site/data/80-*`–`85-*`
+1000 BCE–1000 CE, 3500–1000 BCE), adding about 2,650 events in `archive/site-data/79-culture-branches.js` and `archive/site-data/80-*`–`85-*`
 (4,938 events in all). Each wave targeted the empty time windows of every branch, plus culture-focused passes by region
 for 1900–today and 1800–1925, and a new region, **Arts, culture & sport**, with twelve cross-border branches (Romanticism
 to video games). Roughly a third of the additions are cultural. Every file was then audited by a second agent against
@@ -84,7 +84,7 @@ reachable source stated the claim. See `site/OVERNIGHT-REPORT.md` for the full a
 
 ### Origins
 
-No branch starts out of nothing. Every branch now either has a parent or a sourced **Origins** note (`site/data/16*-origins-*.js`, `site/data/17*-predecessors-*.js`; schema in `site/SCHEMA.md`): who its people were and what it grew out of, named in plain words even when the predecessor is not a branch. 165 branches carry such a note, and 127 of them also link to the earlier branches they came from, with the kind of link: independence from (20), successor to, broke away from, union of, conquest, peoples and roots, grew out of, ideas it built on, or in reaction to. 33 predecessors that were missing were added as branches, each with its own origin, location and one to three events — among them the First World War, Belgium, the Germanic peoples, the Picts and Dál Riata, the Etruscans, Navarre, Anglo-Saxon England, the Visigoths, Asturias and León, medieval Poland and Lithuania, the Kingdom of Sardinia, Dʿmt, Ife, the Tichitt tradition, Denkyira, the Naqada culture, the Canaanites, Israel and Judah, the Pallavas, Ghaznavids and Ghurids, Afsharid Iran, the Deccan sultanates, Funan, Chenla, Singhasari, Gojoseon, the Yuezhi, the Viceroyalties of New Granada and the Río de la Plata, and the Dutch East Indies.
+No branch starts out of nothing. Every branch now either has a parent or a sourced **Origins** note (`archive/site-data/16*-origins-*.js`, `archive/site-data/17*-predecessors-*.js`; schema in `site/SCHEMA.md`): who its people were and what it grew out of, named in plain words even when the predecessor is not a branch. 165 branches carry such a note, and 127 of them also link to the earlier branches they came from, with the kind of link: independence from (20), successor to, broke away from, union of, conquest, peoples and roots, grew out of, ideas it built on, or in reaction to. 33 predecessors that were missing were added as branches, each with its own origin, location and one to three events — among them the First World War, Belgium, the Germanic peoples, the Picts and Dál Riata, the Etruscans, Navarre, Anglo-Saxon England, the Visigoths, Asturias and León, medieval Poland and Lithuania, the Kingdom of Sardinia, Dʿmt, Ife, the Tichitt tradition, Denkyira, the Naqada culture, the Canaanites, Israel and Judah, the Pallavas, Ghaznavids and Ghurids, Afsharid Iran, the Deccan sultanates, Funan, Chenla, Singhasari, Gojoseon, the Yuezhi, the Viceroyalties of New Granada and the Río de la Plata, and the Dutch East Indies.
 
 On the canvas the most direct link is written just before each branch's start (e.g. "independence from United Kingdom"); links between regions are drawn fainter unless one end is selected. The side panel lists the links by kind with a one-line note each. Weak spots: 38 origins are note-only — the deepest roots (the universe, Bantu and Nok origins, the Xiongnu, the newly added ancient predecessors) and modern phenomena with no branch-shaped parent (HIV/AIDS, COVID-19) — Every origin and every added branch now has at least one non-Wikipedia source (mostly Britannica, read through the in-app browser because Britannica refuses automated fetchers; also the Stanford and Internet Encyclopedias of Philosophy, World History Encyclopedia, the Office of the Historian and others), except Yamnaya, for which no reachable non-Wikipedia page was found. Several second sources support the main claims but not every detail, and where they disagree the note gives both (Navarre c. 798 or 824, the Kingdom of Ireland 1541 or 1542, Nok c. 1500 or c. 500 BCE).
 
@@ -106,22 +106,19 @@ Globe assets are rebuilt with `node site/build-globe.mjs` (land, PaleoDEM slices
 
 488 entries have an image (about 27 MB in `images/`): branches, landmark events and notable events. Images are public domain or CC0 only, from Wikimedia Commons, each credited and linked to its Commons page. Picks were made from Commons metadata and then reviewed by hand; about one in twelve was rejected (modern reconstructions, memorials standing in for events, amateur maps, logos, wrong-event photos, doubtful licenses), and non-English or catalog-style captions were rewritten in English. Some photographs of atrocities and disasters (e.g. Sharpeville, Nanjing, the Holodomor) are shown as the historical record they are. No AI-generated or AI-altered imagery is used: candidates in AI-related categories or dated 2020 or later are excluded, the chooser prefers contemporary artworks, artifacts, documents and photographs, and entries with no clearly fitting image have none.
 
-Selected entries also carry a short, sourced **Why it matters** paragraph and **Connections** to related moments elsewhere on the timeline (drawn as dashed arcs when the entry is selected); see `site/data/20-context-pilot.js`. Search groups its results into branches (jumps to the branch's beginning), periods (shows the whole span) and events (centers the moment with context that scales with its age).
+Selected entries also carry a short, sourced **Why it matters** paragraph and **Connections** to related moments elsewhere on the timeline (drawn as dashed arcs when the entry is selected); see `archive/site-data/20-context-pilot.js`. Search groups its results into branches (jumps to the branch's beginning), periods (shows the whole span) and events (centers the moment with context that scales with its age).
 
 ### Rebuilding
 
 ```bash
-node site/build.mjs --check   # validate data (ids, references, citations, dates)
-node site/build.mjs           # validate and regenerate site/timeline.html from template.html
-node site/sample-cites.mjs 40 # random sample of entries for a citation audit
-node site/apply-fixes.mjs audit.json           # preview fixes from an audit (JSON: id, fix, addCite)
-node site/apply-fixes.mjs --apply audit.json   # apply them; added sources go to site/data/13-audit-sources.js
-node site/apply-enrich-fixes.mjs --apply fixes.json   # apply fixes to "why it matters" paragraphs and connections
-node site/verify-geo.mjs --apply        # re-check every location against Wikipedia coordinates (cached in site/.geo-cache.json)
+make release-pull                       # mirror the latest release into var/releases/latest/
+node site/build.mjs --from-json var/releases/latest/content.json --check   # validate it (ids, references, citations, dates)
+node site/build.mjs --from-json var/releases/latest/content.json           # regenerate site/timeline.html (make build)
 node site/build-globe.mjs               # rebuild globe-assets.json (Natural Earth land + PaleoDEM textures)
-node site/build-outlines.mjs            # rebuild outlines.js (Cliopatria polity outlines for the globe; report of matches)
-node site/image-candidates.mjs out.json --imp 1,2   # find public-domain Commons images (cached in site/.image-cache.json)
-node site/fetch-images.mjs picks.json out.json      # download chosen images to site/images/ and write site/data/70-images.js
+node site/build-outlines.mjs            # rebuild outlines.js from the latest release (Cliopatria polity outlines; report of matches)
+node site/build-paleo-points.mjs        # paleo positions for located deep-time entries in the latest release
 ```
+
+The tools that audited and rewrote the legacy files (`sample-cites.mjs`, `apply-fixes.mjs`, `apply-enrich-fixes.mjs`, `verify-geo.mjs`, `image-candidates.mjs`, `fetch-images.mjs`) are retired in `archive/site-tools/`: content changes go through the database now (ADR 0020).
 
 The globe data and images live next to `site/timeline.html` (`globe-assets.json` is inlined; `images/` and `outlines.js` must be kept alongside the page — `outlines.js`, about 1.5 MB, is loaded with a script tag when the page is idle, and without it the globe simply shows radius circles).

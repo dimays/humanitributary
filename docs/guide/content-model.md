@@ -25,7 +25,7 @@ citation rules, style) are in [site/SCHEMA.md](../../site/SCHEMA.md).
 
 ## The tables at a glance
 
-| Model | Legacy name in `site/data/` | What it holds |
+| Model | Name in the legacy files (`archive/site-data/`) | What it holds |
 |---|---|---|
 | `Region` | `region` | A lane group on the page (cosmos, life, humans, global, faiths, culture, mideast, europe, africa, southasia, eastasia, americas, oceania), with a name and `position`. |
 | `Entry` | `id` | Anything with an id: the shared part of a branch or an event. |
@@ -282,12 +282,12 @@ Where keys come from:
 |---|---|
 | `services.save_branch` / `save_event` | A new entry goes after the last of its kind. |
 | `services.place(entry, after=slug)` or `before=slug` | Moves one entry; writes its key only. |
-| The legacy import (`publish/legacy.py` `_sort_keys`) | `reconcile()` against the dump's order: removing an entry writes nothing, inserting or moving one writes one key. |
+| The loader (`publish/legacy.py` `_sort_keys`, `import_legacy`) | `reconcile()` against the file's order: removing an entry writes nothing, inserting or moving one writes one key. |
 | Migration `timeline/migrations/0003_entry_sort_key.py` | Gave existing rows evenly spaced keys in their old (position, slug) order, as `job:migrate`. |
 
-Until the cutover from the legacy files, the import's order wins for every
-entry the files contain, so an entry you `place()` that also lives in
-`site/data/` moves back on the next import.
+Since the cutover ([ADR 0020](../adr/0020-the-cutover.md)) nothing imports
+over Postgres, so an entry you `place()` stays where you put it. (Loading a
+file with `import_legacy` reorders the entries it has to that file's order.)
 
 ## The service layer: how to write content
 
@@ -343,13 +343,13 @@ is in [publishing](publishing.md#from-rows-to-the-snapshot).
 
 An event's keys, in order, are `id`, `branch`, `y`, `end`, `when`, `title`,
 `text`, `imp`, `link`, `cites`, `geo`, `images`, `why`, `connections`,
-`whyCites` and `singleSource`. The last is the one key no table stores and
-the legacy files never write: `manage.py publish` sets `"singleSource": true`
+`whyCites` and `singleSource`. The last is the one key no table stores:
+`manage.py publish` sets `"singleSource": true`
 on an event whose supporting evidence, on its record claim and that claim's
 atomic parts, comes from exactly one independent witness (all of Wikipedia
-counts as one), and leaves it out otherwise. It is an **additive** key
-(`publish/content.py` `ADDITIVE`): the round trip compares a release with the
-legacy dump without it ([ADR 0018](../adr/0018-single-source-marker.md)).
+counts as one), and leaves it out otherwise. It is a **derived** key
+(`publish/content.py` `ADDITIVE`): never stored, and ignored when a snapshot
+is loaded ([ADR 0018](../adr/0018-single-source-marker.md)).
 In `site/template.html`, `renderPanel()` shows it as a quiet "Single source"
 note (the `.single` style) under the event's Sources heading, above the
 list; nothing else on the page reads it, and there is no filter for it.
@@ -359,8 +359,9 @@ list; nothing else on the page reads it, and there is no filter for it.
 - **A new field on an entry that the page shows.** Change
   [site/SCHEMA.md](../../site/SCHEMA.md), `site/canonical.mjs` `KEYS`,
   `publish/content.py` `KEYS` (a test checks the two match), the model (a
-  migration), `publish/legacy.py` (import) and `publish/export.py` (export),
-  then run `make roundtrip` (see [publishing](publishing.md#changing-it)).
+  migration), `publish/legacy.py` (the loader) and `publish/export.py`
+  (export), then run `make test` and `make roundtrip` (see
+  [publishing](publishing.md#changing-it)).
 - **A field only Postgres needs** (not in the snapshot). A model field and a
   migration; the round trip is unaffected.
 - **A key the page shows that is derived at publish time**, like
@@ -373,7 +374,7 @@ list; nothing else on the page reads it, and there is no filter for it.
   (see [revisions](revisions.md#changing-it)).
 - **A new region.** Add it to `REGIONS` in `site/template.html` (name and hue),
   in `site/build.mjs` (validation) and in `publish/legacy.py` (names and
-  order for the import), and to the region list in
+  order for the loader), and to the region list in
   [site/SCHEMA.md](../../site/SCHEMA.md).
 - **A new date pattern.** Change `timeline/dates.py` and add a case to
   `tests/test_evidence_and_dates.py`. Existing rows keep the old derived values

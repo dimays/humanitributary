@@ -83,27 +83,46 @@ def _point(release: Release, *, actor: str, reason: str, previous: str | None):
     })
 
 
-def publish(*, actor: str, notes: str = "", force: bool = False, today: date | None = None, legacy: Path | None = None,
+def _prepare(today: date, skip_gates: tuple[str, ...] = ()) -> dict:
+    """Export, run the gates, and build the change report against the live release. Raises gates.PublishRefused."""
+    content = build_content()
+    body = dumps(content).encode()
+    again = dumps(build_content()).encode() if "deterministic" not in skip_gates else None
+    problems, build = gates.check(content, body, built=today.isoformat(), again=again, skip=skip_gates)
+    if problems:
+        raise gates.PublishRefused(problems)
+    live, live_key = live_release()
+    return {"content": content, "body": body, "digest": hashlib.sha256(body).hexdigest(), "build": build, "live": live,
+            "previous": _content_at(live_key)}
+
+
+def check(*, today: date | None = None, skip_gates: tuple[str, ...] = ()) -> dict:
+    """`publish --check`: every gate that needs no store, and the change report a release would carry, without
+    writing anything. → the report (publish/changes.py). Raises gates.PublishRefused."""
+    today = today or date.today()
+    p = _prepare(today, skip_gates)
+    return changes.report(p["previous"], p["content"], from_version=p["live"], to_version="(unpublished)")
+
+
+def publish(*, actor: str, notes: str = "", force: bool = False, today: date | None = None,
             check_only: bool = False, skip_gates: tuple[str, ...] = ()) -> tuple[Release | None, bool]:
     """Returns (release, created). Unchanged content makes no new release unless forced. Raises
     gates.PublishRefused when a gate fails (nothing is written). check_only runs the gates and writes nothing.
     `skip_gates` is for tests that exercise one gate at a time."""
     today = today or date.today()
-    content = build_content()
-    body = dumps(content).encode()
-    digest = hashlib.sha256(body).hexdigest()
-    last = Release.objects.order_by("-created_at", "-id").first()
-    if last and last.content_hash == digest and not force and not check_only:
-        return last, False
-    problems, build = gates.check(content, body, built=today.isoformat(), legacy=legacy, skip=skip_gates)
-    if problems:
-        raise gates.PublishRefused(problems)
     if check_only:
+        check(today=today, skip_gates=skip_gates)
         return None, False
+    content = build_content()
+    digest = hashlib.sha256(dumps(content).encode()).hexdigest()
+    last = Release.objects.order_by("-created_at", "-id").first()
+    if last and last.content_hash == digest and not force:
+        return last, False
+    p = _prepare(today, skip_gates)
+    content, body, digest, build, live = p["content"], p["body"], p["digest"], p["build"], p["live"]
 
-    live, live_key = live_release()
     version = _next_version(today)
-    report = changes.report(_content_at(live_key), content, from_version=live, to_version=version)
+    report = changes.report(p["previous"], content, from_version=live, to_version=version)
     high = Revision.objects.order_by("-id").values_list("id", flat=True).first() or 0
     created_at = timezone.now()
     manifest = {"version": version, "content_hash": digest, "created_at": created_at.isoformat(timespec="seconds"), "counts": counts(content),
@@ -120,7 +139,7 @@ def publish(*, actor: str, notes: str = "", force: bool = False, today: date | N
         if name == "timeline.html" and not data:
             continue  # only when the build gate was skipped (tests)
         storage.write(storage.RELEASES, storage.release_key(version, name), data)
-    # Gate 4: the report must be beside the snapshot before readers can get it.
+    # Gate 4 (report): the report must be beside the snapshot before readers can get it.
     if not storage.exists(storage.RELEASES, storage.release_key(version, "changes.json")):
         raise gates.PublishRefused({"report": [f"changes.json for {version} is not in the store"]})
     with transaction.atomic():

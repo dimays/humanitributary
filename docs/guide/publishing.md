@@ -1,6 +1,6 @@
 ---
 title: Publishing
-summary: How published content leaves Postgres as a versioned static snapshot, how the page is built from it, how the legacy files are imported, and the round trip that proves nothing is lost either way.
+summary: How published content leaves Postgres as a versioned static snapshot, the gates a release must pass, how the page is built from it, and the round trip (DB → snapshot → DB) that proves nothing is lost; the legacy files are frozen since the cutover.
 order: 90
 covers:
   - publish/**
@@ -10,6 +10,7 @@ covers:
   - site/template.html
   - evidence/publishing.py
   - tests/test_import_and_roundtrip.py
+  - archive/README.md
 ---
 
 Readers never touch the database. `manage.py publish` writes the published
@@ -20,24 +21,28 @@ which one readers get. Content reaches readers only when someone publishes, not
 when a row is saved, and `publish` refuses to make a release that fails its
 gates.
 
-Until the cutover, the old content files in `site/data/` are still edited too,
-and an import brings them into Postgres. The import and the export are exact
-inverses: the same content gives byte-identical JSON and pages either way
+Postgres is the only source of truth
 ([ADR 0001](../adr/0001-postgres-is-the-truth-the-site-reads-snapshots.md),
-[ADR 0007](../adr/0007-one-snapshot-shape-byte-identical-both-ways.md)).
+[ADR 0020](../adr/0020-the-cutover.md)). The content files the site was first
+written in (site/data/*.js) were imported one last time at the cutover and
+frozen in `archive/site-data/` ([the archive](#the-archive)); nothing imports
+them over Postgres any more. A snapshot loaded into an empty database exports
+to the same bytes again, so export and load are exact inverses
+([ADR 0007](../adr/0007-one-snapshot-shape-byte-identical-both-ways.md)).
 
 ## The path from rows to readers
 
 | Step | Command | Reads | Writes |
 |---|---|---|---|
-| Dump the legacy files | `make dump` (`node site/build.mjs --dump-json var/legacy.json`) | `site/data/*.js` | `var/legacy.json` |
-| Import them | `make import` (`manage.py import_legacy var/legacy.json --retract-missing`) | the dump | Postgres rows, with Revisions |
-| Publish | `make publish` (`manage.py publish`, with `--legacy var/legacy.json` when that file exists) | `published` rows, and the legacy dump | `releases/<version>/` (snapshot, manifest, change report, built page) and the pointer `releases/latest.json` in the releases store, a `Release` row |
+| Write content | `timeline.services` inside `revising()`: the agent API, the admin, `branches apply`, a shell | — | Postgres rows, with Revisions |
+| Publish entries | `manage.py facts publish <slug>` (the publishing rule) | an entry's claims | its status `published` |
+| Check a release | `make roundtrip` (`manage.py publish --check`) | `published` rows | nothing: prints the gates' result and the change report's totals |
+| Publish | `make publish` (`manage.py publish`) | `published` rows | `releases/<version>/` (snapshot, manifest, change report, built page) and the pointer `releases/latest.json` in the releases store, a `Release` row |
 | Mirror it | `make release-pull` (`manage.py storage pull-release [VERSION]`) | the store | `var/releases/<version>/`, the `var/releases/latest` link |
-| Build the page | `make build-release` (`make release-pull`, then `node site/build.mjs --from-json var/releases/latest/content.json`) | the mirrored snapshot | the page, timeline.html in `site/` |
+| Build the page | `make build` (= `make build-release`: `make release-pull`, then `node site/build.mjs --from-json var/releases/latest/content.json`) | the mirrored snapshot | the page, timeline.html in `site/` |
 
-`make import` runs the dump first. `make build` is the legacy path: it builds
-the page straight from `site/data/*.js`.
+The page is only ever built from a snapshot: `node site/build.mjs` without
+`--from-json` refuses.
 
 ## What is published
 
@@ -86,8 +91,8 @@ uv run python manage.py facts publish <slug> --agent agent:<name> [--task 42] [-
 
 The rule is enforced at that door, not by the database:
 `timeline.services.set_status` and the admin can still set `published`
-directly. The legacy import doesn't apply it either: it writes new entries as
-`published`, mirroring the files. Agents must use `facts publish`
+directly. The loader (`import_legacy`) doesn't apply it either: it writes new
+entries as `published`, mirroring the file it loads. Agents must use `facts publish`
 (AGENTS.md rule 11). The first half is checked again for every published
 entry when a release is made (the `contested` gate, under
 [Release gates](#release-gates)), so an entry that reached `published` by
@@ -101,20 +106,20 @@ their status is in [evidence and fact-checking](evidence-and-fact-checking.md).
 `releases/<version>/content.json` (in the releases store, mirrored to
 `var/releases/<version>/content.json`) is `{"branches": [...], "events": [...]}`,
 in the one canonical shape (see [the content model](content-model.md)). It is
-written so that a snapshot exported from Postgres and a dump from the legacy
-files of the same content are the same bytes and hash the same, on every key
-the legacy dump has. The exception is the **additive keys**: keys Postgres
-derives at publish time that the legacy files can't have. Today there is one,
-an event's `singleSource`. They are compared separately
-([ADR 0018](../adr/0018-single-source-marker.md), amending ADR 0007).
+written exactly as the site's build writes the same content
+(`JSON.stringify(…, null, 1)`), so the build reads it back byte for byte and
+the same rows always hash the same. Some keys are **derived** (the code calls
+them additive): computed at publish time from other rows, never stored as
+content, and ignored by the loader. Today there is one, an event's
+`singleSource` ([ADR 0018](../adr/0018-single-source-marker.md)).
 
 `publish/content.py` holds the Python side:
 
 | Name | What it does |
 |---|---|
 | `KEYS` | The key order for each kind of object (branch, event, cite, origin, origin link, geo, image, connection). Must equal `site/canonical.mjs` `KEYS`; `read_js_keys()` parses the JavaScript file so a test can compare them. |
-| `ADDITIVE` | The additive keys by kind: `{"event": ["singleSource"]}`. Each is also in `KEYS`, last. |
-| `legacy_view(content)` | The snapshot as the legacy files would write it: the additive keys left out, everything else untouched. |
+| `ADDITIVE` | The derived keys by kind: `{"event": ["singleSource"]}`. Each is also in `KEYS`, last. |
+| `without_derived(content)` | The snapshot with the derived keys left out, everything else untouched (`compare_content --drop-derived`, the tests). |
 | `dumps(value)` | JSON exactly as `JSON.stringify(value, null, 1)` writes it: one space of indent per level, `[]` and `{}` for empty containers, non-ASCII kept as is, and a final newline. |
 | `js_number(x)` | A number as JavaScript prints it: whole numbers without `.0`, the shortest round-trip digits, and exponent form only at 1e21 and above or below 1e-6 (`-13.8e9` → `-13800000000`, `1e-7` → `1e-7`, `1e21` → `1e+21`). NaN and infinity print as `null`. |
 | `num(x)` | A stored double as the snapshot writes it: a whole number becomes an int, since JavaScript has no `2.0`. |
@@ -177,32 +182,36 @@ rewritten is the pointer.
 | `releases/<version>/timeline.html` | The page the build gate built from the snapshot, with the publish date as its "Data compiled" date. |
 | `releases/latest.json` | The pointer: `version`, `content_hash`, `snapshot` (the key), `updated_at`, `updated_by`, `reason` (`publish` or `rollback`) and `previous`. |
 
-`publish/release.py` `publish(actor, notes, force, legacy, check_only)` does
-the work behind the command:
+`publish/release.py` `publish(actor, notes, force, check_only)` does the work
+behind the command:
 
 1. Builds the content and its bytes with `dumps()`, and their sha256.
 2. If the newest `Release` has the same hash, stops: nothing new is written
    and the command prints "Unchanged since <version>". `--force` makes a new
    release anyway (the gates still run).
-3. Runs the gates (`publish/gates.py` `check()`, below). If any finds a
-   problem, raises `PublishRefused` with each gate's problems (the command
-   prints up to 20 per gate), and nothing is written.
-4. With `--check`, stops here: "Every release gate passes (nothing written)."
-   `--check` runs the gates even when the content is unchanged.
-5. Finds the release readers have now (`live_release()`: the pointer's
+3. Runs the gates (`_prepare()`: a second export for the `deterministic` gate,
+   then `publish/gates.py` `check()`, below). If any finds a problem, raises
+   `PublishRefused` with each gate's problems (the command prints up to 20 per
+   gate), and nothing is written.
+4. Finds the release readers have now (`live_release()`: the pointer's
    version, or, before there is a pointer, the newest `Release`), and picks
    the new version `YYYY.MM.DD.N`: today's date, and N one more than the
    releases already made today, skipping any number that has a `Release` row
    or a `content.json` in the store (`_next_version`). A number whose files a
    failed run left behind is never reused.
-6. Builds the change report against the live release's snapshot.
-7. Writes the five files under `releases/<version>/`.
-8. Checks that `changes.json` is in the store (the `report` gate).
-9. Creates the `Release` row, then writes the pointer.
+5. Builds the change report against the live release's snapshot.
+6. Writes the five files under `releases/<version>/`.
+7. Checks that `changes.json` is in the store (the `report` gate).
+8. Creates the `Release` row, then writes the pointer.
+
+`release.check()` (`publish --check`, `make roundtrip`) runs steps 1, 3 and 5
+whether or not the content changed, and writes nothing: it prints "Every
+release gate passes (deterministic, build, contested, report; nothing
+written). Against <live version>: N added, N changed, N retracted."
 
 ```bash
-uv run python manage.py publish [--notes "…"] [--actor job:publish] [--force] [--legacy var/legacy.json]
-uv run python manage.py publish --check [--legacy var/legacy.json]   # the gates only
+uv run python manage.py publish [--notes "…"] [--actor job:publish] [--force]
+uv run python manage.py publish --check                  # the gates and the change report's totals, writing nothing
 uv run python manage.py publish --rollback <version> [--actor human:<you>]
 ```
 
@@ -235,23 +244,21 @@ origin later; cache headers are set when the CDN is (ADR 0016).
 ### Release gates
 
 `publish` refuses unless every gate passes
-([ADR 0019](../adr/0019-processes-and-release-gates.md)):
+([ADR 0019](../adr/0019-processes-and-release-gates.md), amended by
+[ADR 0020](../adr/0020-the-cutover.md)):
 
 | Gate | Passes when | Where |
 |---|---|---|
-| `build` | The site's own build accepts the snapshot: `node site/build.mjs --from-json … --dump-json …` finds no errors, and a second run builds the page (stored as `timeline.html`). Needs Node: without it, the gate fails. | `gates.node_build()` |
+| `deterministic` | Two exports of the same rows (`build_content()` twice) give the same bytes, so the hash says whether anything changed. The problem names the first line that differs. | `gates.deterministic()`, `release._prepare()` |
+| `build` | The site's own build accepts the snapshot: `node site/build.mjs --from-json … --check` finds no errors; `--dump-json` of it gives back the same bytes (the build reads it back: `site/canonical.mjs` and `publish/content.py` agree); a third run builds the page (stored as `timeline.html`). Needs Node: without it, the gate fails. | `gates.node_build()` |
 | `contested` | No entry in the snapshot has a contested top-level claim unless its text says the sources differ: the publishing rule's first half. | `gates.contested()`, `evidence/publishing.py` `unflagged_contested()` |
-| `roundtrip` | The site reads the snapshot back byte for byte (the re-dump from the build gate equals it). With `--legacy <file>`, the snapshot without its additive keys (`legacy_view`) also equals that dump, structurally and byte for byte. | `gates.roundtrip()` |
-| `report` | `changes.json` is in the store before the pointer moves, so readers never get a release without its report. | `release.publish()` (not in `check()`, so `--check` doesn't run it) |
+| `report` | The change report against the release readers have is computed with the gates (`--check` prints its totals), and `changes.json` is in the store before the pointer moves, so readers never get a release without its report. | `release.publish()`, `release.check()` |
 
-`make publish` passes `--legacy var/legacy.json` when the file exists, which
-is until the cutover. A stale dump makes the `roundtrip` gate refuse ("run
-`make import` (it re-dumps data/*.js) before publishing"), so run
-`make import` first. Content published only in Postgres (an event that went
-through `facts publish` but isn't in `site/data/`) differs from the dump the
-same way, so it blocks `make publish` until it is carried into `site/data/`;
-`make import` would retract it instead. After the cutover, publish without
-`--legacy`.
+Before the cutover a `roundtrip` gate also compared the snapshot with a dump
+of the legacy files (`publish --legacy`); with Postgres the only source there
+is nothing to compare it with, so the option is gone. A Postgres-only entry
+(an agent's event published with `facts publish`) is simply part of the next
+release.
 
 ### The change report
 
@@ -302,12 +309,50 @@ hash doesn't match.
   branch proposal, with `branches revert` (see
   [branch governance](branch-governance.md)), then publish.
 
-## The legacy import
+## The loader and the archive
 
-`publish/legacy.py` `import_content()` upserts a dump into Postgres. It runs
-inside one `revising("job:import_legacy", reason)` block, so the whole import
-is one transaction; `import_legacy` sets the reason to the file name and the
-first 12 hex digits of its sha256.
+### The archive
+
+`archive/site-data/` holds the legacy content files as they were at the
+cutover, and `archive/site-tools/` the tools that read or rewrote them
+(`apply-fixes.mjs`, `verify-geo.mjs`, `fetch-images.mjs`, …, retired: they
+look for a `data/` folder beside themselves, so they can't rewrite anything).
+`archive/README.md` says what is there. At the cutover the files and Postgres
+held the same content: `import_legacy --archive` on a copy of the main
+database wrote 0 rows, and the first release from Postgres alone equals a dump
+of the archive on every key the archive has. `publish/legacy.py`
+`ARCHIVE_SHA256` is `archive_hash()` of the directory (file names and bytes,
+in name order); `test_the_legacy_archive_is_frozen` fails if a file changes,
+appears or disappears, or if a site/data/ folder comes back.
+
+`node site/build.mjs --archive [dir]` still reads the files (applying their
+`TL.*` calls), but only to dump (`--dump-json`) or check (`--check`) them:
+the page can't be built that way.
+
+### Loading content: import_legacy
+
+`publish/legacy.py` `import_content()` loads content in the snapshot shape
+into Postgres. Nothing runs it routinely; it has two uses:
+
+```bash
+uv run python manage.py import_legacy --archive [--dry-run]                 # the frozen files (make import-archive)
+uv run python manage.py import_legacy var/releases/latest/content.json      # a release snapshot (a fresh database)
+uv run python manage.py import_legacy <file> [--retract-missing] [--dry-run] [--globe path]
+```
+
+`make import-archive` fills an empty database with the archive: CI does it,
+since the real content lives in Postgres and isn't in git. Loading a release
+snapshot fills a fresh database with what readers have, without what releases
+don't carry (drafts, entries in review, evidence that isn't shown).
+**On a database people and agents have edited, either one overwrites their
+content edits on every entry the file has** (review state is kept), and
+`--retract-missing` retracts everything the file lacks, so run `--dry-run`
+first. `--archive` runs `node site/build.mjs --archive archive/site-data
+--dump-json` into a temporary file (Node is needed).
+
+It runs inside one `revising("job:import_legacy", reason)` block, so the whole
+load is one transaction; the reason is the source (`archive/site-data` or the
+file name) and the first 12 hex digits of its sha256.
 
 It compares every row with what is there and writes only differences, so a
 re-run on unchanged input writes nothing and leaves no Revision. In order:
@@ -331,69 +376,59 @@ re-run on unchanged input writes nothing and leaves no Revision. In order:
    kind are updated; stance, excerpt and check fields belong to review.
 6. **Claim status**: recomputed for those claims (`evidence.sweep.reassess`).
 7. **Paleo pins**: from `site/globe-assets.json` (`--globe`; `''` skips).
-8. **Missing entries**: counts published entries that aren't in the dump.
+8. **Missing entries**: counts published entries that aren't in the file.
    With `--retract-missing`, sets them to `retracted`.
 
-```bash
-uv run python manage.py import_legacy var/legacy.json [--retract-missing] [--dry-run] [--globe path]
-```
+`--dry-run` runs the whole load, prints what it would write, and rolls back.
+Derived keys (`singleSource`) in a snapshot are ignored.
 
-`--dry-run` runs the whole import, prints what it would write, and rolls back.
+Things to know before running it on a live database:
 
-Things to know before relying on it:
-
-- `make import` passes `--retract-missing`, so it retracts any published entry
-  that exists only in Postgres, including one an agent wrote and published.
-  Until the cutover, content belongs in `site/data/` too.
-- A retracted entry that comes back in the dump stays retracted: the import
+- A retracted entry that comes back in the file stays retracted: the loader
   never changes an existing status.
-- The import owns the record claims' citations and an entry's links, places,
-  images and connections: anything added to those in Postgres alone is
-  deleted on the next import. Agents add sources to the claim's atomic parts
-  instead (see [evidence and fact-checking](evidence-and-fact-checking.md)).
+- For each entry in the file it makes the record claims' citations and the
+  entry's links, places, images and connections match the file: anything
+  added to those in Postgres since is deleted. (This is why, before the
+  cutover, agents added sources to the claim's atomic parts; the agent API
+  still refuses new evidence on the record claim, see
+  [evidence and fact-checking](evidence-and-fact-checking.md).)
 
 ## The round trip
 
-`make roundtrip` is the proof that nothing is lost or changed between the
-files, the database and the page
-([ADR 0007](../adr/0007-one-snapshot-shape-byte-identical-both-ways.md)):
+Since the cutover the round trip is **DB → snapshot → DB**: a database's
+snapshot, loaded into an empty database, exports to the same bytes (derived
+keys included), and loading it again writes nothing
+([ADR 0020](../adr/0020-the-cutover.md), restating ADR 0007). Content written
+in Postgres alone (an agent's event) comes back like the rest.
 
-1. `make import`: dump `site/data/*.js` to `var/legacy.json`, then import it.
-2. `make publish`, with `--legacy var/legacy.json`, so the `roundtrip` gate
-   already refuses a release that differs from the dump.
-3. `make release-pull`: mirror the release the pointer names.
-4. `manage.py compare_content var/legacy.json var/releases/latest/content.json
-   --write-legacy-view var/release-legacy-view.json`: drops the additive keys
-   from both (`legacy_view`), compares them structurally, entry by entry
-   (`publish/compare.py`), prints up to 20 differences (`--show`) and fails if
-   there are any, then fails too if they are equal but not byte for byte. It
-   writes the release without its additive keys to
-   `var/release-legacy-view.json`. `--keep-additive` compares those keys too
-   (a legacy dump never has them, so it fails wherever an event is marked).
-5. Builds the page twice with the same `--built` date, once from
-   `site/data/*.js` to `var/timeline-legacy.html` and once from
-   `var/release-legacy-view.json` to `var/timeline-release.html`, and `cmp`s
-   them.
-6. Builds the release itself, additive keys and all, to
-   `var/timeline-release-full.html`, which must succeed.
+- **On the fixture** (`tests/test_import_and_roundtrip.py`
+  `test_db_to_snapshot_to_db_is_exact`): load `tests/fixtures.py` `small()`,
+  write an event in Postgres alone, export; roll all of it back, load that
+  snapshot into the now empty database, export again: the bytes are equal, and
+  a second load writes nothing and leaves no Revision.
+- **On your database** (`make roundtrip`, `manage.py publish --check`): the
+  release gates on the real content, writing nothing: two exports are
+  identical, the build checks it, reads it back byte for byte and builds the
+  page, no contested claim is unflagged, and the change report against the
+  live release is computed. `make check-pr` runs it as its "release gates"
+  lane.
 
-It imports into and publishes from your configured database and store, like
-`make import` and `make publish`. It compares with the release the pointer
-names: after a rollback with unchanged content, `make publish` makes nothing
-new and that is the older release. Run it before a pull request that touches
-content, import or export.
+`manage.py compare_content A B [--drop-derived] [--show N]` compares any two
+snapshots (two releases, or a snapshot and a dump), structurally and entry by
+entry (`publish/compare.py`), printing up to 20 differences, and fails if there
+are any, or if they are equal but not byte for byte.
 
-`tests/test_import_and_roundtrip.py` checks the same on a small fixture with
-every shape (`tests/fixtures.py`):
+`tests/test_import_and_roundtrip.py`:
 
 | Test class | Checks |
 |---|---|
-| `ImportTests` | the first import creates everything; a re-import writes nothing; a changed field is one update and one Revision; removed and reordered citations; review state (rating, stance, status) survives a re-import; claim status counts independent publishers; openstax.org can't be cited |
-| `RoundTripTests` | import then export gives back the input byte for byte on every legacy key, with only additive keys extra; `singleSource` marks events resting on one publisher (Wikipedia alone, or one other), not one with two, and a second publisher on an atomic part lifts it; the export is deterministic; unpublished entries and links to them stay out; conflicting evidence isn't shown; `publish` writes one release per content to the store and moves the pointer (build gate skipped); pages built from the dump and from the snapshot's legacy view are byte-identical (needs Node) |
+| `ImportTests` | the first load creates everything; a re-load writes nothing; a changed field is one update and one Revision; removed and reordered citations; review state (rating, stance, status) survives a re-load; claim status counts independent publishers; openstax.org can't be cited |
+| `RoundTripTests` | DB → snapshot → DB is exact (above); the fixture comes back exact with only derived keys extra; `singleSource` marks events resting on one publisher (Wikipedia alone, or one other), not one with two, and a second publisher on an atomic part lifts it; the export is deterministic; unpublished entries and links to them stay out; conflicting evidence isn't shown; `publish` writes one release per content to the store and moves the pointer (build gate skipped); the archive is frozen and site/data/ is gone; the fixture and its snapshot build byte-identical pages (needs Node) |
 | `FormatTests` | `KEYS` match `site/canonical.mjs`; numbers print as JavaScript does; `dumps` matches `JSON.stringify(…, null, 1)` |
 
 The release files, the pointer, the change report, rollback, the mirror, a
-skipped left-over version and each gate are tested in `tests/test_platform.py`
+skipped left-over version and each gate (an export that isn't deterministic,
+`check()` writing nothing) are tested in `tests/test_platform.py`
 `ReleaseTests`.
 
 ## Building the page
@@ -402,12 +437,12 @@ skipped left-over version and each gate are tested in `tests/test_platform.py`
 
 | Option | What it does |
 |---|---|
-| (none) | Reads `site/data/*.js`, applies the `TL.*` calls, validates, and writes the page |
-| `--check` | Validates only (`--file <prefix>` limits the report to some files) |
-| `--dump-json <file>` | Validates, then writes the resolved content with `JSON.stringify(…, null, 1)`, for the import |
-| `--from-json <file>` | Builds from a snapshot instead of `site/data/`: no `TL.*` calls, the same checks |
+| `--from-json <file>` | Builds the page from a snapshot: validates, then writes the page. Required: without it (or `--archive`) the build refuses and says how to build. |
+| `--check` | Validates only |
+| `--dump-json <file>` | Validates, then writes the content back with `JSON.stringify(…, null, 1)` (the build gate's read-back) |
 | `--out <file>` | Where to write the page (default: timeline.html beside the script) |
 | `--built YYYY-MM-DD` | The "Data compiled" date (default: the `BUILT` environment variable, or today) |
+| `--archive [dir]` | Reads the frozen legacy files (default `archive/site-data`) instead of a snapshot, applying their `TL.*` calls; only with `--dump-json` or `--check` (`--file <prefix>` limits the report to some files) |
 
 It refuses to build or dump while there are errors (an unknown id, a missing
 citation, a non-https URL, a bad region, an image that isn't public domain or
@@ -422,7 +457,10 @@ beside it: pictures in an images folder and polity outlines in outlines.js. A
 release's snapshot carries only the content. The `timeline.html` the build
 gate stores with a release has the globe data inlined from the checkout that
 published it, but a deploy of the page still takes `site/images/` and
-`site/outlines.js` from the same checkout.
+`site/outlines.js` from the same checkout. `site/build-outlines.mjs` and
+`site/build-paleo-points.mjs`, which derive those globe assets from the
+content, read a snapshot too (`--from-json`, default
+`var/releases/latest/content.json`).
 
 The event panel in `site/template.html` reads `singleSource`: an event that
 has it shows a small "Single source" note under the Sources heading, above
@@ -432,22 +470,22 @@ the list. There is no filter for it (the page has no filter controls).
 
 - **A new content field.** Change [site/SCHEMA.md](../../site/SCHEMA.md),
   `KEYS` in both `site/canonical.mjs` and `publish/content.py`, the model and
-  a migration, `publish/legacy.py` and `publish/export.py`. Add the field to
-  `tests/fixtures.py` so the round-trip tests cover it, then run `make test`
-  and `make roundtrip`.
-- **A new derived key** (computed at publish time, never in `site/data/`).
-  Add it to `ADDITIVE` and to both `KEYS` lists (last), compute it in
-  `publish/export.py` from rows alone so the snapshot stays deterministic, and
-  describe it in `site/SCHEMA.md` ([ADR 0018](../adr/0018-single-source-marker.md)).
-  `legacy_view()` drops event keys only: a derived key on branches needs it
-  extended.
+  a migration, `publish/legacy.py` (the loader) and `publish/export.py`. Add
+  the field to `tests/fixtures.py` so the round-trip tests cover it, then run
+  `make test` and `make roundtrip`. The archive never has it.
+- **A new derived key** (computed at publish time, never stored). Add it to
+  `ADDITIVE` and to both `KEYS` lists (last), compute it in
+  `publish/export.py` from rows alone so the snapshot stays deterministic (the
+  `deterministic` gate checks), and describe it in `site/SCHEMA.md`
+  ([ADR 0018](../adr/0018-single-source-marker.md)). `without_derived()` drops
+  event keys only: a derived key on branches needs it extended.
 - **A release gate.** `publish/gates.py` `check()` (or `release.publish()`
   for a check that needs the files in the store), with a test in
-  `tests/test_platform.py` `ReleaseTests` and a line in
-  [ADR 0019](../adr/0019-processes-and-release-gates.md).
+  `tests/test_platform.py` `ReleaseTests`, a line in `gates.GATES` (what
+  `--check` names) and an ADR amending
+  [ADR 0020](../adr/0020-the-cutover.md)'s gate list.
 - **What counts as a shown source.** `SHOWN_STANCES` in `publish/export.py`.
-  It changes the page, so check the round trip and expect the legacy dump and
-  the snapshot to differ wherever Postgres evidence has other stances.
+  It changes the page: `publish --check` shows how many entries change.
 - **The publishing rule.** Thresholds and word lists live in
   `evidence/policy.py` (`grace_days`, `sources_differ`, `attribution`); the
   rule itself in `evidence/publishing.py`. A change to what may be published
@@ -457,9 +495,12 @@ the list. There is no filter for it (the page has no filter controls).
 - **The JSON writer.** Any change to `dumps` or `js_number` must keep
   `FormatTests` passing; a byte that differs from `JSON.stringify` breaks the
   round trip.
-- **The import.** Keep its rule: never overwrite review state (AGENTS.md
-  rule 7), and keep a re-run on unchanged input writing nothing
-  (`test_reimport_of_unchanged_input_changes_nothing`).
+- **The loader.** Keep its rules: never overwrite review state (AGENTS.md
+  rule 7), a re-run on unchanged input writes nothing
+  (`test_reimport_of_unchanged_input_changes_nothing`), and loading a snapshot
+  this database exported writes nothing (`test_db_to_snapshot_to_db_is_exact`).
+- **The archive.** Never. It is frozen (ADR 0020); content changes go into
+  Postgres.
 - **A new file in a release.** `FILES` and `publish()` in
   `publish/release.py` (the manifest lists `FILES`, and `pull_release()`
   mirrors them), and the key list in `infra/storage.py`'s docstring and

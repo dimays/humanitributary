@@ -144,6 +144,8 @@ class Entity(models.Model):
     pageviews_30d = models.PositiveIntegerField(null=True, blank=True, help_text="English Wikipedia views over the last 30 days (Wikimedia REST API): a significance hint.")
     pageviews_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True, help_text="When the Wikidata facts were last read; re-read after ENTITY_TTL_DAYS.")
+    relations = models.JSONField(default=dict, blank=True, help_text='Read only for possible new branches (ingest/branchable.py): {"P361": [QIDs] part of, "P155": follows, "P1365": replaces, "P279": subclass of, "is_a": [Q10864048 first-level division, Q7278 political party: classes it is an instance of, through P31/P279*]}.')
+    relations_at = models.DateTimeField(null=True, blank=True, help_text="When `relations` were last read (the entity_relations job).")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -306,8 +308,8 @@ class SuggestedSource(models.Model):
     """A page a lookup adapter found that may support a claim or a candidate: a suggestion, never evidence.
 
     Kept here rather than as `evidence.Evidence` rows because (a) no stance is known until an agent reads the page,
-    and (b) the legacy import makes each legacy claim's evidence match the dump exactly, so extra rows there would
-    be removed on the next `make import`. An agent that reads the page and finds it supports the claim writes the
+    and (b) the loader (`import_legacy`) makes each record claim's evidence match the file it loads, so extra rows
+    there would be removed if one were loaded again. An agent that reads the page and finds it supports the claim writes the
     Evidence (method agent_read) itself and marks the suggestion accepted.
     """
 
