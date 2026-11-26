@@ -36,12 +36,12 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 | `var/` | Gitignored: `gate-receipt.json` (the gate's last pass), `legacy.json` dumps, `releases/<version>/` (a local mirror of a release from the store, `make release-pull`; `releases/latest` → it), `storage/` (the store itself with `STORAGE_BACKEND=local`), `logs/` (the scheduled runs). Raw documents and releases live in object storage (ADR 0016); an old `raw/` is copied there by `make storage-migrate`. |
 | `ops/` | The local schedule: `run-jobs.sh` (start Docker/Postgres and MinIO or skip, then `run_jobs`), `launchd/run-jobs.plist` (template), `schedule.sh` (install / uninstall / status). |
 | `docs/guide/` | The technical guide: a chapter per part of the platform, each stamped against the code it `covers` (`stamps.json`); `README.md` lists the chapters and says how to write one. `docs/architecture.md` points into it. |
-| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015, object storage: 0016, the agent API: 0017, the single-source marker: 0018, processes and release gates: 0019); the data model with an ER sketch; how claims are checked; the branch rules. |
+| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015, object storage: 0016, the agent API: 0017, the single-source marker: 0018, processes and release gates: 0019, Heroku hosting: 0020); the data model with an ER sketch; how claims are checked; the branch rules. |
 | `guide/` | The guide's tools behind `manage.py guide check / stamp / status / covers / index`: `chapters.py`, `coverage.py` (what a chapter covers, its hash), `checks.py`. No models. |
 | `scripts/` | `make_env.py` (writes `.env`, or adds the keys it lacks, printing no values); `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
 | `.claude/settings.json`, `.claude/hooks/` | Hooks only: before `git commit`, the guide must be fresh; before `gh pr create`, the gate must have passed on the committed code; at the end of a turn, a reminder. |
 | `.claude/skills/` | Agent skills: `drain-write-events`, `review-branch-proposals`, `verify-claims`, `verify-stale-claims`; all work through the agent API (`HUMANITRIBUTARY_API`, `HUMANITRIBUTARY_API_TOKEN`). |
-| `Procfile`, `docker-compose.yml`, `.github/workflows/check.yml` | The processes (`release`, `web`, `worker`; `make up` runs web and worker with honcho), the local services (Postgres on 5433, MinIO on 127.0.0.1:9000/9001), and CI (`make check-pr` on pull requests and pushes to main). |
+| `Procfile`, `app.json`, `docker-compose.yml`, `.github/workflows/check.yml` | The processes (`release`, `web`, `worker`; `make up` runs web and worker with honcho), Heroku's description of the app (buildpack, formation, add-on, config vars: ADR 0020), the local services (Postgres on 5433, MinIO on 127.0.0.1:9000/9001), and CI (`make check-pr` on pull requests and pushes to main). |
 
 ## Rules
 
@@ -249,17 +249,22 @@ make check-pr                          # the gate (about 30 seconds)
 
 ## Deploying
 
-Not deployed yet. The layout is Heroku-ready: `Procfile` (`release` runs
-migrations; `web` is gunicorn: the admin, the agent API and `/healthz`;
-`worker` is `run_jobs --loop`), whitenoise for the admin's static files,
-`DATABASE_URL`, `SECRET_KEY`, `ALLOWED_HOSTS`, the `S3_*` variables (S3 or
-Cloudflare R2) and mail settings for alerts from config vars
-(`ENVIRONMENT=prod`). The `pg_trgm` extension is created by a migration
-(allowed on Heroku Postgres). Jobs run in the worker dyno (or from Heroku
-Scheduler as `python manage.py run_jobs`; the advisory locks keep runs from
-overlapping). Raw documents and releases are in object storage, so dynos
-can be thrown away (ADR 0016); `INGEST_CONTACT` defaults to the GitHub repository. The public site is a separate static deploy of a
-release's `timeline.html`, `images/` and `outlines.js` to a CDN (ADR 0001).
+Heroku, in the pipeline `humanitributary` (ADR 0020): the staging app
+`humanitributary-staging` now, production at launch. `main` deploys to staging
+automatically once CI has passed on it. The `Procfile`'s `release` runs
+migrations; `web` (gunicorn: the admin, the agent API and `/healthz`) is one
+Basic dyno; `worker` (`run_jobs --loop`) stays at 0 until the `S3_*` variables
+(S3 or Cloudflare R2) are set, because a dyno's disk is thrown away. Heroku
+Postgres Essential-1 (Postgres 16) is `DATABASE_URL`, over TLS. Config vars:
+`SECRET_KEY`, `ENVIRONMENT=staging`, `ALLOWED_HOSTS`, `INGEST_CONTACT`,
+`STORAGE_BACKEND=local` until object storage exists (outside dev the settings
+refuse the local backend unless it is stated); keys, `S3_*` and mail settings
+are the owner's to set, never copied from a `.env`. Only the `heroku/python`
+buildpack: nothing hosted runs Node yet. Never attach the custom domain to
+staging, and never import data into a hosted database without the owner. The
+public site is a separate static deploy of a release's `timeline.html`,
+`images/` and `outlines.js` to a CDN (ADR 0001). Commands and the config vars:
+`docs/guide/operations.md`, "Hosted: Heroku".
 
 ## Style
 

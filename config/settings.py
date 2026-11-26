@@ -85,7 +85,8 @@ TEMPLATES = [
 
 if not os.getenv("DATABASE_URL"):
     raise RuntimeError("DATABASE_URL is not set: copy .env.example to .env (or run `make env`), then `make db`.")
-DATABASES = {"default": dj_database_url.config(conn_max_age=600, conn_health_checks=True)}
+# Outside dev the connection must be encrypted (Heroku Postgres: docs/adr/0020-heroku-hosting.md).
+DATABASES = {"default": dj_database_url.config(conn_max_age=600, conn_health_checks=True, ssl_require=not DEV)}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -138,6 +139,10 @@ def _storage(alias: str) -> dict:
         }}
     if STORAGE_BACKEND != "local":
         raise RuntimeError(f"STORAGE_BACKEND must be s3 or local (got {STORAGE_BACKEND!r})")
+    if not DEV and os.getenv("STORAGE_BACKEND") != "local":
+        # A dyno's disk is thrown away on every restart: hosted, the local backend is only ever a stated choice.
+        raise RuntimeError("Outside dev, set the S3_* variables (docs/adr/0016-object-storage.md), or STORAGE_BACKEND=local "
+                           "to accept a disk that is thrown away on restart.")
     return {"BACKEND": "django.core.files.storage.FileSystemStorage",
             "OPTIONS": {"location": str(VAR_DIR / "storage" / STORAGE_BUCKETS[alias]), "allow_overwrite": True}}
 
@@ -184,7 +189,19 @@ AGENT_API_RATE_PER_MINUTE = int(os.getenv("AGENT_API_RATE_PER_MINUTE", "120"))
 TEST_RUNNER = "tests.runner.Runner"
 
 if not DEV:
+    # Hosted (Heroku: docs/adr/0020-heroku-hosting.md). The router ends TLS and says so in X-Forwarded-Proto.
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    # An hour until the custom domain has proved itself over HTTPS; raise it (a year) at launch. No subdomains or
+    # preload: those are hard to undo. (*.herokuapp.com is preloaded by Heroku already.)
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "3600"))
+    # Logs are the process's stdout (heroku logs). Django's defaults print nothing with DEBUG off, so a 500's
+    # traceback would vanish: everything at LOG_LEVEL and above goes to the console.
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "handlers": {"console": {"class": "logging.StreamHandler"}},
+        "root": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")},
+    }
