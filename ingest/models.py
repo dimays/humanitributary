@@ -82,7 +82,7 @@ class Document(models.Model):
     fetched_at = models.DateTimeField(db_index=True)
     http_status = models.PositiveSmallIntegerField(null=True, blank=True)
     content_hash = models.CharField(max_length=64, db_index=True, help_text="sha256 of the raw bytes; the raw file is var/raw/<hash[:2]>/<hash>.")
-    raw_path = models.CharField(max_length=300, blank=True, help_text="Relative to VAR_DIR.")
+    raw_path = models.CharField(max_length=300, blank=True, help_text="The key in the raw object store: raw/<hash[:2]>/<hash> (ADR 0016).")
     title = models.CharField(max_length=500, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)
     language = models.CharField(max_length=20, blank=True)

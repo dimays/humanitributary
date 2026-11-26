@@ -175,9 +175,8 @@ def _page_diff(url: str) -> dict | None:
     import html
     import re
 
-    from django.conf import settings
-
     from ingest.models import Document
+    from ingest.store import read_raw
 
     doc = Document.objects.filter(canonical_url=url).first() or Document.objects.filter(url=url).order_by("-fetched_at").first()
     if doc is None or doc.version < 2:
@@ -185,9 +184,9 @@ def _page_diff(url: str) -> dict | None:
     prev = doc.versions.filter(version__lt=doc.version).order_by("-version").first()
     old = ""
     if prev and prev.raw_path:
-        path = settings.VAR_DIR / prev.raw_path
-        if path.exists():
-            raw = path.read_bytes().decode("utf-8", "replace")
+        data = read_raw(prev.raw_path)
+        if data is not None:
+            raw = data.decode("utf-8", "replace")
             old = html.unescape(re.sub(r"<[^>]+>", " ", re.sub(r"(?is)<(script|style).*?</\1>", " ", raw)))
     norm = lambda t: [ln.strip() for ln in re.split(r"(?<=[.!?])\s+|\n+", t) if ln.strip()]  # noqa: E731
     diff = list(difflib.unified_diff(norm(old), norm(doc.extracted_text), "before", "after", n=0, lineterm=""))

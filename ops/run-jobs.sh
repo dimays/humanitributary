@@ -31,6 +31,15 @@ if ! nc -z localhost 5433 >/dev/null 2>&1 && ! docker compose up -d --wait db >>
   exit 0
 fi
 
+# Object storage: when .env points at a local MinIO (ADR 0016) and it isn't answering, start it (raw documents go there).
+S3_URL="$(grep -E '^S3_ENDPOINT_URL=' .env 2>/dev/null | cut -d= -f2-)"
+if [[ "$S3_URL" =~ ^http://(127\.0\.0\.1|localhost):([0-9]+) ]]; then
+  if ! nc -z 127.0.0.1 "${BASH_REMATCH[2]}" >/dev/null 2>&1 && ! docker compose up -d --wait minio >>"$LOG" 2>&1; then
+    log "skipped: MinIO did not become healthy"
+    exit 0
+  fi
+fi
+
 UV="$(command -v uv || true)"
 if [ -z "$UV" ]; then
   log "skipped: uv not found on PATH ($PATH)"

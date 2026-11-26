@@ -1,6 +1,9 @@
-# Local Postgres for development: `docker compose up -d db` (or `make db`).
-# Host port 5433, because Postgres.app already owns 5432 on the owner's laptop: never point anything here at 5432.
-# The password comes from .env (POSTGRES_PASSWORD), generated locally and never committed.
+# Local services for development: `make db` (or `make up`, which also runs web and worker).
+# Postgres on host port 5433, because Postgres.app already owns 5432 on the owner's laptop: never point anything here
+# at 5432. MinIO is the local stand-in for S3 / Cloudflare R2 (docs/adr/0016-object-storage.md): its S3 API on
+# 127.0.0.1:${MINIO_PORT:-9000} and its console on 127.0.0.1:${MINIO_CONSOLE_PORT:-9001}, both bound to this machine only.
+# Passwords come from .env (`make env` generates them), never committed. The MinIO image is pinned by digest:
+# minio/minio is no longer published on Docker Hub, so this is Chainguard's build (override with MINIO_IMAGE).
 name: humanitributary
 
 services:
@@ -21,5 +24,24 @@ services:
       timeout: 3s
       retries: 30
 
+  minio:
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio@sha256:b9b1cce81a4a6cc9bf250e68d621cc0b9fb8ed15aefe18fcd1840525eab6a81a}
+    restart: unless-stopped
+    command: ["server", "/data", "--address", ":9000", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-humanitributary}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}  # empty: MinIO refuses to start (make env writes one); db is unaffected
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - humanitributary-minio:/data
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
 volumes:
   humanitributary-pg:
+  humanitributary-minio:

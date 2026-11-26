@@ -8,7 +8,7 @@ class Release(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.CharField(max_length=200)
     content_hash = models.CharField(max_length=64, db_index=True, help_text="sha256 of content.json's bytes.")
-    snapshot_path = models.CharField(max_length=300, help_text="Relative to VAR_DIR: releases/<version>/content.json.")
+    snapshot_path = models.CharField(max_length=300, help_text="The key in the releases object store: releases/<version>/content.json (ADR 0016).")
     counts = models.JSONField(default=dict)
     revision_high_water = models.BigIntegerField(default=0, help_text="The last Revision id included: what changed since is everything after it.")
     notes = models.TextField(blank=True)

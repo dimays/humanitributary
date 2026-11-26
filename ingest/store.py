@@ -1,12 +1,12 @@
-"""Documents: raw bytes under `var/raw/<hash[:2]>/<hash>` (never in git or the database), the latest version of each
-canonical URL in `Document`, every distinct content hash in `DocumentVersion`."""
+"""Documents: raw bytes in the `raw` object store at `raw/<hash[:2]>/<hash>` (never in git or the database; ADR 0016),
+the latest version of each canonical URL in `Document`, every distinct content hash in `DocumentVersion`."""
 
 import hashlib
-from pathlib import Path
 
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+
+from infra import storage
 
 from .models import Document, DocumentVersion
 
@@ -15,21 +15,27 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def raw_key(h: str) -> str:
+    return f"raw/{h[:2]}/{h}"
+
+
 def write_raw(data: bytes) -> tuple[str, str]:
-    """Store raw bytes by content hash (once). → (hash, path relative to VAR_DIR)"""
+    """Store raw bytes by content hash (once). → (hash, storage key, which `raw_path` records)"""
     h = sha256(data)
-    rel = Path("raw") / h[:2] / h
-    path = Path(settings.VAR_DIR) / rel
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(data)
-        tmp.replace(path)
-    return h, str(rel)
+    key = raw_key(h)
+    if not storage.exists(storage.RAW, key):  # content-addressed: the same key always holds the same bytes
+        storage.write(storage.RAW, key, data)
+    return h, key
 
 
-def read_raw(rel: str) -> bytes:
-    return (Path(settings.VAR_DIR) / rel).read_bytes()
+def read_raw(key: str) -> bytes | None:
+    """The raw bytes at `key`, or None if the store doesn't have them (e.g. fetched before a storage migration)."""
+    try:
+        return storage.read(storage.RAW, key)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
 
 
 def save_document(*, canonical_url: str, url: str, raw: bytes, feed=None, publisher=None, http_status: int | None = 200,

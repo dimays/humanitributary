@@ -42,6 +42,9 @@ INSTALLED_APPS = [
     "work",
     "publish",
     "guide",  # the technical guide's tools (manage.py guide): no models
+    # The platform around the content: object storage, health and alerts; the agents' HTTP door to the queue.
+    "infra",
+    "agentapi",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -100,17 +103,52 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Where things live on disk. `var/` is gitignored: dumps, the local mirror of the latest release (for the site
+# build), scheduled-run logs, and (with STORAGE_BACKEND=local) the stand-in for the object store.
+SITE_DIR = BASE_DIR / "site"
+VAR_DIR = Path(os.getenv("VAR_DIR", BASE_DIR / "var"))
+LOG_DIR = VAR_DIR / "logs"
+RELEASES_MIRROR_DIR = VAR_DIR / "releases"  # `manage.py storage pull-release` mirrors a release here
+
+# Object storage (docs/adr/0016-object-storage.md). Every file that isn't a database row goes through one of
+# two Django storages: "raw" (fetched documents by content hash, private) and "releases" (versioned snapshots, their
+# change reports and built pages, and the `latest` pointer; the CDN's origin later). Locally that is MinIO in
+# docker-compose.yml; in production S3 or Cloudflare R2, by the same variables. STORAGE_BACKEND=local keeps both in
+# var/storage/<bucket>/ (no Docker needed); the test runner always uses temporary directories (tests/runner.py).
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND") or ("s3" if os.getenv("S3_ENDPOINT_URL") or os.getenv("S3_BUCKET_RAW") else "local")
+STORAGE_BUCKETS = {
+    "raw": os.getenv("S3_BUCKET_RAW", "humanitributary-raw"),
+    "releases": os.getenv("S3_BUCKET_RELEASES", "humanitributary-releases"),
+}
+
+
+def _storage(alias: str) -> dict:
+    if STORAGE_BACKEND == "s3":
+        return {"BACKEND": "storages.backends.s3.S3Storage", "OPTIONS": {
+            "bucket_name": STORAGE_BUCKETS[alias],
+            "endpoint_url": os.getenv("S3_ENDPOINT_URL") or None,  # empty for AWS; MinIO or R2's account endpoint otherwise
+            "access_key": os.getenv("S3_ACCESS_KEY_ID", ""),
+            "secret_key": os.getenv("S3_SECRET_ACCESS_KEY", ""),
+            "region_name": os.getenv("S3_REGION", "us-east-1"),  # "auto" for R2
+            "addressing_style": "path" if os.getenv("S3_ENDPOINT_URL") else None,
+            "signature_version": "s3v4",
+            "default_acl": None,
+            "querystring_auth": True,
+            "file_overwrite": True,  # immutability is the code's job (infra/storage.py), so the pointer can move
+        }}
+    if STORAGE_BACKEND != "local":
+        raise RuntimeError(f"STORAGE_BACKEND must be s3 or local (got {STORAGE_BACKEND!r})")
+    return {"BACKEND": "django.core.files.storage.FileSystemStorage",
+            "OPTIONS": {"location": str(VAR_DIR / "storage" / STORAGE_BUCKETS[alias]), "allow_overwrite": True}}
+
+
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     # Hashed, compressed files in production (after collectstatic); plain files locally and in tests.
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage" if DEV else "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    "raw": _storage("raw"),
+    "releases": _storage("releases"),
 }
-
-# Where things live on disk. `var/` is gitignored: raw fetched documents (by content hash) and release snapshots.
-SITE_DIR = BASE_DIR / "site"
-VAR_DIR = Path(os.getenv("VAR_DIR", BASE_DIR / "var"))
-RAW_DIR = VAR_DIR / "raw"
-RELEASES_DIR = VAR_DIR / "releases"
 
 # How long an agent's claim on a task lasts before another agent may take it (work/queue.py).
 TASK_LEASE_MINUTES = int(os.getenv("TASK_LEASE_MINUTES", "30"))
@@ -122,7 +160,28 @@ INGEST_USER_AGENT = os.getenv("INGEST_USER_AGENT", f"{SITE_NAME}Bot/0.1 (history
 # Free keys for two lookup adapters (ingest/lookup.py); without them those adapters stay disabled.
 SMITHSONIAN_API_KEY = os.getenv("SMITHSONIAN_API_KEY", "")  # api.data.gov
 EUROPEANA_API_KEY = os.getenv("EUROPEANA_API_KEY", "")
-LOG_DIR = VAR_DIR / "logs"
+
+# The worker (Procfile `worker`: `manage.py run_jobs --loop`) wakes this often to run whatever is due.
+WORKER_TICK_SECONDS = int(os.getenv("WORKER_TICK_SECONDS", "60"))
+
+# Alerts (infra/alerts.py): a job that fails this many runs in a row sends one email to ALERT_EMAILS (comma-
+# separated) through Django's mail settings. Locally the console backend prints it instead of sending.
+ALERT_AFTER_FAILURES = int(os.getenv("ALERT_AFTER_FAILURES", "3"))
+ALERT_EMAILS = [a.strip() for a in os.getenv("ALERT_EMAILS", "").split(",") if a.strip()]
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND") or ("django.core.mail.backends.console.EmailBackend" if DEV else "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", f"{SITE_NAME} alerts <alerts@localhost>")
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# The agent API (agentapi/, docs/adr/0017-agent-api.md): requests per token per minute.
+AGENT_API_RATE_PER_MINUTE = int(os.getenv("AGENT_API_RATE_PER_MINUTE", "120"))
+
+# Tests never touch the object store or the network: the runner swaps both storages for temporary directories.
+TEST_RUNNER = "tests.runner.Runner"
 
 if not DEV:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
