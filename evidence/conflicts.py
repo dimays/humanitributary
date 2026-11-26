@@ -61,6 +61,8 @@ def record_conflict(claim: Claim, *, url: str, title: str, found_value: dict, ex
     if ev is not None:
         if ev.stance in ("supports", "partial") and ev.method != "legacy":
             return ev, False  # an agent already read this page and found it supports the claim: theirs stands
+        if (ev.found_value or {}).get("resolved"):
+            return ev, False  # a reviewer resolved this conflict (apply_edits resolve_conflict): their decision stands
         fields.pop("checked_at")  # unchanged findings leave no Revision
         apply_changes(ev, fields)
         return ev, False

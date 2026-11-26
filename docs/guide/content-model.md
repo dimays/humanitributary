@@ -8,13 +8,14 @@ covers:
   - site/SCHEMA.md
   - site/canonical.mjs
   - site/template.html
+  - tests/test_apply_edits.py
 ---
 
 The timeline is made of branches (a people, state, faith, idea or era, drawn as a
 lane that starts, splits, merges and ends) and events (moments or spans on a
 branch). This chapter covers the tables in `timeline/` that hold them, how their
 dates and order are stored, and the small set of functions every write goes
-through.
+through, including the command that applies a reviewer's edit file.
 
 Every table here is **canonical**: it holds the content readers see, and it
 accepts writes only inside `revisions.revising()`, each one recorded (see
@@ -327,8 +328,64 @@ differs.
 
 New entries start as `draft`. There is no service for links, locations,
 images or connections yet: the import writes those with `apply_changes` and
-bulk creates, and `governance/operations.py` with `apply_changes` and
-`delete`.
+bulk creates, `governance/operations.py` with `apply_changes` and `delete`,
+and an edit file's `links` (below) the same way.
+
+## Applying a reviewer's edits
+
+A review of drafts or published entries ends in verdicts: approve, edit,
+rename, reject, add a source, settle a conflict. `manage.py apply_edits`
+(`timeline/edits.py`) applies a file of them in one audited transaction
+([ADR 0023](../adr/0023-edit-files.md)):
+
+```bash
+uv run python manage.py apply_edits var/reviews/2026-11-26-round1.edits.json --validate-only
+uv run python manage.py apply_edits var/reviews/2026-11-26-round1.edits.json --actor human:owner --dry-run
+uv run python manage.py apply_edits var/reviews/2026-11-26-round1.edits.json --actor human:owner
+```
+
+The file is a JSON list of operations. Each has `op`, `entry` (a slug) and a
+`reason`, and may have a `note` that only the file keeps:
+
+| `op` | Keys | What it does |
+|---|---|---|
+| `edit` | `fields`, `add_cites`, `remove_cites` | `fields` may set an event's `title`, `text`, `y`, `end`, `when`, `branch`, `links` (branch slugs, in order: they replace the event's links) and `imp`; a branch's `text` only (its structure changes through [proposals](branch-governance.md)). `save_event` / `save_branch` write them, the record claim's value is rewritten to match, and the entry's atomic claims are re-split and recomputed at once. `add_cites` items are `{"t", "u", "k"?, "stance"?, "method"?, "excerpt"?}` (stance `supports` or `partial`; method `agent_read` by default, `browser_read` or `human`): a new row on the record claim, or the existing row for the same page updated in place. `remove_cites` items are a URL, or `{"domain": …}` for every cite from one site. |
+| `rename` | `to` | Changes the entry's slug on the same row, so its history, links, connections, claims, location, images and tasks follow (they all point at its primary key). Refused if `to` is taken, or while an open branch proposal names the old id. |
+| `approve` | `override`? | An entry in `review` becomes `published` through `evidence.publishing.publish_entry`: the publishing rule applies, and an `override` note is recorded in the Revision ([publishing](publishing.md)). |
+| `reject` | | A `draft` or `review` entry becomes `retracted`. |
+| `add_evidence` | `url`, `stance`, `claim`?, `title`?, `excerpt`?, `method`?, `found`? | `record_evidence` on one of the entry's claims ([evidence](evidence-and-fact-checking.md#recording-evidence)). `claim` is a field name or `{"field", "key"}`, the record claim (`as_written`) by default, where only an existing cite's row can change (a new source there is an edit's `add_cites`). Without an `excerpt`, an existing row keeps its own. |
+| `resolve_conflict` | `claim`?, `urls`? | Every `conflicts` row on the entry's claims (or one claim's, or only those URLs') becomes `unrelated` with `found_value.resolved` (who, when, the reason, what it was); the claims are recomputed. Nothing to resolve is a note, not a problem ([conflicts](evidence-and-fact-checking.md#conflicts)). |
+
+URLs are matched up to percent-encoding, the host's case, `www.` and a
+trailing slash (`norm_url`), so a file can name a page the way the review
+does.
+
+**Checked first, then all or nothing.** `check(ops)` reads no row but the
+branches named, and finds: unknown ops and keys, a missing reason, a bad slug,
+a title over 60 or a text over 240 characters (`site/SCHEMA.md`), `end` not
+after `y`, `imp` outside 1–3, a link to the event's own branch, a non-https or
+openstax.org URL, an excerpt over 25 words, the same page added twice or added
+and removed, two renames to one id, an id used after it was renamed or
+rejected, and branches that don't exist. If it finds anything, nothing runs.
+Otherwise `apply()` opens one transaction and one `revising(actor)` block and
+runs the ops in order, each in a nested `revising()` whose reason is
+`apply_edits <file> #<n> <op> <entry>: <reason>`. An op that fails (an entry
+that doesn't exist, a claim key it doesn't have, the publishing rule) rolls
+back to its savepoint and is listed, and the rest still run, so the error
+lists every problem; then the whole transaction is rolled back. A file is
+safe to run again: unchanged edits write nothing, and approving a published
+entry, rejecting a retracted one or renaming to an id that has already taken
+the old one's place are notes.
+
+**The diff.** After each op the command prints its notes and the Revisions
+it wrote: `~ table row column: before → after` for an update, `+` an insert,
+`-` a delete. `--dry-run` prints the same and rolls back. `--validate-only`
+runs only `check()` and needs no `--actor`, so a file about drafts that a
+database lacks can still be checked there. `--actor` is required otherwise
+(`human:owner`, `agent:reviewer` …).
+
+Tests: `tests/test_apply_edits.py` (each op, both kinds of atomic failure, a
+rename that keeps its references, the dry run, validate-only).
 
 ## The snapshot shape
 

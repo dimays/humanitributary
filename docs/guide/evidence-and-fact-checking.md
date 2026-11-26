@@ -82,7 +82,10 @@ Only `supports` and `partial` evidence is published as a source.
 **Record claims** are the ones the page is built from. The legacy import
 writes one `as_written` claim per entry (its date, title and text together,
 cited by the entry's `cites`), plus a `why` claim and an `origin` claim where
-the entry has them. The import owns their evidence lists.
+the entry has them. The import wrote their evidence lists, and since the
+cutover only an edit file changes the record claim's cites (`edit` with
+`add_cites` / `remove_cites`, [ADR 0023](../adr/0023-edit-files.md)); the
+agent API and `record_evidence` never add a row there.
 
 **Atomic claims** are derived from each entry by a deterministic splitter,
 `evidence/claims.py`, as children of its `as_written` claim, so evidence can
@@ -266,7 +269,14 @@ claim's own value beside it as `claim_value` (`evidence/conflicts.py`
 `record_conflict`). Conflicts attach only to atomic parts; `record_conflict`
 refuses the `as_written` claim, whose evidence the import owns. If the page
 already has evidence on the claim that an agent recorded as supporting, that
-reading stands and the conflict isn't written.
+reading stands and the conflict isn't written. The same goes for a conflict a
+reviewer has resolved: when an edit file corrects the text, its
+`resolve_conflict` sets the conflicting rows to `unrelated` with
+`found_value.resolved` (who, when, why, and that it was `conflicts`), the
+claim is recomputed, and `record_conflict` leaves a resolved row alone, so the
+sweep doesn't reopen it from the same page
+([content model](content-model.md#applying-a-reviewers-edits),
+[ADR 0023](../adr/0023-edit-files.md)).
 
 Agents record conflicts as evidence with stance `conflicts` and a `found`
 value in a `verify_claim` result through the agent API (the owner's
@@ -298,7 +308,9 @@ job runner (the `facts_sweep` job, registered right after `link_health` in
 
 1. **Split.** For every branch and event that isn't retracted and has an
    `as_written` claim, `claims.sync()` brings its atomic claims in line (new
-   ones are bulk-created at the end).
+   ones are bulk-created at the end). `split_all(today, entries=[…])` does the
+   same for some entries only, reading just their claims: an edit file
+   re-splits each entry it edits this way.
 2. **Link health.** `link_health()` sets baseline hashes and finds each
    claim's link problem (above).
 3. **Conflicts.** `conflicts.from_candidates()` records date conflicts.
@@ -385,7 +397,7 @@ calls it from a shell. Inside `revising()`:
 3. If the claim already has evidence from that citation, that row is
    updated. Otherwise a new row is appended at the next position, except on
    a record `as_written` claim: its citations come from the entry's `cites`,
-   so new sources go on an atomic part (or into the data files).
+   so new sources go on an atomic part (or, from an edit file, become a cite).
 4. The row gets the stance, the excerpt (cut to 25 words), `checked_by`,
    `method`, `checked_at` = now, the citation's current `content_hash` and
    `found_value`.

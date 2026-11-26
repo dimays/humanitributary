@@ -1,6 +1,6 @@
 # 0021 — The cutover: Postgres is the only source of truth, and the legacy files are frozen
 
-**Status:** proposed (November 2026); amends [0001](0001-postgres-is-the-truth-the-site-reads-snapshots.md); amends [0007](0007-one-snapshot-shape-byte-identical-both-ways.md); amends [0018](0018-single-source-marker.md); amends [0019](0019-processes-and-release-gates.md); amends [0011](0011-branch-governance.md); amends [0017](0017-agent-api.md)
+**Status:** proposed (November 2026); amends [0001](0001-postgres-is-the-truth-the-site-reads-snapshots.md); amends [0007](0007-one-snapshot-shape-byte-identical-both-ways.md); amends [0018](0018-single-source-marker.md); amends [0019](0019-processes-and-release-gates.md); amends [0011](0011-branch-governance.md); amends [0017](0017-agent-api.md); amended by [0023](0023-edit-files.md)
 
 ## Context
 

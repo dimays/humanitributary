@@ -52,17 +52,22 @@ def _branch_entity_labels() -> dict[int, list[str]]:
 
 
 def split_all(today: date, entries=None) -> dict:
+    """Bring atomic claims in line for every entry, or only for `entries` (entry ids: an edit re-splits just its own)."""
     stats = defaultdict(int)
-    parents = {c.entry_id: c for c in Claim.objects.filter(field="as_written", key="", parent__isnull=True)}
+    parent_qs, child_qs, loc_qs = Claim.objects.filter(field="as_written", key="", parent__isnull=True), Claim.objects.filter(parent__isnull=False), Location.objects.all()
+    branch_qs, event_qs = Branch.objects.exclude(status=Status.RETRACTED), Event.objects.exclude(status=Status.RETRACTED)
+    if entries is not None:
+        entries = list(entries)
+        parent_qs, child_qs, loc_qs = parent_qs.filter(entry_id__in=entries), child_qs.filter(entry_id__in=entries), loc_qs.filter(entry_id__in=entries)
+        branch_qs, event_qs = branch_qs.filter(pk__in=entries), event_qs.filter(pk__in=entries)
+    parents = {c.entry_id: c for c in parent_qs}
     children = defaultdict(list)
-    for c in Claim.objects.filter(parent__isnull=False).annotate(evidence_count=Count("evidence")):
+    for c in child_qs.annotate(evidence_count=Count("evidence")):
         children[c.entry_id].append(c)
-    locations = {loc.entry_id: loc for loc in Location.objects.all()}
+    locations = {loc.entry_id: loc for loc in loc_qs}
     labels = _branch_entity_labels()
     pending = []
-    objs = list(Branch.objects.exclude(status=Status.RETRACTED)) + list(Event.objects.exclude(status=Status.RETRACTED))
-    if entries is not None:
-        objs = [x for x in objs if x.pk in entries]
+    objs = list(branch_qs) + list(event_qs)
     for x in sorted(objs, key=lambda x: x.pk):
         parent = parents.get(x.pk)
         if parent is None:
