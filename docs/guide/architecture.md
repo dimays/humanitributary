@@ -212,8 +212,11 @@ checking the snapshot's hash ([Operations](operations.md#restore-a-release)).
 
 Publishing is run by hand, from Postgres alone, into whichever `releases` store the settings name: MinIO (or
 `var/storage/` with `STORAGE_BACKEND=local`) locally, and on staging the S3 bucket `humanitributary-staging-releases`.
-Staging publishes with `heroku run python manage.py publish` (Node is in its build for the build gate). Nothing
-deploys the page yet; the `releases` bucket is meant to be the CDN's origin.
+Staging publishes with `heroku run python manage.py publish` (Node is in its build for the build gate). Readers get
+the page from the web process: `/` is the latest release's `timeline.html`, read from the `releases` store and kept in
+memory by version, with the pointer re-read at most once a minute, so a publish or a rollback is live within a minute
+and no request reads the database (`infra/site.py`, [ADR 0024](../adr/0024-the-app-serves-the-page.md)). The
+`releases` bucket can become a CDN's origin later; the responses already carry cache headers.
 
 ## The legacy files, frozen
 
@@ -239,8 +242,8 @@ needs judgment becomes a task.
 | File | Role |
 |---|---|
 | `config/settings.py` | `SITE_NAME`; `ENVIRONMENT` (`dev`, or anything else for production safety); `DATABASE_URL` (required); `VAR_DIR` (default `var/`), with `LOG_DIR` and `RELEASES_MIRROR_DIR` under it; the `raw` and `releases` storages (`STORAGE_BACKEND`, the `S3_*` variables); `TASK_LEASE_MINUTES`; `WRITE_EVENT_TASKS_PER_DAY` (20: the `process` job's daily cap on new `write_event` tasks); `WORKER_TICK_SECONDS`; `ALERT_AFTER_FAILURES`, `ALERT_EMAILS` and the mail settings; `AGENT_API_RATE_PER_MINUTE`; `INGEST_CONTACT` and `INGEST_USER_AGENT`; the two lookup keys. Outside `dev`: TLS to the database, HTTPS redirect, secure cookies, HSTS (`SECURE_HSTS_SECONDS`), logs to stdout at `LOG_LEVEL` (with `httpx` and `httpcore` held at `WARNING`: they print every request's URL), and the local storage backend refused unless `STORAGE_BACKEND=local` is set. `INSTALLED_APPS` lists the apps in dependency order ([ADR 0002](../adr/0002-django-and-apps-by-responsibility.md)). |
-| `config/urls.py` | The admin (the owner's review screen), the agent API under `/api/agent/` and `/healthz`. The public page never touches this server. |
-| `infra/` | `storage.py` (the one door to object storage), `manage.py storage`, `health.py` (`/healthz`) and `alerts.py`. No models. |
+| `config/urls.py` | The public page at `/` with `/images/*` and `/outlines.js` (`infra/site.py`), the admin (the owner's review screen), the agent API under `/api/agent/` and `/healthz`. The page never touches the database. |
+| `infra/` | `storage.py` (the one door to object storage), `manage.py storage`, `health.py` (`/healthz`), `alerts.py`, and `site.py` (the public page, its images and outlines, and the `www.` redirect). No models. |
 | `ingest/job_defs.py` | Every scheduled job with its interval, in run order: set-up, sources, entities, processing, upkeep. |
 | `Makefile` | The commands (`make help`): database and storage, publish, build (from a release), the release gates (`roundtrip`), tests, processes, jobs, schedule; `import-archive` for an empty database. |
 | `docker-compose.yml` | The local services: Postgres 16 on host port 5433, and MinIO (the local S3) on `127.0.0.1:9000`, its console on 9001. |
@@ -268,7 +271,7 @@ The job order in `ingest/job_defs.py`:
 | Raw documents and releases | MinIO in Docker on `127.0.0.1:9000` (`make db` creates the buckets), or `var/storage/<bucket>/` with `STORAGE_BACKEND=local` | AWS S3 (us-east-1): `humanitributary-staging-raw` and `-releases`, through a user limited to them | S3, its own buckets and user (at launch) |
 | Processes | `make up`: `web` (gunicorn on 127.0.0.1:8000) and `worker` via honcho | The `Procfile`: `release` (`migrate`), one Basic `web` dyno at https://data.humanitributary.com, one Basic `worker` | The same `Procfile` (at launch) |
 | Scheduled jobs | The worker while `make up` runs, and launchd every 15 minutes if installed (`make schedule-install`); the locks keep them from overlapping | The `worker` dyno: the only place jobs run | A `worker` dyno, or Heroku Scheduler running `run_jobs` |
-| The page | timeline.html in `site/`, built from the mirror in `var/releases/` | Not served | a CDN serving the `releases` bucket (planned) |
+| The page | timeline.html in `site/`, built from the mirror in `var/releases/` | https://humanitributary.com: the web process serves the latest release (`infra/site.py`) | The same app (it is production until a separate one exists); a CDN in front later |
 
 The Heroku pipeline `humanitributary` holds staging now and production at launch
 ([ADR 0020](../adr/0020-heroku-hosting.md)). CI (`.github/workflows/check.yml`) runs the gate with a throwaway Postgres filled

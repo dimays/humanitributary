@@ -222,9 +222,14 @@ The domain, `humanitributary.com`, is registered at Namecheap (contact verified)
 | `data` CNAME | the app's Heroku DNS target (`heroku domains -a humanitributary-staging`), DNS only | the admin and the agent API; DNS only so Heroku issues and renews the certificate (`heroku certs:auto`) |
 | `@` TXT | `v=spf1 -all` | no server may send mail as the domain |
 | `_dmarc` TXT | `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s` | receivers reject mail that claims to come from it |
+| `@` CNAME (flattened) and `www` CNAME | each name's own Heroku DNS target (`heroku domains -a humanitributary-staging`), DNS only | the public page; Heroku issues their certificates, and the app redirects `www` to the bare domain |
 
-The bare domain and `www` have no records until the public page exists; it will be served from the CDN, and a
-`www` redirect comes with it. Mail for the domain needs an MX (Cloudflare Email Routing for forwarding) and an SPF
+The public page is the web process's `/` ([ADR 0024](../adr/0024-the-app-serves-the-page.md)): the latest release's
+`timeline.html` from the S3 releases bucket, kept in memory and re-checked against `releases/latest.json` at most
+once a minute, so `heroku run python manage.py publish` (or `publish --rollback <version>`) is live within a minute.
+`/images/*` and `/outlines.js` come from the slug's `site/`, so a changed image needs a deploy. Before the first
+release `/` answers 503; the `X-Release` header names the version being served. `ALLOWED_HOSTS` must list
+`humanitributary.com` and `www.humanitributary.com`. Mail for the domain needs an MX (Cloudflare Email Routing for forwarding) and an SPF
 that names the sender before anything sends as it.
 
 To create or rotate the access key, with the AWS CLI signed in (`aws login`), the owner runs, in zsh:
