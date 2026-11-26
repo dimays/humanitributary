@@ -2,8 +2,16 @@
 //   node build.mjs --check            validate only
 //   node build.mjs --check --file 3   validate, but report problems only for files whose name starts with "3"
 //   node build.mjs                    validate and build (refuses to build on errors)
+//   node build.mjs --dump-json f.json validate, then write the fully resolved content (after restructure ops: exactly
+//                                     what gets inlined, minus the build date) as JSON, for `manage.py import_legacy`
+//   node build.mjs --from-json f.json build from a published snapshot (`manage.py publish`) instead of data/*.js
+//   --out path.html                   where to write the page (default timeline.html, next to this file)
+//   --built YYYY-MM-DD                the "Data compiled" date (default: today, or BUILT in the environment)
+// Content is written in one canonical key order (canonical.mjs), so a build from data/*.js and a build from a
+// snapshot of the same content are byte-identical.
 import fs from "node:fs";
 import { collector, applyRestructure } from "./restructure.mjs";
+import { canonicalContent, dropped } from "./canonical.mjs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
@@ -11,11 +19,21 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const checkOnly = args.includes("--check");
-const onlyFile = args.includes("--file") ? args[args.indexOf("--file") + 1] : null;
+const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
+const onlyFile = opt("--file");
+const dumpJson = opt("--dump-json");
+const fromJson = opt("--from-json");
+const outPath = opt("--out") || path.join(here, "timeline.html");
+const built = opt("--built") || process.env.BUILT || new Date().toISOString().slice(0, 10);
+if (args.some((a, i) => ["--dump-json", "--from-json", "--out", "--built", "--file"].includes(a) && !args[i + 1])) {
+  console.error("Usage: node build.mjs [--check] [--file prefix] [--dump-json out.json | --from-json content.json] [--out page.html] [--built YYYY-MM-DD]");
+  process.exit(2);
+}
 
 const REGIONS = ["cosmos", "life", "humans", "global", "faiths", "culture", "mideast", "europe", "africa", "southasia", "eastasia", "americas", "oceania"];
 const dataDir = path.join(here, "data");
-const files = fs.readdirSync(dataDir).filter((f) => f.endsWith(".js")).sort();
+// From a snapshot, every entry is already resolved: there are no TL.* calls to apply, only the checks below.
+const files = fromJson ? [] : fs.readdirSync(dataDir).filter((f) => f.endsWith(".js")).sort();
 
 const branches = [], events = [], extraCites = [], enrich = [], geos = [], images = [], origins = [], restructure = [];
 for (const f of files) {
@@ -31,6 +49,13 @@ for (const f of files) {
   };
   try { vm.runInNewContext(src, { TL }, { filename: f }); }
   catch (err) { console.error(`✗ ${f}: does not parse — ${err.message}`); process.exitCode = 1; }
+}
+
+if (fromJson) {
+  const snap = JSON.parse(fs.readFileSync(fromJson, "utf8"));
+  const src = path.basename(fromJson);
+  for (const b of snap.branches || []) branches.push({ ...b, _file: src });
+  for (const e of snap.events || []) events.push({ ...e, _file: src });
 }
 
 const errors = [], warnings = [];
@@ -164,15 +189,19 @@ errors.forEach((e) => console.log("✗", e));
 console.log(`${branches.length} branches, ${events.length} events, ${errors.length} errors, ${warnings.length} warnings`);
 if (errors.length) process.exitCode = 1;
 
-if (!checkOnly) {
+if (dumpJson) {
+  if (errors.length) { console.error("Not dumping: fix errors first."); process.exit(1); }
+  fs.writeFileSync(dumpJson, JSON.stringify(canonicalContent({ branches, events }), null, 1) + "\n");
+  console.log(`Wrote ${dumpJson} (${branches.length} branches, ${events.length} events)`);
+} else if (!checkOnly) {
   if (errors.length) { console.error("Not building: fix errors first."); process.exit(1); }
-  const strip = (x) => { const { _file, ...rest } = x; return rest; };
-  const data = JSON.stringify({ branches: branches.map(strip), events: events.map(strip), built: new Date().toISOString().slice(0, 10) });
+  const data = JSON.stringify({ ...canonicalContent({ branches, events }), built });
   const tpl = fs.readFileSync(path.join(here, "template.html"), "utf8");
   const globePath = path.join(here, "globe-assets.json"); // built once by build-globe.mjs; optional
   const globe = fs.existsSync(globePath) ? fs.readFileSync(globePath, "utf8").trim() : "null";
   const out = tpl.replace("/*__DATA__*/null", () => data.replace(/<\/script/gi, "<\\/script"))
     .replace("/*__GLOBE__*/null", () => globe.replace(/<\/script/gi, "<\\/script"));
-  fs.writeFileSync(path.join(here, "timeline.html"), out);
-  console.log(`Wrote timeline.html (${(out.length / 1024).toFixed(0)} KB)`);
+  fs.writeFileSync(outPath, out);
+  console.log(`Wrote ${path.relative(process.cwd(), outPath) || outPath} (${(out.length / 1024).toFixed(0)} KB)`);
 }
+for (const [k, n] of dropped) console.log(`⚠ ${n} × unknown key "${k}" left out of the page (not in canonical.mjs)`);
