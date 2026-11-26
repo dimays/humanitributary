@@ -1,6 +1,6 @@
 """`/healthz`: is the platform working (docs/adr/0019-processes-and-release-gates.md).
 
-    {"ok": true, "db": {"ok": true}, "storage": {"raw": {"ok": true}, "releases": {"ok": true}},
+    {"ok": true, "db": {"ok": true}, "storage": {"raw": {"ok": true}, "releases": {"ok": true}}, "storage_backend": "s3",
      "latest_release": "2026.11.26.2",
      "jobs": {"portal": {"last_ok": "…", "last_run": "…", "last_status": "ok", "consecutive_failures": 0}, …},
      "queue": {"queued": {"write_event": 12, …}, "claimed": 3, "expired_leases": 0}}
@@ -10,6 +10,7 @@ body says why). Job and queue figures are informational: a failing job alerts by
 Nothing secret is in it: names of jobs, counts and timestamps.
 """
 
+from django.conf import settings
 from django.db import connection
 from django.db.models import Count, Max, Q
 from django.http import JsonResponse
@@ -35,6 +36,7 @@ def status() -> dict:
         out["ok"] = False
         return out  # nothing below can be read without the database
     out["storage"] = {}
+    out["storage_backend"] = settings.STORAGE_BACKEND  # "local" when hosted means a disk thrown away on restart
     for alias in (storage.RAW, storage.RELEASES):
         ok, err = storage.reachable(alias)
         out["storage"][alias] = {"ok": ok} | ({"error": err} if err else {})

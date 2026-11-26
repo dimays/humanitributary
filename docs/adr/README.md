@@ -40,6 +40,7 @@ things work now; an ADR says why, and what was given up.
 | [0017](0017-agent-api.md) | Agents work through an authenticated API, never the database | proposed |
 | [0018](0018-single-source-marker.md) | A "single source" marker, and additive snapshot keys | proposed |
 | [0019](0019-processes-and-release-gates.md) | Production's processes locally, health and alerts, and release gates | proposed |
+| [0020](0020-heroku-hosting.md) | Heroku hosts the platform: a pipeline, staging first | proposed |
 <!-- index:end -->
 
 ## Template

@@ -1,11 +1,11 @@
 {
-  "architecture": {"reviewed": "2026-11-26", "hash": "ed6325da47cb"},
+  "architecture": {"reviewed": "2026-11-26", "hash": "bdbb4fd2253f"},
   "branch-governance": {"reviewed": "2026-11-26", "hash": "bd9bb9bd78cc"},
   "content-model": {"reviewed": "2026-11-26", "hash": "9a22a5d66252"},
   "evidence-and-fact-checking": {"reviewed": "2026-11-26", "hash": "85c976d79eff"},
   "glossary": {"reviewed": "2026-11-26", "hash": "9edcfcc71eae"},
   "ingestion": {"reviewed": "2026-11-26", "hash": "3930688cc299"},
-  "operations": {"reviewed": "2026-11-26", "hash": "487c10c3f283"},
+  "operations": {"reviewed": "2026-11-26", "hash": "24e3f31f4baa"},
   "publishing": {"reviewed": "2026-11-26", "hash": "7ce4c094b085"},
   "revisions": {"reviewed": "2026-11-26", "hash": "9a093264afb7"},
   "sources-and-terms": {"reviewed": "2026-11-26", "hash": "f12966e1f425"},
