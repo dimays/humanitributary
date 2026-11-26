@@ -1,3 +1,5 @@
+The app was renamed Humanitributary on 2026-11-26.
+
 # Overnight report — November 26, 2026
 
 ## What changed

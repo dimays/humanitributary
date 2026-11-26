@@ -127,7 +127,7 @@ and governance's sections, recent runs) is the first thing a session reads. Two 
 - **Local.** A launchd agent (`make schedule-install`; `ops/launchd/run-jobs.plist`, `ops/run-jobs.sh`) runs every
   15 minutes. It starts Docker Desktop and the compose Postgres if needed, or logs a skip, and logs to `var/logs/`.
 - **Hosted.** Heroku Scheduler runs `python manage.py run_jobs` every 10 minutes, unchanged. `var/raw/` is
-  ephemeral on a dyno, so move raw storage to object storage before relying on it there. Set `INGEST_CONTACT`.
+  ephemeral on a dyno, so move raw storage to object storage before relying on it there. `INGEST_CONTACT` defaults to the project's repository.
 
 ## Consequences
 

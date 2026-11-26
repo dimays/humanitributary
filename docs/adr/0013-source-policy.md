@@ -30,8 +30,8 @@ as link metadata (the URL and Wikipedia's anchor text) and is never fetched. Loo
 (`SuggestedSource`) and never Evidence: an agent reads the page and records evidence with `facts record`.
 
 **User-Agent.** `<SITE_NAME>Bot/0.1 (history timeline research; +<INGEST_CONTACT>) python-httpx`. `INGEST_CONTACT`
-must be a generic project address or URL, never a person's details. Wikimedia requires contact information, so set
-it before running hosted.
+must be a generic project address or URL, never a person's details; it defaults to the project's repository,
+https://github.com/dimays/humanitributary (Wikimedia requires contact information).
 
 **Keys** come only from `.env` (`SMITHSONIAN_API_KEY`, `EUROPEANA_API_KEY`). An adapter without its key is disabled
 cleanly. Keys are masked in errors, logs and test cassettes. Europeana's key goes in the `X-Api-Key` header: the

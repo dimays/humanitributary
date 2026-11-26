@@ -19,7 +19,7 @@ db-stop: ## Stop the local Postgres (the data stays in the volume)
 	docker compose stop db
 
 psql: ## A psql shell on the local database
-	docker compose exec db psql -U tributaries tributaries
+	docker compose exec db psql -U humanitributary humanitributary
 
 migrate: ## Apply migrations
 	$(M) migrate

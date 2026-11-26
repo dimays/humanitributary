@@ -1,6 +1,6 @@
-# Tributaries
+# Humanitributary
 
-<!-- The product's name lives here and in config/settings.py SITE_NAME, nowhere else: a rename is coming. -->
+<!-- The product's name lives here, in config/settings.py SITE_NAME and in site/template.html, nowhere else. -->
 
 An interactive, cited timeline of all history, from the Big Bang to today: about 380 branches (peoples, states, faiths, ideas, cultures) and 5,400 events, every one cited. This repository is its data platform: Postgres holds the content and the evidence behind every fact, scheduled deterministic jobs will feed a review queue that Claude agents drain, and each release is a static snapshot the single-file site is built from.
 

@@ -1,7 +1,7 @@
 [project]
-name = "tributaries"
+name = "humanitributary"
 version = "0.1.0"
-description = "Tributaries: an interactive, cited timeline of all history, with Postgres as its source of truth"
+description = "Humanitributary: an interactive, cited timeline of all history, with Postgres as its source of truth"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [

@@ -215,6 +215,45 @@ wheels = [
 ]
 
 [[package]]
+name = "humanitributary"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "dateparser" },
+    { name = "dj-database-url" },
+    { name = "django" },
+    { name = "feedparser" },
+    { name = "gunicorn" },
+    { name = "httpx" },
+    { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "python-dotenv" },
+    { name = "trafilatura" },
+    { name = "whitenoise" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "tblib" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dateparser", specifier = ">=1.2,<2.0" },
+    { name = "dj-database-url", specifier = ">=2.2,<3.0" },
+    { name = "django", specifier = ">=6.0,<7.0" },
+    { name = "feedparser", specifier = ">=6.0,<7.0" },
+    { name = "gunicorn", specifier = ">=23.0,<24.0" },
+    { name = "httpx", specifier = ">=0.28,<1.0" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3,<4.0" },
+    { name = "python-dotenv", specifier = ">=1.2,<2.0" },
+    { name = "trafilatura", specifier = ">=2.0,<3.0" },
+    { name = "whitenoise", specifier = ">=6.9,<7.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "tblib", specifier = ">=3.2.2" }]
+
+[[package]]
 name = "idna"
 version = "3.20"
 source = { registry = "https://pypi.org/simple" }
@@ -397,45 +436,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/a0/64/882e8fc266228bd22
 wheels = [
     { url = "https://files.pythonhosted.org/packages/42/16/7e6a86c1c05481006591e85248c94285fa0c7665340d824cf503b774cc17/trafilatura-2.4.0-py3-none-any.whl", hash = "sha256:49dec72fb60d8bc0bb393a8b447706b511593fe88cfb1fd10d47e35ea2e2bf77", size = 183984, upload-time = "2026-11-23T17:52:00.82Z" },
 ]
-
-[[package]]
-name = "tributaries"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "dateparser" },
-    { name = "dj-database-url" },
-    { name = "django" },
-    { name = "feedparser" },
-    { name = "gunicorn" },
-    { name = "httpx" },
-    { name = "psycopg", extra = ["binary", "pool"] },
-    { name = "python-dotenv" },
-    { name = "trafilatura" },
-    { name = "whitenoise" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "tblib" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "dateparser", specifier = ">=1.2,<2.0" },
-    { name = "dj-database-url", specifier = ">=2.2,<3.0" },
-    { name = "django", specifier = ">=6.0,<7.0" },
-    { name = "feedparser", specifier = ">=6.0,<7.0" },
-    { name = "gunicorn", specifier = ">=23.0,<24.0" },
-    { name = "httpx", specifier = ">=0.28,<1.0" },
-    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3,<4.0" },
-    { name = "python-dotenv", specifier = ">=1.2,<2.0" },
-    { name = "trafilatura", specifier = ">=2.0,<3.0" },
-    { name = "whitenoise", specifier = ">=6.9,<7.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "tblib", specifier = ">=3.2.2" }]
 
 [[package]]
 name = "typing-extensions"

@@ -13,9 +13,9 @@ cp site/build.mjs site/canonical.mjs site/restructure.mjs site/template.html sit
 ln -s "$PWD/site/images" "$TMP/site/images"
 for f in site/data/*.js; do case "$(basename "$f")" in 90-*|91-*) ;; *) cp "$f" "$TMP/site/data/";; esac; done
 node "$TMP/site/build.mjs" --dump-json "$TMP/presplit.json" | tail -1
-docker exec tributaries-db-1 dropdb -U tributaries --if-exists "$SCRATCH"
-docker exec tributaries-db-1 createdb -U tributaries "$SCRATCH"
-trap 'docker exec tributaries-db-1 dropdb -U tributaries --if-exists "$SCRATCH"' EXIT
+docker compose exec -T db dropdb -U humanitributary --if-exists "$SCRATCH"
+docker compose exec -T db createdb -U humanitributary "$SCRATCH"
+trap 'docker compose exec -T db dropdb -U humanitributary --if-exists "$SCRATCH"' EXIT
 DATABASE_URL="$URL" uv run python manage.py migrate -v0
 DATABASE_URL="$URL" uv run python manage.py import_legacy "$TMP/presplit.json" | tail -1
 DATABASE_URL="$URL" uv run python manage.py branches review | grep -v "THIN-v1"

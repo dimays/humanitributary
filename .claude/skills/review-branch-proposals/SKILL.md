@@ -1,6 +1,6 @@
 ---
 name: review-branch-proposals
-description: Drain the review_branch_proposal queue in the Tributaries repo — read what a branch rule proposed (split, merge, end date, new branch), decide, and either apply it mechanically (writing the names, texts and cites it leaves to you) or reject it with a reason. Use when asked to review branch proposals or to work review_branch_proposal tasks.
+description: Drain the review_branch_proposal queue in the Humanitributary repo — read what a branch rule proposed (split, merge, end date, new branch), decide, and either apply it mechanically (writing the names, texts and cites it leaves to you) or reject it with a reason. Use when asked to review branch proposals or to work review_branch_proposal tasks.
 ---
 
 # Review branch proposals

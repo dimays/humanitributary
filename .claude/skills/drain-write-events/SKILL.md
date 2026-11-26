@@ -1,6 +1,6 @@
 ---
 name: drain-write-events
-description: Work the write_event queue in the Tributaries repo. Claim a story that ingestion clustered (Wikipedia Current events, "<Year> in X", official feeds), read its sources, draft one event in the SCHEMA style, cite pages actually read, write it, and complete the task. Use when asked to drain or work write_event tasks, add current events, or turn queued candidates into timeline events.
+description: Work the write_event queue in the Humanitributary repo. Claim a story that ingestion clustered (Wikipedia Current events, "<Year> in X", official feeds), read its sources, draft one event in the SCHEMA style, cite pages actually read, write it, and complete the task. Use when asked to drain or work write_event tasks, add current events, or turn queued candidates into timeline events.
 ---
 
 # Drain the write_event queue

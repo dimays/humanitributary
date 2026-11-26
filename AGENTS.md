@@ -1,11 +1,12 @@
-# AGENTS.md — working on Tributaries
+# AGENTS.md — working on Humanitributary
 
 Read this before changing anything. It's the short version of how the data
 platform is put together and the rules that keep it that way. The why behind
 each rule is in `docs/adr/`; every table, and how they connect, is in
 `docs/data-model.md`. The product's name lives in one place,
-`config/settings.py` `SITE_NAME` (plus this repo's README title): a rename is
-coming, so never write the name anywhere else in code.
+`config/settings.py` `SITE_NAME` (plus this repo's README title, the page's
+`<title>` and header in `site/template.html`): never write the name anywhere
+else in code.
 
 ## What this is
 
@@ -189,7 +190,7 @@ migrations; web is gunicorn), whitenoise for the admin's static files,
 (allowed on Heroku Postgres). Scheduled jobs run there from Heroku Scheduler
 as `python manage.py run_jobs` every 10 minutes (the same command as local
 launchd; the advisory lock keeps runs from overlapping); move `var/raw/` to
-object storage first (dynos are ephemeral) and set `INGEST_CONTACT`. The public site is a separate static deploy of a
+object storage first (dynos are ephemeral); `INGEST_CONTACT` defaults to the GitHub repository. The public site is a separate static deploy of a
 release's `timeline.html`, `images/` and `outlines.js` to a CDN (ADR 0001).
 
 ## Style

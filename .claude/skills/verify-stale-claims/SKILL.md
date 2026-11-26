@@ -1,6 +1,6 @@
 ---
 name: verify-stale-claims
-description: Work verify_claim tasks that ingestion caused in the Tributaries repo. A citation's link died, moved or its page changed (link health → facts sweep), or a Wikipedia-only claim has suggested second sources from open APIs (second_source job). Re-read, record evidence, accept or reject suggestions. Use when asked to fix dead or changed citations, verify stale claims, or check suggested second sources.
+description: Work verify_claim tasks that ingestion caused in the Humanitributary repo. A citation's link died, moved or its page changed (link health → facts sweep), or a Wikipedia-only claim has suggested second sources from open APIs (second_source job). Re-read, record evidence, accept or reject suggestions. Use when asked to fix dead or changed citations, verify stale claims, or check suggested second sources.
 ---
 
 # Verify stale claims and suggested second sources

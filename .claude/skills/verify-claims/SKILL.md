@@ -1,6 +1,6 @@
 ---
 name: verify-claims
-description: Work verify_claim tasks in the Tributaries repo — re-read a claim's cited pages (stale, dead link, changed page, conflicting source, or a Wikipedia-only event that needs a second source) and record what each page says as evidence. Use when asked to verify claims, adjudicate conflicts, or work the verify_claim queue.
+description: Work verify_claim tasks in the Humanitributary repo — re-read a claim's cited pages (stale, dead link, changed page, conflicting source, or a Wikipedia-only event that needs a second source) and record what each page says as evidence. Use when asked to verify claims, adjudicate conflicts, or work the verify_claim queue.
 ---
 
 # Verify claims

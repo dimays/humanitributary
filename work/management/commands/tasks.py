@@ -23,9 +23,9 @@ from work.models import AgentTask
 
 
 def _agent(value: str) -> str:
-    agent = value or os.getenv("TRIBUTARIES_AGENT", "")
+    agent = value or os.getenv("HUMANITRIBUTARY_AGENT", "")
     if not ACTOR_RE.match(agent):
-        raise CommandError('name yourself with --agent "agent:<name>" (or TRIBUTARIES_AGENT)')
+        raise CommandError('name yourself with --agent "agent:<name>" (or HUMANITRIBUTARY_AGENT)')
     return agent
 
 

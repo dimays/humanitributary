@@ -1,4 +1,4 @@
-"""Settings for the Tributaries data platform.
+"""Settings for the Humanitributary data platform.
 
 Everything secret or environment-specific comes from the environment (`.env` locally, config vars on Heroku).
 Postgres only: the data model leans on JSONB, GIN and trigram indexes, check constraints and the revision triggers
@@ -14,8 +14,8 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-# The product's name, in one place (with the README's title). A rename is coming: change it here.
-SITE_NAME = "Tributaries"
+# The product's name, in one place (with the README's title and the page template).
+SITE_NAME = "Humanitributary"
 
 # "dev" locally, "prod" on Heroku. Anything but "dev" gets production safety.
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
@@ -115,8 +115,8 @@ RELEASES_DIR = VAR_DIR / "releases"
 TASK_LEASE_MINUTES = int(os.getenv("TASK_LEASE_MINUTES", "30"))
 
 # Ingestion (ingest/, docs/adr/0012-ingestion.md). The User-Agent names the bot and a generic contact, never a
-# person: set INGEST_CONTACT to a project address or URL before running hosted (Wikimedia asks for one).
-INGEST_CONTACT = os.getenv("INGEST_CONTACT", "operator contact via the project repository")
+# person: the project's repository by default (Wikimedia asks for a contact).
+INGEST_CONTACT = os.getenv("INGEST_CONTACT", "https://github.com/dimays/humanitributary")
 INGEST_USER_AGENT = os.getenv("INGEST_USER_AGENT", f"{SITE_NAME}Bot/0.1 (history timeline research; +{INGEST_CONTACT}) python-httpx")
 # Free keys for two lookup adapters (ingest/lookup.py); without them those adapters stay disabled.
 SMITHSONIAN_API_KEY = os.getenv("SMITHSONIAN_API_KEY", "")  # api.data.gov

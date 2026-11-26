@@ -8,5 +8,5 @@ if env.exists():
     print(".env exists; leaving it")
 else:
     pw = secrets.token_urlsafe(24)
-    env.write_text(f"ENVIRONMENT=dev\nPOSTGRES_PASSWORD={pw}\nDATABASE_URL=postgres://tributaries:{pw}@localhost:5433/tributaries\n")
+    env.write_text(f"ENVIRONMENT=dev\nPOSTGRES_PASSWORD={pw}\nDATABASE_URL=postgres://humanitributary:{pw}@localhost:5433/humanitributary\n")
     print("wrote .env")

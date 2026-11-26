@@ -32,7 +32,7 @@ const CACHE = path.join(here, ".outline-cache");
 const CLIO_VER = "v0.2.2";
 const CLIO_ZIP = path.join(CACHE, `cliopatria-${CLIO_VER}.geojson.zip`), CLIO = path.join(CACHE, "cliopatria.geojson");
 const NE = path.join(CACHE, "ne_50m_admin_0_countries.geojson");
-const UA = "tributaries-timeline-build/1.0 (static history timeline; one-off dataset download)";
+const UA = "humanitributary-timeline-build/1.0 (static history timeline; one-off dataset download)";
 const TOL = 0.14;              // Douglas–Peucker tolerance, degrees (the globe is 130–260 px across: 1 px ≈ 0.7–1.4°)
 const Q = 10;                  // coordinates stored in tenths of a degree
 const MIN_POLY_KM2 = 2500;     // drop islands/exclaves smaller than this (unless they are the shape's largest piece)
