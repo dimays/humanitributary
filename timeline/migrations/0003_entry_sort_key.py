@@ -1,4 +1,4 @@
-"""Entry order becomes a fractional sort key assigned once (docs/adr/0008-govern-entry-order.md), replacing the
+"""Entry order becomes a fractional sort key assigned once (docs/adr/0008-entry-order.md), replacing the
 legacy file position that renumbered every later entry when one was removed. Existing rows get evenly spaced keys in
 their current (position, slug) order, so the snapshot's order is unchanged; each update leaves a Revision."""
 

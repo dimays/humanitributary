@@ -1,4 +1,4 @@
-"""The fact base's thresholds, in one place (docs/fact-checking.md explains each; docs/adr/0009-govern-fact-base.md says
+"""The fact base's thresholds, in one place (docs/fact-checking.md explains each; docs/adr/0009-fact-base.md says
 why). Override any of them with `settings.FACTS` (a dict merged over this one) rather than editing the code that reads
 them, so a change is one line and shows up in review.
 
@@ -70,7 +70,7 @@ DEFAULTS = {
     "max_open_tasks": 500,  # … and at most this many of its verify_claim tasks open at once
     "task_priority": {"conflict": 60, "dead_link": 50, "content_changed": 45, "no_second_source": 20, "scheduled": 10},
 
-    # ── Publishing (docs/adr/0010-govern-publishing-rule.md) ──
+    # ── Publishing (docs/adr/0010-publishing-rule.md) ──
     # A newly published event needs a non-Wikipedia supporting source once it is this many days old (current
     # events may go out on Wikipedia and wire reports first).
     "grace_days": 14,

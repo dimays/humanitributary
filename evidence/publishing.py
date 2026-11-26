@@ -1,4 +1,4 @@
-"""What may be published (docs/adr/0010-govern-publishing-rule.md).
+"""What may be published (docs/adr/0010-publishing-rule.md).
 
 An entry may become `published` only if
 

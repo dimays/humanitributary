@@ -1,4 +1,4 @@
-"""A claim's status and confidence, computed from its evidence (docs/adr/0009-govern-fact-base.md; the formula is in
+"""A claim's status and confidence, computed from its evidence (docs/adr/0009-fact-base.md; the formula is in
 docs/fact-checking.md). Deterministic, so a job can recompute every claim at any time; never edited by hand.
 
 Witnesses. Evidence is grouped by independent publisher (evidence/independence.py: one organization, one witness;

@@ -1,4 +1,4 @@
-"""Entry order: a sort key assigned once, stable under insertion and deletion (docs/adr/0008-govern-entry-order.md).
+"""Entry order: a sort key assigned once, stable under insertion and deletion (docs/adr/0008-entry-order.md).
 
 The page breaks ties in its sorts by array order, so the snapshot lists entries in a fixed order (ADR 0007). That
 order is `Entry.sort_key`: a fractional index, a string of base-62 digits read as a fraction (0.k₁k₂k₃…) and compared
