@@ -11,8 +11,11 @@ LOG="var/logs/run-jobs-$(date +%F).log"
 log() { echo "$(date '+%F %T') $*" >>"$LOG"; }
 export PATH="/opt/homebrew/bin:/usr/local/bin:/Applications/Docker.app/Contents/Resources/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-# The database: Docker's Postgres on 5433 (never 5432). Start Docker Desktop if it isn't running (wait up to 2 min).
-if ! docker info >/dev/null 2>&1; then
+# The database: Docker's Postgres on 5433 (never 5432). Already answering (from any checkout or worktree)? Go.
+# Otherwise start Docker Desktop if it isn't running (wait up to 2 min) and the compose service.
+if nc -z localhost 5433 >/dev/null 2>&1; then
+  :
+elif ! docker info >/dev/null 2>&1; then
   if [ "${INGEST_START_DOCKER:-1}" = "1" ] && [ -d /Applications/Docker.app ]; then
     log "Docker is not running: starting Docker Desktop"
     open -g -a Docker
@@ -23,7 +26,7 @@ if ! docker info >/dev/null 2>&1; then
     exit 0
   fi
 fi
-if ! docker compose up -d --wait db >>"$LOG" 2>&1; then
+if ! nc -z localhost 5433 >/dev/null 2>&1 && ! docker compose up -d --wait db >>"$LOG" 2>&1; then
   log "skipped: the database container did not become healthy"
   exit 0
 fi
