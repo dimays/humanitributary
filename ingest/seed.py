@@ -2,7 +2,7 @@
 access notes. Idempotent: existing Publisher rows keep their rating and policy (review state, AGENTS.md rule 7);
 existing Feeds keep their `enabled` flag and state, and only gain config keys they lack.
 
-The source policy behind each entry: docs/adr/0009-ingest-source-policy.md.
+The source policy behind each entry: docs/adr/0013-source-policy.md.
 """
 
 from django.conf import settings
@@ -40,7 +40,7 @@ PUBLISHERS = {
     "olympedia.org": dict(name="Olympedia", tier=None, license="© OlyMADMen"),
 }
 
-# The terms check (docs/adr/0009-ingest-source-policy.md): domain → (fetch_policy to set or None to leave, access note).
+# The terms check (docs/adr/0013-source-policy.md): domain → (fetch_policy to set or None to leave, access note).
 # Applied once (JobState "terms_verdicts_v1") through revising(); later edits in the admin are the owner's and stay.
 VERDICTS = {
     "theguardian.com": ("browser_only", "Citation only. No automated access of any kind (OP terms 6(g), 5): agents verify manually in a browser."),
@@ -136,7 +136,7 @@ def apply_verdicts(actor="job:seed_sources") -> int:
     if state.state.get("applied"):
         return 0
     n = 0
-    with revising(actor, reason=f"{CHECKED}: source terms verdicts (docs/adr/0009-ingest-source-policy.md)"):
+    with revising(actor, reason=f"{CHECKED}: source terms verdicts (docs/adr/0013-source-policy.md)"):
         for domain, (fetch_policy, note) in VERDICTS.items():
             p = Publisher.objects.filter(domain=domain).first()
             if p is None:

@@ -1,4 +1,4 @@
-"""Run every due ingestion job once (docs/adr/0008-ingest-design.md). The scheduler's one entry point:
+"""Run every due ingestion job once (docs/adr/0012-ingestion.md). The scheduler's one entry point:
 
     manage.py run_jobs                  # what's due, in registry order, under the runner lock
     manage.py run_jobs --only portal,process

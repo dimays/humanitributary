@@ -1,4 +1,4 @@
-"""Routing new material to branches through `BranchEntity` (docs/adr/0008-ingest-design.md), and seeding it.
+"""Routing new material to branches through `BranchEntity` (docs/adr/0012-ingestion.md), and seeding it.
 
 Score of a branch for a candidate (deterministic, documented):
 
@@ -140,11 +140,19 @@ def confident_match(variants: list[str], hits: list[dict], cited_qids: set, kind
     return None
 
 
-def seed_branch_entities(fetcher, ctx, *, branches=None, actor="job:seed_branch_entities", limit=None):
-    """Map branches without BranchEntity rows to Wikidata items (exact matches only); queue the rest for agents.
+DISAMBIGUATION = {"Q4167410", "Q22808320", "Q4167836"}  # disambiguation page, human-name disambiguation, category
 
-    Batched: every search first, then one pass resolving the branches' cited Wikipedia articles and reading the
-    candidate items, then the decisions.
+
+def seed_branch_entities(fetcher, ctx, *, branches=None, actor="job:seed_branch_entities", limit=None, search=False):
+    """Map branches without BranchEntity rows to Wikidata items, exact matches only; queue the rest for agents.
+
+    Exact means: a name variant of the branch ("Iran" for "Iran (Qajar to Islamic Republic)") is itself an English
+    Wikipedia title (redirects followed: Wikipedia's own primary-topic decision) whose item is not a disambiguation
+    page and is of an expected kind; an item the branch also cites wins over the others, and without a citation a
+    shortened name only counts for a polity or organization. Members listed in a name
+    ("Gulf states (Kuwait, …)") map when their title is a polity. All lookups are batched MediaWiki title queries
+    and SPARQL reads (a few dozen requests for every branch). `search=True` also tries Wikidata's entity search
+    (confident_match), which is slower and rate-limited.
     """
     from evidence.models import Evidence
     from work import queue
@@ -159,38 +167,44 @@ def seed_branch_entities(fetcher, ctx, *, branches=None, actor="job:seed_branch_
     for entry_id, url in Evidence.objects.filter(claim__entry__in=todo).values_list("claim__entry_id", "citation__url"):
         if t := wikidata.title_from_url(url):
             cited_by[entry_id].add(t)
-    t2q = wikidata.resolve_titles(fetcher, sorted(set().union(*cited_by.values())) if cited_by else [], counts=counts)
-    plan = []
+    plan = {b.pk: (name_variants(b.name), members(b.name)) for b in todo}
+    titles = set().union(*cited_by.values()) if cited_by else set()
+    for variants, mem in plan.values():
+        titles |= set(variants) | set(mem)
+    t2q = wikidata.resolve_titles(fetcher, sorted(titles), counts=counts)
+    from .wikitext import normalize_title
+
+    q = lambda t: t2q.get(normalize_title(t), "")  # noqa: E731
+    ents = wikidata.fetch_entities(fetcher, sorted({v for v in t2q.values() if v}), counts=counts)
+
+    def usable(qid):
+        e = ents.get(qid)
+        return e is not None and not (set((e.facts or {}).get("P31", [])) & DISAMBIGUATION) and e.kind in EXPECTED_KINDS
+
     for b in todo:
-        variants = name_variants(b.name)
-        hits, seen = [], set()
-        for v in variants[:2]:
-            for h in wikidata.search(fetcher, v):
-                if h["id"] not in seen:
-                    seen.add(h["id"])
-                    hits.append(h)
-        member_hits = {m: wikidata.search(fetcher, m) for m in members(b.name)}
-        plan.append((b, variants, hits, member_hits, {t2q[t] for t in cited_by.get(b.pk, ()) if t2q.get(t)}))
-        counts["searched"] += 1
-    want = set()
-    for b, variants, hits, member_hits, cited_qids in plan:
-        low = {v.lower() for v in variants}
-        want |= {h["id"] for h in hits if (h.get("label") or "").lower() in low or ((h.get("match") or {}).get("text") or "").lower() in low}
-        for m, mh in member_hits.items():
-            want |= {h["id"] for h in mh[:5]}
-    kinds = {q: e.kind for q, e in wikidata.fetch_entities(fetcher, sorted(want), counts=counts).items()}
-    for b, variants, hits, member_hits, cited_qids in plan:
+        variants, mem = plan[b.pk]
+        cited_qids = {q(t) for t in cited_by.get(b.pk, ())} - {""}
+        options = [(v, q(v)) for v in variants if q(v) and usable(q(v))]
+        found = next(((qid, f"title '{v}', cited article") for v, qid in options if qid in cited_qids), None)
+        # Uncited, a shortened name must be a polity or organization ("Iran" for "Iran (Qajar …)"); a concept's
+        # short name is too often another primary topic ("Ubuntu" is the operating system, not the philosophy).
+        options = [(v, qid) for v, qid in options if v == variants[0] or ents[qid].kind in ("polity", "org")]
+        if found is None and options:
+            found = (options[0][1], f"title '{options[0][0]}'")
+        if found is None and search:
+            hits = [h for v in variants[:2] for h in wikidata.search(fetcher, v)]
+            kinds = {k: e.kind for k, e in wikidata.fetch_entities(fetcher, [h["id"] for h in hits][:20], counts=counts).items()}
+            found = confident_match(variants, hits, cited_qids, kinds)
         mapped = []
-        if found := confident_match(variants, hits, cited_qids, kinds):
+        if found:
             e = Entity.objects.get(qid=found[0])
             BranchEntity.objects.get_or_create(branch=b, entity=e, defaults=dict(role=e.kind, weight=1.0, note=found[1], created_by=actor))
             mapped.append(found[0])
-        for m, mh in member_hits.items():
-            mf = confident_match([m], mh, set(), kinds)
-            if mf and kinds.get(mf[0]) == "polity" and mf[0] not in mapped:
-                e = Entity.objects.get(qid=mf[0])
-                BranchEntity.objects.get_or_create(branch=b, entity=e, defaults=dict(role="member", weight=0.8, note=f"member '{m}': {mf[1]}", created_by=actor))
-                mapped.append(mf[0])
+        for m in mem:
+            mq = q(m)
+            if mq and usable(mq) and ents[mq].kind == "polity" and mq not in mapped:
+                BranchEntity.objects.get_or_create(branch=b, entity=ents[mq], defaults=dict(role="member", weight=0.8, note=f"member title '{m}'", created_by=actor))
+                mapped.append(mq)
         if mapped:
             counts["branches_mapped"] += 1
             counts["branch_entities"] += len(mapped)
@@ -199,6 +213,6 @@ def seed_branch_entities(fetcher, ctx, *, branches=None, actor="job:seed_branch_
             queue.enqueue("map_branch_entities", created_by=actor, dedupe_key=f"branch:{b.slug}", priority=1, target_entry=b,
                           payload={"branch": b.slug, "name": b.name, "variants": variants,
                                    "cited_articles": sorted(cited_by.get(b.pk, ()))[:10],
-                                   "search_hits": [{"qid": h["id"], "label": h.get("label", ""), "description": h.get("description", "")} for h in hits[:8]],
+                                   "cited_items": sorted(cited_qids)[:10],
                                    "instructions": "Pick the Wikidata item(s) this branch is about (polity, faith, movement, organization) and add "
                                                    "BranchEntity rows (admin, or ingest.models.BranchEntity) with created_by agent:<name>; none if no item fits."})

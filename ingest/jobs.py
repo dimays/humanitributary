@@ -1,4 +1,4 @@
-"""The job registry and runner behind `manage.py run_jobs` / `run_job` (docs/adr/0008-ingest-design.md).
+"""The job registry and runner behind `manage.py run_jobs` / `run_job` (docs/adr/0012-ingestion.md).
 
 - A job is a function `fn(ctx)` registered with a name, an interval and, for feed jobs, the Feed kind it reads:
   a feed job runs once per enabled Feed whose `config["job"]` names it, when that feed's `next_run_at` has come;

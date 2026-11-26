@@ -1,6 +1,6 @@
 """The `process` job: route, de-duplicate, cluster and prioritize queued candidates, queue `write_event` tasks for
 clusters over the threshold, keep candidates in step with their tasks, and raise new-branch signals.
-Deterministic throughout (docs/adr/0008-ingest-design.md has the formulas).
+Deterministic throughout (docs/adr/0012-ingestion.md has the formulas).
 
 Clusters. A Wikipedia portal item's cluster is its story: the deepest context topic it sits under (an article such as
 "2026 Strait of Hormuz crisis") within a calendar month (`topic:<QID>:<YYYY-MM>`), or the item alone when it has no

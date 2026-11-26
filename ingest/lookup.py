@@ -2,7 +2,7 @@
 support it. Deterministic: fixed queries, a fixed relevance score, fixed thresholds; no LLM (AGENTS.md rule 3).
 
 A hit is only ever a *suggestion* (`SuggestedSource`, and a task payload): an agent must read the page and decide.
-Nothing here writes Evidence or changes a claim's status (docs/adr/0009-ingest-source-policy.md).
+Nothing here writes Evidence or changes a claim's status (docs/adr/0013-source-policy.md).
 
 Relevance = share of the query's keywords found in the hit's title and snippet (keywords: content words of the
 query title, and of the entities' labels), plus 0.15 when the hit's date falls within the query's window; a hit

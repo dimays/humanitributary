@@ -1,4 +1,4 @@
-"""What jobs may fetch automatically (docs/adr/0009-ingest-source-policy.md).
+"""What jobs may fetch automatically (docs/adr/0013-source-policy.md).
 
 Three layers, all checked by `ingest.http.Fetcher` before any request leaves the machine:
 
@@ -16,7 +16,7 @@ from evidence.publishers import domain_of
 NEVER_FETCH = {
     "britannica.com": "Terms forbid automated access; agents read it in a browser.",
     "openstax.org": "Terms forbid use of its textbooks by AI systems: never read or cite.",
-    # News publishers whose terms forbid automated use (terms check 2026-11-26, docs/adr/0009-ingest-source-policy.md).
+    # News publishers whose terms forbid automated use (terms check 2026-11-26, docs/adr/0013-source-policy.md).
     # Their URLs may still be stored as link metadata (from Wikipedia's portal), never fetched; agents read them in a browser.
     "theguardian.com": "Open Platform terms 6(g) ban TDM, aggregation, AI/ML synthesis and any bot or automated program; 5: delete within 24h.",
     "guardianapis.com": "The Guardian's API host: same terms as theguardian.com.",

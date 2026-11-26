@@ -1,4 +1,4 @@
-"""Link health: re-check the URLs we cite, on a schedule (docs/adr/0008-ingest-design.md).
+"""Link health: re-check the URLs we cite, on a schedule (docs/adr/0012-ingestion.md).
 
 Per round, up to `limit` citations, least recently checked first, interleaved across publishers so no host gets a
 burst. Never checked: NEVER_FETCH hosts and `browser_only` / `forbidden` publishers (agents re-read those in a

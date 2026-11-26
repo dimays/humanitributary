@@ -1,4 +1,4 @@
-"""Feeds that publish new items (only those whose terms allow automated reading: docs/adr/0009-ingest-source-policy.md):
+"""Feeds that publish new items (only those whose terms allow automated reading: docs/adr/0013-source-policy.md):
 RSS/Atom where permitted, WHO Disease
 Outbreak News, Federal Register presidential documents, The Gazette's state notices, Nobel Prize announcements, and
 the Office of the Historian's Milestones (TEI on GitHub, synced weekly for the lookup adapter).

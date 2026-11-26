@@ -265,7 +265,7 @@ class Candidate(models.Model):
 
 
 class LinkCheck(models.Model):
-    """One re-check of a cited URL by the link-health job (docs/adr/0008-ingest-design.md). The Citation row keeps the
+    """One re-check of a cited URL by the link-health job (docs/adr/0012-ingestion.md). The Citation row keeps the
     latest result (through the revisions service layer); this table keeps the history, so "dead twice in a row" and
     "blocked by this host lately" are queries."""
 
