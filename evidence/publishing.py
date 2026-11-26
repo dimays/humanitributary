@@ -35,14 +35,21 @@ def says_sources_differ(text: str) -> bool:
     return len(re.findall(policy.get("attribution"), text or "", re.I)) >= 2
 
 
-def problems(entry: Entry, today: date | None = None) -> list[str]:
-    today = today or date.today()
+def unflagged_contested(entry: Entry) -> list[str]:
+    """Contested record claims whose entry doesn't say the sources differ (rule 1; also a release gate)."""
     x = entry.concrete
     out = []
     words = " ".join(filter(None, [x.text, getattr(x, "when", ""), getattr(x, "start_when", ""), getattr(x, "end_when", "") or ""]))
     for claim in entry.claims.filter(parent__isnull=True, status="contested"):
         if not says_sources_differ(words if claim.field != "why" else x.why):
             out.append(f"{claim.field} claim is contested and the entry does not say the sources differ")
+    return out
+
+
+def problems(entry: Entry, today: date | None = None) -> list[str]:
+    today = today or date.today()
+    x = entry.concrete
+    out = unflagged_contested(entry)
     if x.kind == "event":
         claim = entry.claims.filter(field="as_written", key="").first()
         rows = list(claim.evidence.values_list(*EVIDENCE_FIELDS)) if claim else []
