@@ -93,9 +93,13 @@ def overlaps(spans, ws: float, we: float) -> list[tuple[float, float]]:
     return [(a, b) for a, b in spans if a < we and b > ws]
 
 
-def candidate_pages(article: str) -> list[str]:
-    a = article.strip()
-    return [f"History of {a}", f"Timeline of {a} history", f"Timeline of {a}", a]
+def candidate_pages(article: str, name: str = "") -> list[str]:
+    """The pages to look in: "History of X", "Timeline of X history", "Timeline of X" for the branch's article and
+    its name (they differ: "Kingdom of Portugal" vs "Portugal"), then the article itself."""
+    out = []
+    for a in dict.fromkeys(x.strip() for x in (article, name) if x and x.strip()):
+        out += [f"History of {a}", f"Timeline of {a} history", f"Timeline of {a}"]
+    return list(dict.fromkeys(out + [article.strip()] if article.strip() else out))
 
 
 def existing(fetcher, titles: list[str]) -> dict[str, str]:
@@ -147,7 +151,10 @@ def run(ctx) -> None:
     if not tasks:
         return
     present = timezone.now().year + 1
-    wanted = {t.pk: candidate_pages((t.payload.get("branch") or {}).get("article") or (t.payload.get("branch") or {}).get("name", "")) for t in tasks}
+    wanted = {}
+    for t in tasks:
+        b = t.payload.get("branch") or {}
+        wanted[t.pk] = candidate_pages(b.get("article") or b.get("name", ""), b.get("name", ""))
     try:
         found = existing(ctx.fetcher, [p for ps in wanted.values() for p in ps])
     except Exception as e:  # Wikipedia down: lookups still run

@@ -155,9 +155,10 @@ queued `fill_gap` tasks that have none, best first, `limit` (20) a run. They
 are suggestions for where to start reading, marked as unread, never
 evidence:
 
-- **`wikipedia_sections`**: for the branch's article X, the pages "History
-  of X", "Timeline of X history", "Timeline of X" and X itself, where they
-  exist (one MediaWiki query for 50 titles), and each page's section list
+- **`wikipedia_sections`**: for the branch's article and for its name
+  (they can differ: "Kingdom of Portugal" and "Portugal"), the pages "History
+  of X", "Timeline of X history" and "Timeline of X", and the article itself,
+  where they exist (one MediaWiki query for 50 titles), and each page's section list
   (`action=parse&prop=sections`). A heading is kept when the years it names
   overlap the window (`heading_spans()`: ranges such as "1966–1979" or
   "1914–18", "c. 3000 BC – 500 AD" and "1999–present", centuries such as
