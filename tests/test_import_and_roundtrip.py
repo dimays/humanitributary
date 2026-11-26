@@ -82,11 +82,12 @@ class ImportTests(TestCase):
         self.assertEqual(Evidence.objects.get(claim__entry__slug="an-punic-wars", position=0).stance, "partial")
         self.assertEqual(Event.objects.get(slug="an-punic-wars").status, Status.REVIEW)
 
-    def test_claim_status_follows_the_non_wikipedia_rule(self):
+    def test_claim_status_counts_independent_publishers(self):
         import_content(small())
         status = lambda slug: Claim.objects.get(entry__slug=slug, field="as_written").status  # noqa: E731
         self.assertEqual(status("an-punic-wars"), "single_source")  # Wikipedia only
-        self.assertEqual(status("an-caesar-assassinated"), "corroborated")  # + Britannica
+        self.assertEqual(status("un-charter"), "single_source")  # one non-Wikipedia publisher is still one witness
+        self.assertEqual(status("an-caesar-assassinated"), "corroborated")  # Wikipedia + Britannica
         self.assertEqual(Publisher.objects.get(domain="wikipedia.org").tier, 3)
 
     def test_openstax_can_never_be_cited(self):

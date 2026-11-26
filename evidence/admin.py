@@ -39,10 +39,10 @@ class CitationAdmin(RevisedAdmin, admin.ModelAdmin):
 
 @admin.register(Claim)
 class ClaimAdmin(RevisedAdmin, admin.ModelAdmin):
-    list_display = ["entry", "field", "key", "status", "confidence", "recheck_after", "updated_at"]
-    list_filter = ["status", "field", "entry__kind", ("recheck_after", admin.EmptyFieldListFilter)]
+    list_display = ["entry", "field", "key", "status", "confidence", "recheck_after", "recheck_reason", "updated_at"]
+    list_filter = ["status", "field", "recheck_reason", "entry__kind", ("parent", admin.EmptyFieldListFilter), ("recheck_after", admin.EmptyFieldListFilter)]
     search_fields = ["entry__slug"]
-    raw_id_fields = ["entry"]
+    raw_id_fields = ["entry", "parent"]
     readonly_fields = ["status", "confidence"]
     inlines = [EvidenceInline]
 

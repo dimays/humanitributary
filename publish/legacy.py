@@ -10,9 +10,9 @@ an entry's status, a publisher's rating and notes, a citation's check results, a
 check fields. Claim status and confidence are recomputed from the evidence (evidence/confidence.py).
 """
 
-from collections import Counter, defaultdict
+from collections import Counter
 
-from evidence.confidence import assess
+from evidence.sweep import reassess
 from evidence.models import Citation, Claim, Evidence, Publisher
 from evidence.publishers import defaults_for, domain_of
 from revisions import revising
@@ -214,15 +214,8 @@ def import_content(data: dict, *, actor: str = ACTOR, reason: str = "", globe: d
         existing = {(r.claim_id, r.position): r for r in Evidence.objects.filter(claim_id__in=claim_id.values())}
         _sync(Evidence, existing, desired, lambda k, v: Evidence(claim_id=k[0], position=k[1], stance="supports", method="legacy", checked_by=ACTOR, **v), stats, "evidence")
 
-        # Status and confidence, from the evidence as it now stands.
-        rows = defaultdict(list)
-        for cid, stance, dom, tier in Evidence.objects.filter(claim_id__in=claim_id.values()).values_list("claim_id", "stance", "citation__publisher__domain", "citation__publisher__tier"):
-            rows[cid].append((stance, dom, tier))
-        for claim in Claim.objects.filter(pk__in=claim_id.values()):
-            status, confidence = assess(rows[claim.pk], claim.recheck_after)
-            r = apply_changes(claim, {"status": status, "confidence": confidence})
-            if r != "unchanged":
-                stats["claim.assessed"] += 1
+        # Status and confidence, from the evidence as it now stands (the same computation as `facts sweep`).
+        stats["claim.assessed"] += reassess(claim_id.values()).get("updated", 0)
 
         # Paleo pins (globe-assets.json `pts`: slice → "lat,lon" → [lat, lon]).
         if globe and globe.get("pts"):

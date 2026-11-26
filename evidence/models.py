@@ -94,8 +94,9 @@ class Claim(models.Model):
 
     `field` says which part of the entry it covers. Legacy content arrives as one "as written" claim per entry (its
     date, title and text together, cited by the entry's `cites`), plus a "why" claim (TL.enrich) and an "origin"
-    claim (TL.origin) where those exist; verification agents split them into finer claims (date, title, location …)
-    over time, each with its own key.
+    claim (TL.origin) where those exist. A deterministic splitter (evidence/claims.py) derives atomic claims from
+    each entry (its dates, place, numbers and named actors) as children of the "as written" claim (`parent`), so
+    evidence can attach to the part it supports.
     """
 
     class Field(models.TextChoices):
@@ -108,6 +109,8 @@ class Claim(models.Model):
         WHY = "why", "why it matters (and its connections)"
         CONNECTION = "connection"
         LINK = "link"
+        NUMBER = "number", "a number in the text (count, magnitude, percentage)"
+        ACTOR = "actor", "a named actor (person, state, group) in the text"
 
     class Status(models.TextChoices):
         UNVERIFIED = "unverified"
@@ -117,12 +120,18 @@ class Claim(models.Model):
         STALE = "stale"
 
     entry = models.ForeignKey("timeline.Entry", on_delete=models.CASCADE, related_name="claims")
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.CASCADE, related_name="children",
+        help_text="For an atomic claim (evidence/claims.py): the \"as written\" claim it was split from.",
+    )
     field = models.CharField(max_length=16, choices=Field.choices)
     key = models.CharField(max_length=100, blank=True, default="", help_text="Tells apart several claims on one field (e.g. a sentence number).")
     value = models.JSONField(default=dict, help_text="What is claimed, e.g. {\"when\": …, \"title\": …, \"text\": …}.")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.UNVERIFIED, db_index=True)
     confidence = models.FloatField(default=0.0, help_text="0–1, computed from the evidence (evidence/confidence.py).")
-    recheck_after = models.DateField(null=True, blank=True, db_index=True, help_text="After this date the claim is stale until re-checked.")
+    recheck_after = models.DateField(null=True, blank=True, db_index=True, help_text="From this date the claim is stale until re-checked (set by `facts sweep`; a job may pull it earlier).")
+    recheck_requested_at = models.DateTimeField(null=True, blank=True, help_text="When an earlier recheck was asked for (value changed, conflict …): a check after this time answers it.")
+    recheck_reason = models.CharField(max_length=40, blank=True, help_text='Why recheck_after is what it is: "scheduled", "dead_link", "content_changed", "value_changed", "conflict", or a job\'s own reason.')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -130,7 +139,7 @@ class Claim(models.Model):
         ordering = ["entry", "field", "key"]
         constraints = [
             models.UniqueConstraint(fields=["entry", "field", "key"], name="claim_unique_per_entry_field_key"),
-            models.CheckConstraint(condition=Q(field__in=["as_written", "date", "title", "text", "location", "origin", "why", "connection", "link"]), name="claim_field_valid"),
+            models.CheckConstraint(condition=Q(field__in=["as_written", "date", "title", "text", "location", "origin", "why", "connection", "link", "number", "actor"]), name="claim_field_valid"),
             models.CheckConstraint(condition=Q(status__in=["unverified", "single_source", "corroborated", "contested", "stale"]), name="claim_status_valid"),
             models.CheckConstraint(condition=Q(confidence__gte=0, confidence__lte=1), name="claim_confidence_0_to_1"),
         ]
@@ -165,6 +174,8 @@ class Evidence(models.Model):
     method = models.CharField(max_length=16, choices=Method.choices, default=Method.LEGACY)
     cited_title = models.CharField(max_length=500, help_text="The citation's title as this entry writes it (`t`).")
     cited_kind = models.CharField(max_length=16, blank=True, help_text="The citation kind as this entry writes it (`k`).")
+    found_value = models.JSONField(null=True, blank=True, help_text='What the source itself says, when it differs or is worth keeping: e.g. {"y": 1951.3, "when": "April 1951"} or {"value": 5000}.')
+    content_hash = models.CharField(max_length=64, blank=True, help_text="The citation's content hash when this evidence was checked (or first seen by the sweep): a later change means re-read.")
 
     class Meta:
         verbose_name_plural = "evidence"
