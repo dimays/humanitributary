@@ -224,6 +224,35 @@ class RoutingTests(TestCase):
         self.assertEqual(routing.confident_match(["France"], [{"id": "Q142", "label": "France"}, {"id": "Q9", "label": "France"}], set(), {"Q142": "polity", "Q9": "concept"})[0], "Q142")
 
 
+class BranchSeedingTests(TestCase):
+    def test_exact_titles_members_and_tasks(self):
+        branch("iran", "Iran (Qajar to Islamic Republic)", 1789)
+        branch("ubuntu", "Ubuntu (African humanism)", 1850, region_slug="faiths")
+        branch("gulf", "Gulf states (Kuwait, Oman)", 1899, region_slug="mideast")
+        pages = {"Iran": "Q794", "Iran (Qajar to Islamic Republic)": "", "Ubuntu": "Q381", "Ubuntu (African humanism)": "",
+                 "Gulf states": "Q1", "Gulf states (Kuwait, Oman)": "", "Kuwait": "Q817", "Oman": "Q842"}
+        facts = {"Q794": ["Q6256"], "Q381": ["Q131669"], "Q1": ["Q4167410"], "Q817": ["Q6256"], "Q842": ["Q6256"]}
+
+        def handler(request):
+            q = dict(request.url.params)
+            if request.url.host == "en.wikipedia.org":
+                titles = q["titles"].split("|")
+                return httpx.Response(200, json={"query": {"pages": [{"title": t, **({"pageprops": {"wikibase_item": pages[t]}} if pages.get(t) else {"missing": True})} for t in titles]}})
+            rows = []
+            if "?p ?v" in q["query"]:
+                for qid, classes in facts.items():
+                    rows += [{"item": {"value": f"http://www.wikidata.org/entity/{qid}"}, "p": {"value": "http://www.wikidata.org/prop/direct/P31"},
+                              "v": {"type": "uri", "value": f"http://www.wikidata.org/entity/{c}"}} for c in classes]
+            return httpx.Response(200, json={"results": {"bindings": rows}})
+
+        r = run("seed_branch_entities", fetcher=Fetcher(transport=httpx.MockTransport(handler), sleep=lambda s: None))
+        self.assertEqual(r.status, "ok", r.error)
+        got = sorted(BranchEntity.objects.values_list("branch__slug", "entity__qid", "role"))
+        self.assertEqual(got, [("gulf", "Q817", "member"), ("gulf", "Q842", "member"), ("iran", "Q794", "polity")])
+        self.assertTrue(AgentTask.objects.filter(kind="map_branch_entities", dedupe_key="branch:ubuntu").exists(),
+                        "an uncited short name of a concept is not trusted")
+
+
 # Sources ---------------------------------------------------------------------------------------------------------
 class PortalTests(SeededTestCase):
     def test_portal_day_to_document_candidates_and_entities(self):
