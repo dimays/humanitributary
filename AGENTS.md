@@ -267,8 +267,12 @@ Postgres Essential-1 (Postgres 16) is `DATABASE_URL`, over TLS. Config vars:
 `S3_REGION`, `S3_BUCKET_*` (outside dev the settings refuse the local storage
 backend unless `STORAGE_BACKEND=local` is stated); the S3 access key, API keys
 and mail settings are the owner's to set, never copied from a `.env`. Only the `heroku/python`
-buildpack: nothing hosted runs Node yet. Never attach the custom domain to
-staging, and never import data into a hosted database without the owner. The
+buildpack: nothing hosted runs Node yet. Staging holds the platform's data
+since November 26, 2026 (moved from the laptop) and is the only place jobs run
+(the `worker` dyno); agents use `https://data.humanitributary.com/api/agent`.
+DNS is Cloudflare's (the registrar is Namecheap): `data` points at Heroku, the
+bare domain waits for the public page. A key never goes in a URL (logs). Never
+import data into a hosted database without the owner. The
 public site is a separate static deploy of a release's `timeline.html`,
 `images/` and `outlines.js` to a CDN (ADR 0001). Commands and the config vars:
 `docs/guide/operations.md`, "Hosted: Heroku".

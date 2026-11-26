@@ -207,4 +207,7 @@ if not DEV:
         "disable_existing_loggers": False,
         "handlers": {"console": {"class": "logging.StreamHandler"}},
         "root": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")},
+        # httpx logs every request's full URL at INFO: noise at best, and a key in a query string at worst. The
+        # fetcher records what matters (FetchRun, with keys masked).
+        "loggers": {name: {"level": "WARNING"} for name in ("httpx", "httpcore")},
     }

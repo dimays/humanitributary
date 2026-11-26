@@ -200,7 +200,10 @@ class Smithsonian(Adapter):
     name, publisher, kind, key_setting = "smithsonian", "si.edu", "museum", "SMITHSONIAN_API_KEY"
 
     def search(self, fetcher, q):
-        r = fetcher.get("https://api.si.edu/openaccess/api/v1.0/search", params={"q": q.search_text, "rows": "8", "api_key": settings.SMITHSONIAN_API_KEY})
+        # The key goes in api.data.gov's X-Api-Key header, never the query string: URLs reach logs (httpx logs every
+        # request at INFO) and error messages.
+        r = fetcher.get("https://api.si.edu/openaccess/api/v1.0/search", params={"q": q.search_text, "rows": "8"},
+                        headers={"X-Api-Key": settings.SMITHSONIAN_API_KEY})
         if not r.ok:
             raise RuntimeError(f"Smithsonian HTTP {r.status}")
         out = []

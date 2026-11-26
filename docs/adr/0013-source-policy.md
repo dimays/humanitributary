@@ -1,6 +1,6 @@
 # 0013 — Source policy: what jobs fetch, what they never do, and why
 
-**Status:** accepted (November 2026; terms checked 2026-11-26)
+**Status:** accepted (November 2026; terms checked 2026-11-26); amended by [0020](0020-heroku-hosting.md)
 
 ## Context
 

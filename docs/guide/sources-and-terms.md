@@ -279,11 +279,16 @@ lists them empty. Without its key an adapter is disabled cleanly, and it starts 
 
 | Setting | Adapter | How it is sent | Key tier |
 |---|---|---|---|
-| `SMITHSONIAN_API_KEY` | `smithsonian` | The `api_key` query parameter on api.si.edu | An api.data.gov key (`config/settings.py` comment; the si.edu verdict). Neither the ADR nor the code names a tier beyond that. |
+| `SMITHSONIAN_API_KEY` | `smithsonian` | api.data.gov's `X-Api-Key` header on api.si.edu (never the `api_key` query parameter: URLs reach logs) | An api.data.gov key (`config/settings.py` comment; the si.edu verdict). Neither the ADR nor the code names a tier beyond that. |
 | `EUROPEANA_API_KEY` | `europeana` | The `X-Api-Key` header (Europeana deprecated the `wskey` parameter, and keys in URLs leak into logs) | The europeana.eu verdict: a personal key is for non-production use only; request a Project key (one per service) before production or hosted scheduling. ADR 0013 says the same. The code doesn't check which kind of key it has. |
 
 ### Keeping keys out of logs, errors and fixtures
 
+- **Headers, never URLs.** Both keyed adapters send their key in an `X-Api-Key` header (`ingest/lookup.py`), so it
+  is never part of a URL that a log line, an error or a cassette could hold. Hosted, `httpx` and `httpcore` log at
+  `WARNING` only (`config/settings.py` `LOGGING`), since at `INFO` they print every request's full URL; on November
+  26, 2026 that printed the Smithsonian key (then a query parameter) into Heroku's log buffer
+  ([ADR 0020](../adr/0020-heroku-hosting.md)). `LookupKeyTests` checks the header.
 - **Masking.** `ingest/policy.py` `mask_secrets(text)` replaces the value of every setting in `SECRET_SETTINGS`
   (`SMITHSONIAN_API_KEY`, `EUROPEANA_API_KEY`, when at least 6 characters long) with `***`, then masks any
   `api_key=`, `apikey=`, `api-key=`, `wskey=`, `key=` or `token=` parameter value. The runner applies it to every
@@ -293,7 +298,7 @@ lists them empty. Without its key an adapter is disabled cleanly, and it starts 
 - **Cassettes.** `tests/cassette.py` keys recorded responses by method and URL with `api_key` and `wskey` values
   masked (`KEY_RE`), and matches requests the same way, so a test with a real key in its URL still finds its
   recording. `RecordingTransport` stores only the response's status, a few headers and the body, never request
-  headers, so a header key such as Europeana's is never recorded.
+  headers, so a header key (Smithsonian's, Europeana's) is never recorded.
 
 ### The User-Agent
 

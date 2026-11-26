@@ -293,7 +293,7 @@ class HostedSettingsTests(TestCase):
         base = dict(os.environ) | {"STORAGE_BACKEND": "", "S3_ENDPOINT_URL": "", "S3_BUCKET_RAW": ""}
         base |= {"ENVIRONMENT": "staging", "SECRET_KEY": "test-only", "ALLOWED_HOSTS": "example.herokuapp.com",
                  "DATABASE_URL": "postgres://u:p@localhost:1/x", **env}
-        code = "import django; django.setup(); from django.conf import settings as s; print(s.DATABASES['default']['OPTIONS'].get('sslmode'), s.SECURE_HSTS_SECONDS)"
+        code = "import django; django.setup(); from django.conf import settings as s; print(s.DATABASES['default']['OPTIONS'].get('sslmode'), s.SECURE_HSTS_SECONDS, s.LOGGING['loggers']['httpx']['level'])"
         return subprocess.run([sys.executable, "-c", code], env=base, capture_output=True, text=True, cwd=Path(__file__).resolve().parent.parent)
 
     def test_local_storage_only_when_stated(self):
@@ -302,4 +302,4 @@ class HostedSettingsTests(TestCase):
         self.assertIn("STORAGE_BACKEND=local", r.stderr)
         r = self.settings_load(STORAGE_BACKEND="local")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.split(), ["require", "3600"], "the database over TLS, and HSTS on")
+        self.assertEqual(r.stdout.split(), ["require", "3600", "WARNING"], "the database over TLS, HSTS on, no per-request URLs in the logs")
