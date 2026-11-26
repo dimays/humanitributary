@@ -15,6 +15,7 @@ from django.db import models
 
 from revisions import require_revising
 
+from . import ordering
 from .dates import parse_when
 from .models import Branch, Entry, Event, Region, Status
 
@@ -60,15 +61,31 @@ def event_date_fields(when: str) -> dict:
     return {"precision": d.precision, "approximate": d.approximate, "date": d.date, "end_date": d.end_date}
 
 
-def _next_position(model) -> int:
-    last = model.objects.order_by("-position").values_list("position", flat=True).first()
-    return 0 if last is None else last + 1
+def _last_key(kind: str) -> str | None:
+    return Entry.objects.filter(kind=kind).order_by("-sort_key").values_list("sort_key", flat=True).first()
+
+
+def place(entry: Entry, *, after: str | None = None, before: str | None = None) -> str:
+    """Move an entry in the snapshot order (within its kind): just after the entry `after` or just before `before`
+    (slugs). Writes this entry's sort key only; no other entry moves."""
+    require_revising()
+    kind = entry.kind
+    keys = Entry.objects.filter(kind=kind).exclude(pk=entry.pk).order_by("sort_key")
+    if after is not None:
+        lo = Entry.objects.get(slug=after, kind=kind).sort_key
+        hi = keys.filter(sort_key__gt=lo).values_list("sort_key", flat=True).first()
+    elif before is not None:
+        hi = Entry.objects.get(slug=before, kind=kind).sort_key
+        lo = keys.filter(sort_key__lt=hi).order_by("-sort_key").values_list("sort_key", flat=True).first()
+    else:
+        raise ValueError("place() needs after= or before=")
+    return apply_changes(entry, {"sort_key": ordering.between(lo, hi)})
 
 
 def save_branch(slug: str, *, region: str | Region | None = None, **fields) -> tuple[Branch, str]:
     """Create or update a branch by slug. Date-derived fields follow start_when/end_when."""
     require_revising()
-    branch = Branch.objects.filter(slug=slug).first() or Branch(slug=slug, position=_next_position(Branch))
+    branch = Branch.objects.filter(slug=slug).first() or Branch(slug=slug, sort_key=ordering.between(_last_key("branch"), None))
     if region is not None:
         fields["region"] = region if isinstance(region, Region) else Region.objects.get(slug=region)
     start_when = fields.get("start_when", branch.start_when if branch.pk else "")
@@ -80,7 +97,7 @@ def save_branch(slug: str, *, region: str | Region | None = None, **fields) -> t
 def save_event(slug: str, *, branch: str | Branch | None = None, **fields) -> tuple[Event, str]:
     """Create or update an event by slug. Date-derived fields follow `when`."""
     require_revising()
-    event = Event.objects.filter(slug=slug).first() or Event(slug=slug, position=_next_position(Event))
+    event = Event.objects.filter(slug=slug).first() or Event(slug=slug, sort_key=ordering.between(_last_key("event"), None))
     if branch is not None:
         fields["branch"] = branch if isinstance(branch, Branch) else Branch.objects.get(slug=branch)
     fields.update(event_date_fields(fields.get("when", event.when if event.pk else "")))

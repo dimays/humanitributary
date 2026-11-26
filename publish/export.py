@@ -20,11 +20,11 @@ def _ordered(d: dict, kind: str) -> dict:
 
 
 def build_content() -> dict:
-    branches = list(Branch.objects.filter(status=Status.PUBLISHED).select_related("region").order_by("position", "slug"))
+    branches = list(Branch.objects.filter(status=Status.PUBLISHED).select_related("region").order_by("sort_key", "slug"))
     events = list(
         Event.objects.filter(status=Status.PUBLISHED, branch__status=Status.PUBLISHED)
         .select_related("branch")
-        .order_by("position", "slug")
+        .order_by("sort_key", "slug")
     )
     slug = {b.pk: b.slug for b in branches} | {e.pk: e.slug for e in events}
     branch_ids = {b.pk for b in branches}

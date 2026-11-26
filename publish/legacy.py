@@ -17,6 +17,7 @@ from evidence.models import Citation, Claim, Evidence, Publisher
 from evidence.publishers import defaults_for, domain_of
 from revisions import revising
 from timeline.models import Branch, BranchLink, Connection, Entry, Event, EventLink, Image, Location, PaleoPin, Region, Status
+from timeline.ordering import reconcile
 from timeline.services import apply_changes, branch_date_fields, event_date_fields
 
 ACTOR = "job:import_legacy"
@@ -52,6 +53,16 @@ def _sync(model, existing: dict, desired: dict, make, stats: Counter, label: str
         if extra:
             model.objects.filter(pk__in=extra).delete()
             stats[f"{label}.deleted"] += len(extra)
+
+
+def _sort_keys(kind: str, order: list[str]) -> dict[str, str]:
+    """Sort keys that put `order` (the dump's ids) in the dump's order, changing as few existing keys as possible:
+    removing or inserting an entry moves nothing else (timeline/ordering.py)."""
+    current = dict(Entry.objects.filter(kind=kind).values_list("slug", "sort_key"))
+    wanted = set(order)
+    others = [k for s, k in current.items() if s not in wanted and k]
+    new = reconcile(order, current, others)
+    return {s: new.get(s) or current[s] for s in order}
 
 
 def _all_cites(x):
@@ -98,11 +109,12 @@ def import_content(data: dict, *, actor: str = ACTOR, reason: str = "", globe: d
             raise LegacyImportError(f"ids that changed kind (branch ↔ event): {clash[:10]}")
 
         existing = {b.slug: b for b in Branch.objects.filter(slug__in=[b["id"] for b in branches])}
-        for i, b in enumerate(branches):
+        sort_key = _sort_keys("branch", [b["id"] for b in branches])
+        for b in branches:
             values = {
                 "name": b["name"], "region_id": region_id[b["region"]], "start": b["start"], "end": b["end"],
                 "start_when": b["startWhen"], "end_when": b.get("endWhen"), "text": b["text"], "why": b.get("why") or "",
-                "origin_note": b["origin"]["note"] if "origin" in b else None, "position": i,
+                "origin_note": b["origin"]["note"] if "origin" in b else None, "sort_key": sort_key[b["id"]],
                 **branch_date_fields(b["startWhen"], b.get("endWhen")),
             }
             row = existing.get(b["id"])
@@ -114,10 +126,11 @@ def import_content(data: dict, *, actor: str = ACTOR, reason: str = "", globe: d
         branch_pk |= dict(Branch.objects.filter(slug__in=missing_parent).values_list("slug", "pk"))
 
         existing_e = {e.slug: e for e in Event.objects.filter(slug__in=[e["id"] for e in events])}
-        for i, e in enumerate(events):
+        sort_key = _sort_keys("event", [e["id"] for e in events])
+        for e in events:
             values = {
                 "branch_id": branch_pk[e["branch"]], "y": e["y"], "end": e.get("end"), "when": e["when"], "title": e["title"],
-                "text": e["text"], "imp": e["imp"], "why": e.get("why") or "", "position": i, **event_date_fields(e["when"]),
+                "text": e["text"], "imp": e["imp"], "why": e.get("why") or "", "sort_key": sort_key[e["id"]], **event_date_fields(e["when"]),
             }
             row = existing_e.get(e["id"])
             if row is None:

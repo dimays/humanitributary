@@ -68,14 +68,21 @@ class Entry(models.Model):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT, db_index=True)
     text = models.TextField(help_text="One or two sentences, every claim supported by the entry's citations.")
     why = models.TextField(blank=True, help_text='"Why it matters" (TL.enrich), ≤ 700 chars; blank = not enriched.')
-    position = models.IntegerField(default=0, db_index=True, help_text="Order within its kind in the snapshot (legacy file order); the page breaks sort ties by it.")
+    sort_key = models.CharField(
+        max_length=64,
+        db_collation="C",
+        help_text="Order within its kind in the snapshot, which the page breaks sort ties by: a fractional index assigned "
+        "once, so inserting or removing an entry never moves another (timeline/ordering.py).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name_plural = "entries"
-        ordering = ["kind", "position", "slug"]
+        ordering = ["kind", "sort_key", "slug"]
         constraints = [
+            # Deferred, so a reorder can pass through a moment where two rows share a key inside one transaction.
+            models.UniqueConstraint(fields=["kind", "sort_key"], name="entry_sort_key_unique", deferrable=models.Deferrable.DEFERRED),
             models.CheckConstraint(condition=Q(slug__regex=SLUG_RE), name="entry_slug_kebab"),
             models.CheckConstraint(condition=Q(kind__in=["branch", "event"]), name="entry_kind_valid"),
             models.CheckConstraint(condition=Q(status__in=Status.values), name="entry_status_valid"),
@@ -107,7 +114,7 @@ class Branch(Entry):
 
     class Meta:
         verbose_name_plural = "branches"
-        ordering = ["position", "slug"]
+        ordering = ["sort_key", "slug"]
         indexes = [GinIndex(OpClass(Lower("name"), name="gin_trgm_ops"), name="branch_name_trgm")]
         constraints = [
             models.CheckConstraint(condition=Q(end__isnull=True) | Q(end__gt=F("start")), name="branch_end_after_start"),
@@ -140,7 +147,7 @@ class Event(Entry):
     linked_branches = models.ManyToManyField(Branch, through="EventLink", related_name="linked_events", blank=True)
 
     class Meta:
-        ordering = ["position", "slug"]
+        ordering = ["sort_key", "slug"]
         indexes = [
             models.Index(fields=["branch", "y"], name="event_branch_y_idx"),
             # Duplicate matching: candidates' titles against events' (`title % …`, similarity()).

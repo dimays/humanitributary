@@ -24,7 +24,7 @@ equals the dump, normalized and byte for byte, and the pages built from each
 are byte-identical.
 
 Order is data: the page breaks ties in its sorts by array order, so entries
-keep their legacy file order (`Entry.position`).
+keep their legacy file order (as `Entry.sort_key`, ADR 0008).
 
 ## Consequences
 
@@ -35,5 +35,6 @@ keep their legacy file order (`Entry.position`).
   warning. Neither was read by the page.
 - A new content field is a change in three places (`SCHEMA.md`,
   `canonical.mjs`, `content.py`) plus the model and the import and export.
-- Positions follow the legacy files until the cutover, so removing an entry
-  from a data file renumbers the entries after it (and records those updates).
+- Order follows the legacy files until the cutover. (Originally a position
+  index, so removing an entry renumbered every entry after it; ADR 0008
+  replaced it with a sort key that moves nothing else.)

@@ -60,7 +60,7 @@ class EntryAdmin(RevisedAdmin, admin.ModelAdmin):
 
 @admin.register(Branch)
 class BranchAdmin(RevisedAdmin, admin.ModelAdmin):
-    list_display = ["slug", "name", "region", "start_when", "end_when", "status", "position"]
+    list_display = ["slug", "name", "region", "start_when", "end_when", "status", "sort_key"]
     list_filter = ["status", "region", "start_precision", ("origin_note", admin.EmptyFieldListFilter)]
     search_fields = ["slug", "name", "text"]
     readonly_fields = ["kind", "start_precision", "end_precision", "start_approximate", "end_approximate", "start_date", "end_date"]
