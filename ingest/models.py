@@ -55,7 +55,8 @@ class FetchRun(models.Model):
         PARTIAL = "partial"
         FAILED = "failed"
 
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE, related_name="runs")
+    feed = models.ForeignKey(Feed, null=True, blank=True, on_delete=models.CASCADE, related_name="runs", help_text="Empty for a job that reads no feed (link health, processing).")
+    job = models.CharField(max_length=60, blank=True, db_index=True, help_text="The job registry name (ingest/jobs.py) that ran.")
     started_at = models.DateTimeField(db_index=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.RUNNING)
@@ -68,7 +69,7 @@ class FetchRun(models.Model):
         constraints = [models.CheckConstraint(condition=Q(status__in=["running", "ok", "partial", "failed"]), name="fetchrun_status_valid")]
 
     def __str__(self):
-        return f"{self.feed} {self.started_at:%Y-%m-%d %H:%M} {self.status}"
+        return f"{self.job or self.feed} {self.started_at:%Y-%m-%d %H:%M} {self.status}"
 
 
 class Document(models.Model):
@@ -138,6 +139,11 @@ class Entity(models.Model):
     lat = models.FloatField(null=True, blank=True)
     lon = models.FloatField(null=True, blank=True)
     aliases = models.JSONField(default=list, blank=True)
+    enwiki_title = models.CharField(max_length=300, blank=True, help_text="The English Wikipedia article, when there is one.")
+    facts = models.JSONField(default=dict, blank=True, help_text='The Wikidata statements routing uses: {"P31": [QIDs], "P17": […], "P131": […], "P27": […], "P585": "2026-11-20", "P580": …, "P582": …}.')
+    pageviews_30d = models.PositiveIntegerField(null=True, blank=True, help_text="English Wikipedia views over the last 30 days (Wikimedia REST API): a significance hint.")
+    pageviews_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True, help_text="When the Wikidata facts were last read; re-read after ENTITY_TTL_DAYS.")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -148,6 +154,23 @@ class Entity(models.Model):
 
     def __str__(self):
         return f"{self.label} ({self.qid})"
+
+
+class WikiTitle(models.Model):
+    """English Wikipedia title → Wikidata QID, cached (redirects followed). An empty qid means the page is missing or
+    has no item; such rows are retried after the TTL like any other."""
+
+    title = models.CharField(max_length=300, unique=True, help_text="As linked, with underscores as spaces and the first letter upper-cased.")
+    target = models.CharField(max_length=300, blank=True, help_text="Where it redirects (or the title itself).")
+    qid = models.CharField(max_length=20, blank=True, db_index=True)
+    missing = models.BooleanField(default=False)
+    resolved_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["title"]
+
+    def __str__(self):
+        return f"{self.title} → {self.qid or '∅'}"
 
 
 class DocumentEntity(models.Model):
@@ -214,6 +237,8 @@ class Candidate(models.Model):
     duplicate_of = models.ForeignKey("timeline.Event", null=True, blank=True, on_delete=models.SET_NULL, related_name="duplicate_candidates")
     similarity = models.FloatField(null=True, blank=True, help_text="Trigram similarity of the title to duplicate_of's.")
     cluster_key = models.CharField(max_length=200, blank=True, db_index=True, help_text="Candidates about the same happening share it.")
+    source_key = models.CharField(max_length=200, blank=True, help_text='Where it came from, stable across re-fetches: "portal:2026-11-20:<hash>", "rss:<url>", "signal:Q123".')
+    details = models.JSONField(default=dict, blank=True, help_text="What the job read: category, topics, source links, routing hits, duplicate checks, priority parts.")
     priority = models.FloatField(default=0.0, db_index=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.QUEUED, db_index=True)
     created_by = models.CharField(max_length=200, blank=True, help_text='The job that proposed it: "job:<name>".')
@@ -232,7 +257,99 @@ class Candidate(models.Model):
             models.CheckConstraint(condition=Q(kind__in=["new_event", "update", "new_branch_signal"]), name="candidate_kind_valid"),
             models.CheckConstraint(condition=Q(status__in=["queued", "claimed", "accepted", "rejected", "merged"]), name="candidate_status_valid"),
             models.CheckConstraint(condition=Q(similarity__isnull=True) | Q(similarity__gte=0, similarity__lte=1), name="candidate_similarity_0_to_1"),
+            models.UniqueConstraint(fields=["source_key"], condition=~Q(source_key=""), name="candidate_source_key_unique"),
         ]
 
     def __str__(self):
         return self.title
+
+
+class LinkCheck(models.Model):
+    """One re-check of a cited URL by the link-health job (docs/adr/0008-ingest-design.md). The Citation row keeps the
+    latest result (through the revisions service layer); this table keeps the history, so "dead twice in a row" and
+    "blocked by this host lately" are queries."""
+
+    class Outcome(models.TextChoices):
+        OK = "ok"
+        CHANGED = "changed", "content changed"
+        REDIRECTED = "redirected", "moved to another URL"
+        DEAD = "dead"
+        ERROR = "error", "failed (network, 5xx); retried next round"
+        BLOCKED = "blocked", "refused automated readers (403, CAPTCHA, robots.txt)"
+        SKIPPED = "skipped", "not fetched: the publisher's fetch policy"
+
+    citation = models.ForeignKey("evidence.Citation", on_delete=models.CASCADE, related_name="link_checks")
+    checked_at = models.DateTimeField(db_index=True)
+    method = models.CharField(max_length=10, help_text='"api" (MediaWiki), "head", "get" or "none".')
+    http_status = models.PositiveSmallIntegerField(null=True, blank=True)
+    final_url = models.URLField(max_length=1000, blank=True)
+    content_hash = models.CharField(max_length=64, blank=True, help_text="sha256 of the extracted main text (or the page revision for Wikipedia).")
+    outcome = models.CharField(max_length=12, choices=Outcome.choices)
+    etag = models.CharField(max_length=300, blank=True)
+    last_modified = models.CharField(max_length=100, blank=True)
+    archive_url = models.URLField(max_length=1000, blank=True)
+    error = models.TextField(blank=True)
+    elapsed_ms = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-checked_at"]
+        indexes = [models.Index(fields=["citation", "-checked_at"], name="linkcheck_citation_idx")]
+        constraints = [
+            models.CheckConstraint(condition=Q(outcome__in=["ok", "changed", "redirected", "dead", "error", "blocked", "skipped"]), name="linkcheck_outcome_valid"),
+        ]
+
+    def __str__(self):
+        return f"{self.citation_id} {self.checked_at:%Y-%m-%d} {self.outcome}"
+
+
+class SuggestedSource(models.Model):
+    """A page a lookup adapter found that may support a claim or a candidate: a suggestion, never evidence.
+
+    Kept here rather than as `evidence.Evidence` rows because (a) no stance is known until an agent reads the page,
+    and (b) the legacy import makes each legacy claim's evidence match the dump exactly, so extra rows there would
+    be removed on the next `make import`. An agent that reads the page and finds it supports the claim writes the
+    Evidence (method agent_read) itself and marks the suggestion accepted.
+    """
+
+    class Status(models.TextChoices):
+        SUGGESTED = "suggested"
+        ACCEPTED = "accepted", "an agent read it and added it as evidence"
+        REJECTED = "rejected", "an agent read it: it does not support the claim"
+
+    claim = models.ForeignKey("evidence.Claim", null=True, blank=True, on_delete=models.CASCADE, related_name="suggested_sources")
+    candidate = models.ForeignKey(Candidate, null=True, blank=True, on_delete=models.CASCADE, related_name="suggested_sources")
+    adapter = models.CharField(max_length=40, help_text="ingest/lookup.py adapter name (openalex, crossref, loc …).")
+    url = models.URLField(max_length=1000)
+    title = models.CharField(max_length=500)
+    publisher_domain = models.CharField(max_length=200, blank=True)
+    date_text = models.CharField(max_length=60, blank=True)
+    snippet = models.CharField(max_length=400, blank=True, help_text="≤ 25 words from the record (title, abstract or description).")
+    kind = models.CharField(max_length=16, blank=True)
+    ids = models.JSONField(default=dict, blank=True)
+    score = models.FloatField(default=0.0, help_text="Keyword relevance 0–1 (ingest/lookup.py).")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.SUGGESTED)
+    created_by = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_by = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["-score", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["claim", "url"], condition=Q(claim__isnull=False), name="suggestedsource_claim_url_unique"),
+            models.UniqueConstraint(fields=["candidate", "url"], condition=Q(candidate__isnull=False), name="suggestedsource_candidate_url_unique"),
+            models.CheckConstraint(condition=Q(status__in=["suggested", "accepted", "rejected"]), name="suggestedsource_status_valid"),
+        ]
+
+    def __str__(self):
+        return f"{self.adapter}: {self.url}"
+
+
+class JobState(models.Model):
+    """A job's own bookmark between runs (e.g. how far the second-source walk got)."""
+
+    name = models.CharField(max_length=60, unique=True)
+    state = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name

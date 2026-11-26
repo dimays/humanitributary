@@ -114,6 +114,15 @@ RELEASES_DIR = VAR_DIR / "releases"
 # How long an agent's claim on a task lasts before another agent may take it (work/queue.py).
 TASK_LEASE_MINUTES = int(os.getenv("TASK_LEASE_MINUTES", "30"))
 
+# Ingestion (ingest/, docs/adr/0008-ingest-design.md). The User-Agent names the bot and a generic contact, never a
+# person: set INGEST_CONTACT to a project address or URL before running hosted (Wikimedia asks for one).
+INGEST_CONTACT = os.getenv("INGEST_CONTACT", "operator contact via the project repository")
+INGEST_USER_AGENT = os.getenv("INGEST_USER_AGENT", f"{SITE_NAME}Bot/0.1 (history timeline research; +{INGEST_CONTACT}) python-httpx")
+# Free keys for two lookup adapters (ingest/lookup.py); without them those adapters stay disabled.
+SMITHSONIAN_API_KEY = os.getenv("SMITHSONIAN_API_KEY", "")  # api.data.gov
+EUROPEANA_API_KEY = os.getenv("EUROPEANA_API_KEY", "")
+LOG_DIR = VAR_DIR / "logs"
+
 if not DEV:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True

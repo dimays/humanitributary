@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import BranchEntity, Candidate, Document, DocumentEntity, DocumentVersion, Entity, Feed, FetchRun
+from .models import BranchEntity, Candidate, Document, DocumentEntity, DocumentVersion, Entity, Feed, FetchRun, JobState, LinkCheck, SuggestedSource, WikiTitle
 
 
 class FetchRunInline(admin.TabularInline):
@@ -23,8 +23,8 @@ class FeedAdmin(admin.ModelAdmin):
 
 @admin.register(FetchRun)
 class FetchRunAdmin(admin.ModelAdmin):
-    list_display = ["feed", "started_at", "finished_at", "status", "counts", "http_status"]
-    list_filter = ["status", "feed"]
+    list_display = ["job", "feed", "started_at", "finished_at", "status", "counts", "http_status"]
+    list_filter = ["status", "job", "feed"]
     date_hierarchy = "started_at"
 
 
@@ -59,7 +59,7 @@ class DocumentVersionAdmin(admin.ModelAdmin):
 
 @admin.register(Entity)
 class EntityAdmin(admin.ModelAdmin):
-    list_display = ["qid", "label", "kind", "lat", "lon"]
+    list_display = ["qid", "label", "kind", "enwiki_title", "pageviews_30d", "lat", "lon", "resolved_at"]
     list_filter = ["kind"]
     search_fields = ["qid", "label", "description"]
 
@@ -82,6 +82,34 @@ class BranchEntityAdmin(admin.ModelAdmin):
 class CandidateAdmin(admin.ModelAdmin):
     list_display = ["title", "kind", "when_text", "top_branch", "duplicate_of", "similarity", "priority", "status", "created_at"]
     list_filter = ["status", "kind", "precision", ("duplicate_of", admin.EmptyFieldListFilter), "top_branch__region"]
-    search_fields = ["title", "summary", "cluster_key"]
+    search_fields = ["title", "summary", "cluster_key", "source_key"]
     raw_id_fields = ["top_branch", "target_entry", "duplicate_of", "result_entry"]
     filter_horizontal = ["documents", "entities"]
+
+
+@admin.register(WikiTitle)
+class WikiTitleAdmin(admin.ModelAdmin):
+    list_display = ["title", "target", "qid", "missing", "resolved_at"]
+    search_fields = ["title", "qid"]
+
+
+@admin.register(LinkCheck)
+class LinkCheckAdmin(admin.ModelAdmin):
+    list_display = ["citation", "checked_at", "method", "http_status", "outcome", "archive_url"]
+    list_filter = ["outcome", "method"]
+    search_fields = ["citation__url", "final_url"]
+    raw_id_fields = ["citation"]
+    date_hierarchy = "checked_at"
+
+
+@admin.register(SuggestedSource)
+class SuggestedSourceAdmin(admin.ModelAdmin):
+    list_display = ["adapter", "title", "url", "score", "status", "claim", "candidate", "created_at"]
+    list_filter = ["adapter", "status", "kind"]
+    search_fields = ["title", "url"]
+    raw_id_fields = ["claim", "candidate"]
+
+
+@admin.register(JobState)
+class JobStateAdmin(admin.ModelAdmin):
+    list_display = ["name", "updated_at"]
