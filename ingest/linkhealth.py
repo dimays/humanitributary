@@ -211,7 +211,7 @@ def run(ctx):
                                          error=r.get("error", "")[:2000], elapsed_ms=r.get("elapsed_ms"))
         ctx.counts[f"outcome_{outcome}"] += 1
         values = {"last_checked_at": now}
-        if r.get("http_status"):
+        if r.get("http_status") and outcome != O.BLOCKED:  # a refusal says nothing about the page: keep its last real status
             values["http_status"] = r["http_status"]
         if outcome == O.DEAD and not (r.get("http_status") or 0) >= 400:
             values["http_status"] = UNREACHABLE  # dead without a 4xx (home-page redirect, or three failed rounds)

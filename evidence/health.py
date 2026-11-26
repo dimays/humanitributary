@@ -72,7 +72,7 @@ def collect(today: date | None = None) -> dict:
         "due_now": due.filter(recheck_after__lte=today).count(),
         "due_30": due.filter(recheck_after__gt=today, recheck_after__lte=today + timedelta(days=30)).count(),
         "due_365": due.filter(recheck_after__gt=today, recheck_after__lte=today + timedelta(days=365)).count(),
-        "dead_citations": Citation.objects.filter(http_status__gte=dead).count(),
+        "dead_citations": Citation.objects.filter(http_status__gte=dead).exclude(http_status__in=policy.get("blocked_http_statuses")).count(),
         "checked_citations": Citation.objects.filter(last_checked_at__isnull=False).count(),
         "citations": Citation.objects.count(),
         "open_verify_tasks": AgentTask.objects.filter(kind="verify_claim", status__in=["queued", "claimed"]).count(),

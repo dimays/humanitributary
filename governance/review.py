@@ -173,9 +173,10 @@ def _task_payload(p: BranchProposal, f: Finding, M: dict) -> dict:
         "needs_agent": f.needs_agent,
         "how_to_decide": (
             "Read the evidence and the events involved. If the change is right, write the fields listed in needs_agent "
-            "(names, texts and cites following site/SCHEMA.md; every cite fetched and read), save the operations as JSON "
-            "and run `manage.py branches apply <proposal> --ops ops.json --agent agent:<you> --task <task>`. If it is wrong, "
-            "`manage.py branches reject <proposal> --note \"why\" --agent agent:<you>`. Either way, complete the task."
+            "(names, texts and cites following site/SCHEMA.md; every cite fetched and read) and complete the task over the "
+            "agent API with {\"decision\": \"accept\", \"proposal\": <id>, \"operations\": [...], \"note\": \"why\"}: the owner "
+            "then runs `manage.py branches apply <proposal>`. If it is wrong, complete with {\"decision\": \"reject\", "
+            "\"proposal\": <id>, \"note\": \"why\"} (ADR 0017)."
         ),
     }
 
@@ -263,16 +264,16 @@ def _thin_task(f: Finding, today: date, actor: str) -> str:
         return "recently_filled"
     payload = {"rule": f.rule, "action": "fill", "summary": f.summary, **f.evidence,
                "how": "Add the branch's missing landmark events (write_event style: SCHEMA.md, cited, through the service layer), "
-                      "starting with the empty windows; then complete this task with the slugs you wrote."}
+                      "starting with the empty windows; complete this task over the agent API with {\"events\": [...]} (they land in review)."}
     enqueue("audit", created_by=actor, dedupe_key=key, priority=15, payload=payload, target_entry=Branch.objects.get(slug=f.branch))
     return "queued"
 
 
 def digest_section() -> str:
     """Open branch proposals, for `manage.py digest`."""
-    rows = list(BranchProposal.objects.filter(status__in=OPEN).order_by("-created_at")[:20])
+    rows = list(BranchProposal.objects.filter(status__in=[*OPEN, "accepted"]).order_by("-created_at")[:20])
     out = [f"## Branch proposals ({len(rows)} open, {RULES_VERSION})", ""]
-    out += [f"- #{p.pk} {p.rule_id} {p.branch.slug if p.branch_id else '(new)'}: {p.summary[:160]}" for p in rows]
+    out += [f"- #{p.pk} {p.rule_id} {p.branch.slug if p.branch_id else '(new)'}{' [accepted: apply or reject]' if p.status == 'accepted' else ''}: {p.summary[:160]}" for p in rows]
     thin = AgentTask.objects.filter(kind="audit", dedupe_key__startswith="thin:", status__in=["queued", "claimed"]).count()
     out.append(f"\nFill-in tasks for thin branches: {thin} open.")
     return "\n".join(out) + "\n"

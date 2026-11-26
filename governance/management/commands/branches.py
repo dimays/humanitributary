@@ -92,7 +92,7 @@ class Command(BaseCommand):
                         out["legacy_file"] = str(path)
                     self.stdout.write(json.dumps({k: v for k, v in out.items() if k != "operations"}))
                 elif action == "reject":
-                    if p.status != "proposed":
+                    if p.status not in ("proposed", "accepted"):  # an agent's accepted operations may still be turned down
                         raise CommandError(f"proposal {p.pk} is {p.status}")
                     p.status, p.decided_by, p.decided_at, p.decision_note = "rejected", agent, timezone.now(), o["note"]
                     p.save(update_fields=["status", "decided_by", "decided_at", "decision_note"])

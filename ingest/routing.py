@@ -214,5 +214,5 @@ def seed_branch_entities(fetcher, ctx, *, branches=None, actor="job:seed_branch_
                           payload={"branch": b.slug, "name": b.name, "variants": variants,
                                    "cited_articles": sorted(cited_by.get(b.pk, ()))[:10],
                                    "cited_items": sorted(cited_qids)[:10],
-                                   "instructions": "Pick the Wikidata item(s) this branch is about (polity, faith, movement, organization) and add "
-                                                   "BranchEntity rows (admin, or ingest.models.BranchEntity) with created_by agent:<name>; none if no item fits."})
+                                   "instructions": "Pick the Wikidata item(s) this branch is about (polity, faith, movement, organization) and complete "
+                                                   "this task over the agent API with {\"branch\": …, \"entities\": [{\"qid\", \"role\"}]}; an empty list if no item fits."})

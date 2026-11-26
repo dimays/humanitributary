@@ -1,7 +1,8 @@
 """The one HTTP client every job uses: polite, cached, and refusing what the source policy forbids.
 
 - Refuses NEVER_FETCH hosts, `browser_only` / `forbidden` publishers and anything robots.txt disallows for our
-  User-Agent (ingest/policy.py), before a request is made.
+  User-Agent (ingest/policy.py), before a request is made, and again before following each redirect: a redirect
+  never lands a job on a host it may not fetch (it raises Refused naming the hop).
 - One request at a time, with a per-host delay; backs off on 429/503 (honoring Retry-After, capped) and retries
   network errors a few times.
 - Conditional requests: pass the stored ETag / Last-Modified and a 304 comes back as `not_modified`.
@@ -14,7 +15,7 @@ import re
 import time
 import urllib.robotparser
 from dataclasses import dataclass, field
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from django.conf import settings
@@ -83,7 +84,8 @@ class Fetcher:
                  timeout: float = 20.0, max_retries: int = 3, publisher_policy=None):
         self.user_agent = user_agent or settings.INGEST_USER_AGENT
         self.robots_token = self.user_agent.split("/")[0]
-        self.client = httpx.Client(transport=transport, timeout=timeout, follow_redirects=True,
+        # Redirects are followed by hand (_follow), so each hop passes the source policy first.
+        self.client = httpx.Client(transport=transport, timeout=timeout, follow_redirects=False,
                                    headers={"User-Agent": self.user_agent, "Accept-Encoding": "gzip, deflate"})
         self.sleep = sleep
         self.max_retries = max_retries
@@ -126,8 +128,8 @@ class Fetcher:
         if host not in self._robots:
             rp = urllib.robotparser.RobotFileParser()
             try:
-                r = self._request("GET", f"{parts.scheme}://{parts.netloc}/robots.txt", retries=1)
-            except FetchError:
+                r = self._follow("GET", f"{parts.scheme}://{parts.netloc}/robots.txt", retries=1, robots=False)
+            except (FetchError, Refused):
                 r = None
             if r is None or r.status >= 500:
                 rp.disallow_all = True  # RFC 9309: unreachable robots.txt means assume disallowed
@@ -156,12 +158,33 @@ class Fetcher:
             h["If-None-Match"] = etag
         if last_modified:
             h["If-Modified-Since"] = last_modified
-        r = self._request(method, url, params=params, headers=h, timeout=timeout)
+        r = self._follow(method, url, params=params, headers=h, timeout=timeout, robots=robots)
         if looks_like_challenge(r.status, r.content):
             r.blocked = True
             self.blocked.add((urlsplit(r.final_url).hostname or "").lower())
             self.blocked.add((urlsplit(url).hostname or "").lower())
         return r
+
+    MAX_REDIRECTS = 10
+
+    def _follow(self, method, url, *, params=None, headers=None, retries=None, timeout=None, robots=True) -> Fetched:
+        """A request, following redirects one hop at a time and checking the source policy before each hop."""
+        history = []
+        current, current_method, current_params = url, method, params
+        for _ in range(self.MAX_REDIRECTS + 1):
+            r = self._request(current_method, current, params=current_params, headers=headers, retries=retries, timeout=timeout)
+            location = r.headers.get("location")
+            if r.status not in (301, 302, 303, 307, 308) or not location:
+                r.url, r.history = url, history
+                return r
+            nxt = urljoin(r.final_url, location)
+            if reason := self.refusal(nxt, robots=robots):
+                raise Refused(f"{current} redirects to {nxt}: {reason}")
+            history.append(r.final_url)
+            if r.status == 303 and current_method != "HEAD":
+                current_method = "GET"
+            current, current_params = nxt, None
+        raise FetchError(f"more than {self.MAX_REDIRECTS} redirects from {url}")
 
     def _wait_turn(self, host: str):
         delay = policy.host_delay(host)

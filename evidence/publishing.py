@@ -53,7 +53,8 @@ def problems(entry: Entry, today: date | None = None) -> list[str]:
     if x.kind == "event":
         claim = entry.claims.filter(field="as_written", key="").first()
         rows = list(claim.evidence.values_list(*EVIDENCE_FIELDS)) if claim else []
-        if not rows or wikipedia_only(rows):
+        supporting = [r for r in rows if r[0] in policy.get("stance_factor")]  # evidence that all conflicts supports nothing
+        if not supporting or wikipedia_only(rows):
             recent = x.y >= today.year - 1
             age = (today - entry.created_at.date()).days
             if not (recent and age <= policy.get("grace_days")):

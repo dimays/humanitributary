@@ -51,6 +51,8 @@ DEFAULTS = {
     "ongoing_words": r"\b(ongoing|present|to date|continues|since \d{4}\s*$)\b",
     # Link health: an HTTP status at or above this is a dead link.
     "dead_http_status": 400,
+    # … except these, which say the site refuses automated readers, not that the page is gone ("blocked").
+    "blocked_http_statuses": (401, 403, 429),
 
     # ── Conflicts from ingestion (evidence/conflicts.py) ──
     # A candidate counts as being about an existing event when its title is this similar (pg_trgm) …

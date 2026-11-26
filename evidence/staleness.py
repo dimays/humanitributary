@@ -90,8 +90,8 @@ def link_problem(ev: dict, dead_status: int) -> str | None:
     checked_since = ev["checked_at"] is not None and ev["cit_checked_at"] is not None and ev["checked_at"] >= ev["cit_checked_at"]
     if checked_since:
         return None
-    if ev["http_status"] is not None and ev["http_status"] >= dead_status:
-        return "dead_link"
+    if ev["http_status"] is not None and ev["http_status"] >= dead_status and ev["http_status"] not in policy.get("blocked_http_statuses"):
+        return "dead_link"  # 401/403/429 refuse automated readers: the page may be fine (link health records "blocked")
     if ev["content_hash"] and ev["cit_hash"] and ev["content_hash"] != ev["cit_hash"]:
         return "content_changed"
     return None

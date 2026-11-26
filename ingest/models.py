@@ -7,8 +7,8 @@ mention, and propose candidates for the timeline. No LLM calls here: agents pick
     timeline.Branch >─< Entity (BranchEntity: routes new material to branches)
     Candidate >─< Document, Entity;  Candidate → possible duplicate timeline.Event
 
-Not canonical: these tables are working state and change without Revisions. Raw bytes live under `var/raw/` by
-content hash, never in the database or in git.
+Not canonical: these tables are working state and change without Revisions. Raw bytes live in the `raw` object
+store by content hash (infra/storage.py, ADR 0016), never in the database or in git.
 """
 
 from django.contrib.postgres.indexes import GinIndex, OpClass
@@ -81,7 +81,7 @@ class Document(models.Model):
     publisher = models.ForeignKey("evidence.Publisher", null=True, blank=True, on_delete=models.PROTECT, related_name="documents")
     fetched_at = models.DateTimeField(db_index=True)
     http_status = models.PositiveSmallIntegerField(null=True, blank=True)
-    content_hash = models.CharField(max_length=64, db_index=True, help_text="sha256 of the raw bytes; the raw file is var/raw/<hash[:2]>/<hash>.")
+    content_hash = models.CharField(max_length=64, db_index=True, help_text="sha256 of the raw bytes; they are stored at raw/<hash[:2]>/<hash> in the raw object store.")
     raw_path = models.CharField(max_length=300, blank=True, help_text="The key in the raw object store: raw/<hash[:2]>/<hash> (ADR 0016).")
     title = models.CharField(max_length=500, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)
