@@ -786,3 +786,20 @@ class SeedAndDigestTests(TestCase):
         text = out.getvalue()
         for s in ("# Queue digest", "| write_event | 1 | 0 | 60 |", "2026 Bayelsa boat disaster", "## Candidates", "## Job runs"):
             self.assertIn(s, text)
+
+
+class LookupKeyTests(TestCase):
+    """A key never rides in a URL: URLs reach logs and errors (docs/adr/0013-source-policy.md)."""
+
+    def test_smithsonian_key_in_header(self):
+        seen = {}
+
+        class Recorder:
+            def get(self, url, params=None, headers=None, **kw):
+                seen.update(url=url, params=params or {}, headers=headers or {})
+                return mock.Mock(ok=True, status=200, json=lambda: {"response": {"rows": []}})
+
+        with override_settings(SMITHSONIAN_API_KEY="test-key-123456"):
+            lookup.Smithsonian().search(Recorder(), lookup.Query("Apollo 11 lunar landing", year=1969))
+        self.assertEqual(seen["headers"].get("X-Api-Key"), "test-key-123456")
+        self.assertNotIn("test-key-123456", seen["url"] + json.dumps(seen["params"]))

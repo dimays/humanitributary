@@ -1,0 +1,8 @@
+{
+  "name": "humanitributary-site",
+  "private": true,
+  "description": "No dependencies: this file pins the Node that runs site/build.mjs (the publish gates' build) on Heroku and in CI. docs/adr/0020-heroku-hosting.md",
+  "engines": {
+    "node": "24.x"
+  }
+}

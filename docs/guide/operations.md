@@ -66,7 +66,7 @@ The other variables are in `.env.example`:
 | Variable | Needed for |
 |---|---|
 | `ENVIRONMENT` | `dev` locally. Anything else (`staging`, `prod`) turns on production safety and requires `SECRET_KEY` and `ALLOWED_HOSTS`: TLS to the database, HTTPS redirect, secure cookies, HSTS, logs to stdout. |
-| `SECURE_HSTS_SECONDS`, `LOG_LEVEL` | Outside `dev` only: HSTS's max-age (3600; a year at launch) and the console log level (`INFO`). |
+| `SECURE_HSTS_SECONDS`, `LOG_LEVEL` | Outside `dev` only: HSTS's max-age (3600; a year at launch) and the console log level (`INFO`; staging runs `WARNING`). `httpx` and `httpcore` stay at `WARNING` whatever the level: they log every request's full URL. |
 | `POSTGRES_PASSWORD`, `DATABASE_URL` | The database. Settings refuse to start without `DATABASE_URL`. |
 | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | The local MinIO. Without a password MinIO refuses to start (Postgres is unaffected). `MINIO_PORT`, `MINIO_CONSOLE_PORT` and `MINIO_IMAGE` override its ports and image. |
 | `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_BUCKET_RAW`, `S3_BUCKET_RELEASES` | Object storage ([ADR 0016](../adr/0016-object-storage.md)): MinIO locally, AWS S3 on staging ([Hosted: Heroku](#hosted-heroku)); any S3-compatible store works (an empty endpoint for AWS; `S3_REGION=auto` and the account endpoint for Cloudflare R2). |
@@ -184,15 +184,17 @@ and releases live in object storage, and why staging's worker stays at 0 until t
 ## Hosted: Heroku
 
 The Heroku pipeline `humanitributary` holds the hosted apps ([ADR 0020](../adr/0020-heroku-hosting.md)). Today that
-is staging; production joins it at launch, with its own database, and only production ever gets the custom domain.
+is staging, and since November 26, 2026 it holds the platform's data: the laptop's database and object store were
+moved into it, and collection runs there, not on a laptop. Production joins the pipeline at launch, with its own
+database; the bare domain is reserved for the public page.
 
 | | Staging |
 |---|---|
-| App | `humanitributary-staging` (region us, stack heroku-24), at https://humanitributary-staging-aeb697fb63be.herokuapp.com |
-| Build | The `heroku/python` buildpack: Python from `.python-version`, packages from `uv.lock`, then `collectstatic`. No Node: nothing hosted runs `site/build.mjs` yet. |
-| Processes | From the `Procfile`: `release` runs `migrate` before each release goes live (a failed migration stops the deploy); `web` 1 × Basic; `worker` 0 × Basic until the owner turns it on |
+| App | `humanitributary-staging` (region us, stack heroku-24), at https://data.humanitributary.com (Heroku-managed certificate) and https://humanitributary-staging-aeb697fb63be.herokuapp.com. Agents use `https://data.humanitributary.com/api/agent` as `HUMANITRIBUTARY_API` |
+| Build | Two buildpacks, in order: `heroku/nodejs` (Node 24.x from `package.json`, which has no dependencies; it runs `site/build.mjs` for the publish gates) and `heroku/python` (Python from `.python-version`, packages from `uv.lock`, then `collectstatic`). `heroku buildpacks -a humanitributary-staging` lists them. |
+| Processes | From the `Procfile`: `release` runs `migrate` before each release goes live (a failed migration stops the deploy); `web` 1 × Basic; `worker` 1 × Basic (`run_jobs --loop`): the only place jobs run |
 | Object storage | AWS S3, us-east-1: `humanitributary-staging-raw` and `humanitributary-staging-releases`, private (public access blocked, SSE-S3). The IAM user `humanitributary-staging` has no console login and may only list those two buckets and read, write and delete their objects |
-| Database | Heroku Postgres Essential-1, Postgres 16 (10 GB, 20 connections), as `DATABASE_URL`; TLS required |
+| Database | Heroku Postgres Essential-1, Postgres 16 (10 GB, 20 connections), as `DATABASE_URL`; TLS required; a backup daily at 03:00 Chicago time (`heroku pg:backups`) |
 | Deploys | Connected to `dimays/humanitributary`: `main` deploys automatically once CI has passed on it |
 
 Config vars (`heroku config -a humanitributary-staging` lists them; never paste their values anywhere):
@@ -201,7 +203,8 @@ Config vars (`heroku config -a humanitributary-staging` lists them; never paste 
 |---|---|---|
 | `SECRET_KEY` | the setup, generated on the spot | never printed; rotate with a new random value (it signs out every admin session) |
 | `ENVIRONMENT` | the setup | `staging` |
-| `ALLOWED_HOSTS` | the setup | the app's `herokuapp.com` host; add the custom domain only on production |
+| `ALLOWED_HOSTS` | the setup | `data.humanitributary.com` and the app's `herokuapp.com` host |
+| `LOG_LEVEL` | the setup | `WARNING` (the worker's progress is in FetchRun rows, the admin and `/healthz`, not the log) |
 | `INGEST_CONTACT` | the setup | the repository's URL |
 | `STORAGE_BACKEND` | the setup | `local` only until the access key is in; unset after, so the `S3_*` variables choose S3 |
 | `DATABASE_URL` | Heroku Postgres | managed by Heroku; it changes when Heroku rotates credentials |
@@ -211,10 +214,18 @@ Config vars (`heroku config -a humanitributary-staging` lists them; never paste 
 | `SMITHSONIAN_API_KEY` | the owner | its lookup adapter skips without it |
 | `EUROPEANA_API_KEY` | nobody yet | a Personal key is for non-production use only: leave it unset until a Project key exists ([Sources and terms](sources-and-terms.md)) |
 
-The domain, `humanitributary.com`, is registered at Namecheap with its DNS on Cloudflare (free plan) once its
-nameservers are moved there. No record points at Heroku yet: at launch production gets a subdomain for the admin
-and the agent API (a CNAME to its Heroku DNS target, then `ALLOWED_HOSTS`), and the bare domain serves the static
-page from the CDN ([ADR 0020](../adr/0020-heroku-hosting.md)).
+The domain, `humanitributary.com`, is registered at Namecheap (contact verified) with its nameservers on Cloudflare
+(free plan: `angelina.ns.cloudflare.com`, `rex.ns.cloudflare.com`). The zone holds three records:
+
+| Record | Value | Why |
+|---|---|---|
+| `data` CNAME | the app's Heroku DNS target (`heroku domains -a humanitributary-staging`), DNS only | the admin and the agent API; DNS only so Heroku issues and renews the certificate (`heroku certs:auto`) |
+| `@` TXT | `v=spf1 -all` | no server may send mail as the domain |
+| `_dmarc` TXT | `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s` | receivers reject mail that claims to come from it |
+
+The bare domain and `www` have no records until the public page exists; it will be served from the CDN, and a
+`www` redirect comes with it. Mail for the domain needs an MX (Cloudflare Email Routing for forwarding) and an SPF
+that names the sender before anything sends as it.
 
 To create or rotate the access key, with the AWS CLI signed in (`aws login`), the owner runs, in zsh:
 
@@ -234,10 +245,12 @@ Everyday commands:
 heroku logs --tail -a humanitributary-staging                  # web, worker, release and router lines
 heroku ps -a humanitributary-staging                           # dynos and their state
 heroku releases -a humanitributary-staging                     # each deploy; heroku releases:output shows a release phase's log
-heroku ps:scale worker=1 -a humanitributary-staging            # once the S3_* variables are set (Basic: $7 a month)
+heroku ps:scale worker=0 -a humanitributary-staging            # stop collection (1 starts it again; Basic: $7 a month)
 heroku run python manage.py createsuperuser -a humanitributary-staging       # the owner types the password
 heroku run python manage.py agent_token create <name> --scope <kind> -a humanitributary-staging
 heroku pg:info -a humanitributary-staging                      # size against the plan's 10 GB
+heroku run python manage.py publish --check -a humanitributary-staging       # the release gates, writing nothing
+heroku run python manage.py publish -a humanitributary-staging               # a release in the S3 releases bucket
 ```
 
 To deploy a branch to staging by hand (the dashboard's Deploy tab, "Manual deploy", does the same): `git push
@@ -245,8 +258,12 @@ https://git.heroku.com/humanitributary-staging.git <branch>:main`. The next auto
 To roll back, `heroku rollback -a humanitributary-staging` returns to the previous release's code and config; it
 doesn't undo a migration.
 
-Staging's database started empty and nothing is imported into it without the owner's say. Heroku keeps no
-scheduled backups of it unless `heroku pg:backups:schedule` is set; `heroku pg:backups:capture` takes one now.
+Staging's database is the laptop's, moved on November 26, 2026 with the writers stopped: `pg_dump -Fc --no-owner
+--no-acl` from the Docker Postgres, `heroku pg:reset`, then `pg_restore --no-owner --no-acl` (Postgres 16's client,
+in Docker); every table's row count and the 15 audit triggers matched afterwards. The objects went across with
+`aws s3 sync` (MinIO → S3, every `raw_path` the database names present). Nothing else is imported without the
+owner's say. `heroku pg:backups` lists the daily backups (and `capture` takes one now); restore one with `heroku
+pg:backups:restore <id> DATABASE_URL`, which replaces the database, schema and data together.
 
 ## Is it healthy?
 
@@ -292,7 +309,7 @@ Say it plainly: **there is no backup system.** Here is what exists.
 | What | Where it lives | Survives |
 |---|---|---|
 | The database | The Docker volume `humanitributary-pg` | Stopping or recreating the container (`make db-stop`, `docker compose down`). It does not survive `docker compose down -v`, `docker volume rm` or losing the laptop. |
-| Staging's database | Heroku Postgres Essential-1 | Dyno restarts and deploys. No scheduled backups unless `heroku pg:backups:schedule` is set; no point-in-time rollback on Essential plans. |
+| Staging's database (the platform's data) | Heroku Postgres Essential-1 | Dyno restarts and deploys; a daily backup at 03:00 Chicago time, kept by Heroku (`heroku pg:backups`). No point-in-time rollback on Essential plans. |
 | Content (branches, events, cites) | Postgres only, since the cutover ([ADR 0021](../adr/0021-the-cutover.md)) | Only what the volume survives. What was published is also in every release in the object store (`import_legacy <content.json>` loads one into an empty database), and the content as it was at the cutover is frozen in git (`archive/site-data/`), but anything written since and not yet released exists nowhere else. |
 | Review state, Revisions, evidence checks, ratings set in the admin, the queue, ingest state, agent tokens | Postgres only | Only what the volume survives. |
 | Raw documents and releases | The object store: the Docker volume `humanitributary-minio`, or `var/storage/` with `STORAGE_BACKEND=local` | The same as the database's volume. Nothing copies them elsewhere. Old `var/raw/` and `var/releases/` copies stay until you delete them. |
