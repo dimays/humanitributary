@@ -1,0 +1,44 @@
+# The gate (make check-pr: scripts/check_pr.py, ADR 0015) on every pull request and every push to main.
+# No secrets: Postgres is a throwaway service container, object storage is the local directory backend (ADR 0016;
+# the test suite uses temporary directories either way), and nothing reaches MinIO, S3 or the network.
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: humanitributary
+          POSTGRES_PASSWORD: ci-only-not-secret
+          POSTGRES_DB: humanitributary
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U humanitributary -d humanitributary"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      ENVIRONMENT: dev
+      DATABASE_URL: postgres://humanitributary:ci-only-not-secret@localhost:5433/humanitributary
+      STORAGE_BACKEND: local
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the guide's stamps are checked against git history
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run python manage.py migrate --noinput
+      - run: make check-pr

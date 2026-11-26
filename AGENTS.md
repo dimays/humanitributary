@@ -22,30 +22,35 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 | Path | What |
 |---|---|
 | `site/` | The static site: `template.html`, `build.mjs` (builds `site/timeline.html` from `data/*.js`, or from a snapshot with `--from-json`; `--dump-json` writes the resolved content for import), `canonical.mjs` (the one content shape both directions share), `restructure.mjs`, `SCHEMA.md` (the content model and the citation rules), `images/` and `outlines.js` (inputs, kept beside the page), `globe-assets.json`, and the content tools (`build-outlines.mjs`, `fetch-images.mjs`, …). `data/*.js` is the legacy content, imported until the cutover (ADR 0001). |
-| `config/` | Settings (`SITE_NAME`, `DATABASE_URL`, `VAR_DIR`, `TASK_LEASE_MINUTES`), URLs (the admin only), WSGI/ASGI. |
+| `config/` | Settings (`SITE_NAME`, `DATABASE_URL`, `VAR_DIR`, the two object storages and `S3_*`, `TASK_LEASE_MINUTES`, `WORKER_TICK_SECONDS`, alerts, `AGENT_API_RATE_PER_MINUTE`), URLs (the admin, `/api/agent/`, `/healthz`), WSGI/ASGI. |
 | `timeline/` | Canonical content: `Region`, `Entry` (the shared id namespace) with `Branch` and `Event`, `BranchLink`, `EventLink`, `Connection`, `Location`, `PaleoPin`, `Image`. `services.py` is the write path (`save_branch`, `save_event`, `apply_changes`, `place`); `dates.py` derives precision and exact dates from date text; `ordering.py` is the snapshot order (`Entry.sort_key`, a fractional index: ADR 0008). |
 | `evidence/` | Canonical: `Publisher`, `Citation`, `Claim` (record claims and their atomic parts), `Evidence`. `confidence.py` computes status and confidence (independent witnesses: `independence.py`); `claims.py` splits entries into date, location, number and actor claims; `staleness.py` schedules rechecks; `conflicts.py` records disagreeing sources; `sweep.py` is `manage.py facts sweep`; `health.py` is `facts report`; `services.py` (`record_evidence`) and `publishing.py` (the publishing rule) are the agents' doors; every threshold is in `policy.py`. `publishers.py` holds the starting ratings for known publishers. See `docs/fact-checking.md`. |
 | `revisions/` | The audit log. `revising(actor, reason, task)` (`context.py`) is the only door to canonical tables; the trigger in `sql.py` refuses writes without it and records every changed row (ADR 0006). `admin_mixins.py` runs admin edits as `human:<username>`. |
 | `ingest/` | Collection, not canonical (ADR 0012): `Feed`, `FetchRun`, `Document` + `DocumentVersion`, `Entity` (Wikidata) + `WikiTitle`, `DocumentEntity`, `BranchEntity` (routing), `Candidate`, `LinkCheck`, `SuggestedSource`, `JobState`. `jobs.py` (registry, runner, lock) and `job_defs.py` (every job, in run order) behind `manage.py run_jobs` / `run_job`; `http.py` + `policy.py` (the one fetcher and the source policy, ADR 0013); `seed.py` (sources, terms verdicts); `sources_wiki.py` (Current events portal, "<Year> in X"), `sources_news.py` (WHO, Federal Register, Gazette, Nobel, permitted RSS, Office of the Historian); `wikidata.py`, `wikitext.py`, `extract.py`, `store.py`; `routing.py` (branch scores, BranchEntity seeding); `process.py` (duplicates, clusters, priority, write_event tasks, new-branch signals); `linkhealth.py`; `lookup.py` (open-API adapters) and `second_source.py`; `manage.py digest`. |
+| `infra/` | The platform around the content, no models: `storage.py` (the one door to object storage: `raw` and `releases`, write-once, the `latest` pointer; ADR 0016), `migrate_local.py` and `manage.py storage init / status / migrate_local / pull-release`, `health.py` (`/healthz`), `alerts.py` (one email when a job fails N runs in a row; ADR 0019). |
+| `agentapi/` | The agents' HTTP door (ADR 0017): `AgentToken` (hashed, scoped; `manage.py agent_token create / list / revoke`), `auth.py` (bearer tokens, the per-token rate limit), `schemas.py` (a result schema per task kind), `apply.py` (results applied through the services into review), `views.py` (the endpoints). |
 | `work/` | The agents' queue: `AgentTask`, `queue.py` (leases under `FOR UPDATE SKIP LOCKED`), `manage.py tasks`. |
 | `governance/` | `BranchMetric`, `BranchProposal`, and `manage.py branches`: `metrics.py` (each branch's shape on the page's time scale), `rules.py` (SPLIT-PLACE, SPLIT-TIME, MERGE-OVERLAP, END-STALE, NEW-BRANCH, THIN), `thresholds.py` (every threshold), `review.py` (proposals, tasks, hysteresis), `operations.py` (apply and revert). See `docs/branch-rules.md`. |
-| `publish/` | `Release`; the snapshot format (`content.py`: key order and a writer byte-compatible with `JSON.stringify`), `export.py` (Postgres → content), `legacy.py` (dump → Postgres), `release.py`, and the `import_legacy`, `publish` and `compare_content` commands. |
+| `publish/` | `Release`; the snapshot format (`content.py`: key order and a writer byte-compatible with `JSON.stringify`), `export.py` (Postgres → content), `legacy.py` (dump → Postgres), `release.py` (immutable releases in the store, the `latest` pointer, rollback, the local mirror), `gates.py` (what must hold before a release: ADR 0019), `changes.py` (the change report), and the `import_legacy`, `publish` and `compare_content` commands. |
 | `tests/` | The suite: import idempotency, the round trip, entry order, revision enforcement, the queue, dates, the fact base, branch governance, the docs' checks and hooks (`test_guide.py`) and ingestion (`test_ingest.py` on recorded cassettes in `fixtures/ingest/`: `cassette.py` replays them, `record_fixtures.py` re-records). |
-| `var/` | Gitignored: `gate-receipt.json` (the gate's last pass), `legacy.json` dumps, `releases/<version>/` snapshots (`releases/latest` → newest), `raw/` fetched documents by content hash, `logs/` (the scheduled runs). |
-| `ops/` | The local schedule: `run-jobs.sh` (start Docker/Postgres or skip, then `run_jobs`), `launchd/run-jobs.plist` (template), `schedule.sh` (install / uninstall / status). |
+| `var/` | Gitignored: `gate-receipt.json` (the gate's last pass), `legacy.json` dumps, `releases/<version>/` (a local mirror of a release from the store, `make release-pull`; `releases/latest` → it), `storage/` (the store itself with `STORAGE_BACKEND=local`), `logs/` (the scheduled runs). Raw documents and releases live in object storage (ADR 0016); an old `raw/` is copied there by `make storage-migrate`. |
+| `ops/` | The local schedule: `run-jobs.sh` (start Docker/Postgres and MinIO or skip, then `run_jobs`), `launchd/run-jobs.plist` (template), `schedule.sh` (install / uninstall / status). |
 | `docs/guide/` | The technical guide: a chapter per part of the platform, each stamped against the code it `covers` (`stamps.json`); `README.md` lists the chapters and says how to write one. `docs/architecture.md` points into it. |
-| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015); the data model with an ER sketch; how claims are checked; the branch rules. |
+| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015, object storage: 0016, the agent API: 0017, the single-source marker: 0018, processes and release gates: 0019); the data model with an ER sketch; how claims are checked; the branch rules. |
 | `guide/` | The guide's tools behind `manage.py guide check / stamp / status / covers / index`: `chapters.py`, `coverage.py` (what a chapter covers, its hash), `checks.py`. No models. |
-| `scripts/` | `make_env.py`; `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
+| `scripts/` | `make_env.py` (writes `.env`, or adds the keys it lacks, printing no values); `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
 | `.claude/settings.json`, `.claude/hooks/` | Hooks only: before `git commit`, the guide must be fresh; before `gh pr create`, the gate must have passed on the committed code; at the end of a turn, a reminder. |
-| `.claude/skills/` | Agent skills: `drain-write-events`, `review-branch-proposals`, `verify-claims`, `verify-stale-claims`. |
+| `.claude/skills/` | Agent skills: `drain-write-events`, `review-branch-proposals`, `verify-claims`, `verify-stale-claims`; all work through the agent API (`HUMANITRIBUTARY_API`, `HUMANITRIBUTARY_API_TOKEN`). |
+| `Procfile`, `docker-compose.yml`, `.github/workflows/check.yml` | The processes (`release`, `web`, `worker`; `make up` runs web and worker with honcho), the local services (Postgres on 5433, MinIO on 127.0.0.1:9000/9001), and CI (`make check-pr` on pull requests and pushes to main). |
 
 ## Rules
 
 1. **Postgres is the source of truth; the site reads snapshots.** The page is
-   built from `var/releases/<version>/content.json`, never from a live query.
-   Never edit a snapshot (or `site/timeline.html`) by hand: change the rows,
-   then `manage.py publish`. Until the cutover, `site/data/*.js` is also
+   built from a release (`releases/<version>/content.json` in the object
+   store, mirrored to `var/releases/` by `make release-pull`), never from a
+   live query. Never edit a snapshot (or `site/timeline.html`) by hand:
+   change the rows, then `manage.py publish`, which refuses unless its gates
+   pass; roll back with `publish --rollback <version>`. (ADR 0019) Until the cutover, `site/data/*.js` is also
    edited by the content agents; bring changes in with `make import`
    (idempotent) rather than by editing rows to match. (ADR 0001)
 2. **Every canonical write goes through the service layer and leaves a
@@ -63,11 +68,15 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
    and give the same output for the same input. Judgment goes into an
    `AgentTask` for an agent to claim. A job that writes canonical rows runs as
    `job:<command>`. (ADR 0003)
-4. **Agents work through the queue.** Claim with `manage.py tasks next --kind
-   … --claim --agent agent:<name>`, finish with `tasks complete <id> --result
-   file.json`, or hand it back with `tasks release` / `tasks fail`. Pass the
-   task to `revising(…, task=task)` so its Revisions link to it. Extend a long
-   lease with `tasks extend`; an expired lease may be taken over. (ADR 0003)
+4. **Agents work through the queue, over the agent API.** An agent holds a
+   token (`manage.py agent_token create <name> --scope <kind>`, the owner's
+   command), never database credentials: claim with `POST
+   /api/agent/tasks/claim`, finish with `POST tasks/<id>/complete` and a
+   result its kind's schema accepts, or hand it back with `release` /
+   `fail`; `extend` a long lease (an expired one may be taken over). The API
+   applies results through the services as `agent:<name>`, linked to the
+   task, and what it writes lands in review, never published. The owner's
+   CLI (`manage.py tasks …`) does the same from a shell. (ADR 0003, ADR 0017)
 5. **Every fact has evidence.** Each statement the timeline makes is a
    `Claim` on an entry, backed by `Evidence` rows tying it to `Citation`s, each
    with a stance (supports, partial, conflicts, unrelated), who checked it and
@@ -94,8 +103,9 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
    the pages built from them. A new content field changes both, and
    `SCHEMA.md`. (ADR 0007)
 9. **Raw documents and secrets stay out of git.** Raw fetched bytes live in
-   `var/raw/` by content hash; `.env` holds the local password. Never commit
-   either, and never point anything at port 5432 (Postgres.app's): the local
+   the `raw` object store by content hash, written only through
+   `infra/storage.py` (ADR 0016); `.env` holds the local passwords (Postgres,
+   MinIO). Never commit either, never print a credential, and never point anything at port 5432 (Postgres.app's): the local
    database is Docker's, on 5433.
 10. **Don't run content-rewriting scripts casually.** `site/verify-geo.mjs
     --apply`, `apply-fixes.mjs --apply`, `fetch-images.mjs` and friends
@@ -144,17 +154,19 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 ## Working
 
 ```bash
-make env          # .env with a random local-only Postgres password (once)
-make db           # Postgres 16 in Docker on localhost:5433 (starts Docker if needed)
+make env          # .env with random local-only passwords (adds missing keys to an existing one)
+make db           # Postgres 16 on localhost:5433 and MinIO on 127.0.0.1:9000 (console :9001), buckets created
+make storage-migrate  # once, on a checkout that has var/raw and var/releases: copy them into the store
 uv sync
 make migrate
 make import       # node site/build.mjs --dump-json var/legacy.json, then manage.py import_legacy
-make publish      # var/releases/<version>/content.json and releases/latest
-make build-release   # site/timeline.html from the latest snapshot (make build: from data/*.js)
-make roundtrip    # dump → import → publish → diff the JSON and both built pages
+make publish      # a release in the store (gates first), latest → it; publish --rollback <version> repoints
+make build-release   # mirror the latest release (make release-pull), then site/timeline.html from it
+make roundtrip    # dump → import → publish → diff the JSON and both built pages (additive keys aside: ADR 0018)
 make test         # uv run python manage.py test (needs the database)
 make check        # Django checks, missing migrations, the site's data validation
 make serve        # the admin at http://localhost:8000/admin/ (manage.py createsuperuser first)
+make up           # production's processes: web (gunicorn: admin, /api/agent/, /healthz) and worker (run_jobs --loop)
 
 uv run python manage.py facts sweep      # the fact base's daily job: split claims, schedule rechecks, queue verify_claim tasks
 uv run python manage.py facts report     # its health: corroborated / single source / contested / stale, by era and region
@@ -173,12 +185,18 @@ uv run python manage.py run_job link_health --opt limit=200
 make schedule-install   # launchd: run_jobs every 15 minutes (the owner decides; schedule-status / schedule-uninstall)
 ```
 
+The worker (`make up` or `make worker`) and the launchd schedule run the same
+jobs under the same lock, so they never overlap: use `make up` while you
+work, the schedule when nothing else is running. A job that fails three runs
+in a row sends one alert (the console locally). Agents reach the platform at
+`http://127.0.0.1:8000/api/agent` while `make up` runs (ADR 0017).
+
 `facts sweep` (daily, right after `link_health`) and `branches review`
 (weekly) run from the job runner as `facts_sweep` and `branches_review`;
 `manage.py digest` includes `evidence.health.digest_section()` and
 `governance.review.digest_section()`.
 
-Writing canonical content from a shell (an agent with a task):
+Writing canonical content from a shell (the owner, or a job; agents use the API):
 
 ```python
 from revisions import revising
@@ -231,14 +249,16 @@ make check-pr                          # the gate (about 30 seconds)
 
 ## Deploying
 
-Not deployed yet. The layout is Heroku-ready: `Procfile` (release phase runs
-migrations; web is gunicorn), whitenoise for the admin's static files,
-`DATABASE_URL`, `SECRET_KEY` and `ALLOWED_HOSTS` from config vars
+Not deployed yet. The layout is Heroku-ready: `Procfile` (`release` runs
+migrations; `web` is gunicorn: the admin, the agent API and `/healthz`;
+`worker` is `run_jobs --loop`), whitenoise for the admin's static files,
+`DATABASE_URL`, `SECRET_KEY`, `ALLOWED_HOSTS`, the `S3_*` variables (S3 or
+Cloudflare R2) and mail settings for alerts from config vars
 (`ENVIRONMENT=prod`). The `pg_trgm` extension is created by a migration
-(allowed on Heroku Postgres). Scheduled jobs run there from Heroku Scheduler
-as `python manage.py run_jobs` every 10 minutes (the same command as local
-launchd; the advisory lock keeps runs from overlapping); move `var/raw/` to
-object storage first (dynos are ephemeral); `INGEST_CONTACT` defaults to the GitHub repository. The public site is a separate static deploy of a
+(allowed on Heroku Postgres). Jobs run in the worker dyno (or from Heroku
+Scheduler as `python manage.py run_jobs`; the advisory locks keep runs from
+overlapping). Raw documents and releases are in object storage, so dynos
+can be thrown away (ADR 0016); `INGEST_CONTACT` defaults to the GitHub repository. The public site is a separate static deploy of a
 release's `timeline.html`, `images/` and `outlines.js` to a CDN (ADR 0001).
 
 ## Style

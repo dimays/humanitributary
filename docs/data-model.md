@@ -99,7 +99,7 @@ Working state, not canonical (ADR 0012). The jobs that fill these tables are lis
 |---|---|
 | `Feed` | Something a job reads on a schedule: publisher, URL, kind (api, rss, sitemap, html), interval, enabled, `config` (`job` names the handler; lookup adapters are feeds with `job: lookup`, for their on/off switch), and conditional-request state (ETag, Last-Modified, cursor). |
 | `FetchRun` | One run of a job (`job`), with its feed if it reads one: timings, status (running, ok, partial, failed), counts, error (keys masked). |
-| `Document` | A fetched page or record by canonical URL (latest version): fetch time and status, sha256 content hash (raw bytes in `var/raw/<hash[:2]>/<hash>`), title, published date, language, license, extracted text (for news: a lead of at most 60 words), metadata JSON (wikilinks, revision id, categories, attribution …), `version` and `changed_at`. |
+| `Document` | A fetched page or record by canonical URL (latest version): fetch time and status, sha256 content hash (raw bytes in the `raw` object store at `raw/<hash[:2]>/<hash>`, the key `raw_path` holds: ADR 0016), title, published date, language, license, extracted text (for news: a lead of at most 60 words), metadata JSON (wikilinks, revision id, categories, attribution …), `version` and `changed_at`. |
 | `DocumentVersion` | Every distinct content hash a document has had, so changed pages are detectable and old versions findable. |
 | `Entity` | A Wikidata item (QID unique): label, kind (person, place, polity, org, work, event, concept), coordinates, aliases, its English article, `facts` (P31, P17, P131, P27, dates, ISO code), pageviews, when it was read. |
 | `WikiTitle` | English Wikipedia title → QID (redirects followed); an empty QID means no page or no item. The exact-resolution cache. |
@@ -116,25 +116,33 @@ Working state, not canonical (ADR 0012). The jobs that fill these tables are lis
 |---|---|
 | `AgentTask` | The queue: kind (write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation, map_branch_entities), target (entry, claim, candidate, proposal or a free reference), payload, priority, status, `dedupe_key` (one open task per kind and key), the lease (`claimed_by`, `claimed_at`, `lease_until`, attempts of `max_attempts`), result, error, and who created it. |
 
+## agentapi
+
+| Table | What it's for |
+|---|---|
+| `AgentToken` | An agent's API token (ADR 0017): its name (it acts as `agent:<name>`), the token's sha256 and first characters (the token itself is shown once), the task kinds it may claim (`scopes`, `*` for all), who made it, last use, revocation, and the rate limit's one-minute window. Not canonical. |
+
 ## governance
 
 | Table | What it's for |
 |---|---|
 | `BranchMetric` | `manage.py branches metrics`'s snapshot of a branch's shape (events, span, windows, density against peers, gaps, phases, links, geographic clusters, structure; JSON, see `docs/branch-rules.md`), stored when it changes, with the metrics version. |
-| `BranchProposal` | A rule's proposed split, merge, new branch or ending (`rule_id` such as `SPLIT-PLACE-v1`), with what it saw (`evidence`), the change (`payload`: its key, strength, operations and the fields an agent must write), and the decision (status proposed → applied / rejected / withdrawn, by whom, when, note). `branches apply` runs the operations through the timeline's services and records the transaction in `payload.applied`; `branches revert` undoes it from the Revisions. |
+| `BranchProposal` | A rule's proposed split, merge, new branch or ending (`rule_id` such as `SPLIT-PLACE-v1`), with what it saw (`evidence`), the change (`payload`: its key, strength, operations and the fields an agent must write), and the decision (status proposed → accepted (an agent's operations stored in `payload.accepted`, for the owner to apply) → applied, or rejected / withdrawn; by whom, when, note). `branches apply` runs the operations through the timeline's services and records the transaction in `payload.applied`; `branches revert` undoes it from the Revisions. |
 
 ## publish
 
 | Table | What it's for |
 |---|---|
-| `Release` | One `manage.py publish`: version (`YYYY.MM.DD.N`), who, the content's sha256, the snapshot path under `var/`, counts, and the last Revision it includes. |
+| `Release` | One `manage.py publish`: version (`YYYY.MM.DD.N`), who, the content's sha256, the snapshot's key in the `releases` object store (`releases/<version>/content.json`), counts (with `single_source_events`), and the last Revision it includes. Which release readers get is `releases/latest.json` in the store, not a row (ADR 0019). |
 
 ## The snapshot
 
-`var/releases/<version>/content.json` is `{"branches": […], "events": […]}` in
+`releases/<version>/content.json` (in the object store; mirrored to
+`var/releases/` for the site build) is `{"branches": […], "events": […]}` in
 the canonical shape of `site/canonical.mjs` (ADR 0007), exactly what the page
-inlines apart from its build date; `manifest.json` beside it has the version,
-hash and counts. The mapping from rows:
+inlines apart from its build date; beside it `manifest.json` has the version,
+hash and counts, `changes.json` / `changes.md` the change report and
+`timeline.html` the page built from it. The mapping from rows:
 
 | Snapshot | From |
 |---|---|
@@ -148,3 +156,4 @@ hash and counts. The mapping from rows:
 | `geo` | `Location` (`radius_km` → `r`) |
 | `images` | `Image` in order (`width`/`height` → `w`/`h`) |
 | `connections` | `Connection` in order |
+| event `singleSource` | `true` when the supporting evidence on the record claim and its atomic parts comes from one independent witness; absent otherwise (derived at publish time, additive: ADR 0018) |

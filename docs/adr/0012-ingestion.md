@@ -1,6 +1,6 @@
 # 0012 — Ingestion: scheduled, deterministic collection into the agents' queue
 
-**Status:** accepted (November 2026)
+**Status:** accepted (November 2026); amended by [0016](0016-object-storage.md); amended by [0019](0019-processes-and-release-gates.md)
 
 ## Context
 
@@ -139,3 +139,13 @@ and governance's sections, recent runs) is the first thing a session reads. Two 
   the network.
 - The thresholds (45, 0.5, 2.0, 4 stories on 3 days) are first guesses, set on the first real ingestion. Change
   them in one place each and say why.
+
+## Amendment note (November 2026)
+
+The entity resolution above says three SPARQL queries "per 100 items". The code uses batches of 50
+(`ingest/wikidata.py` `SPARQL_BATCH`), changed together with a 65-second query timeout (commit 81f575a);
+the decision is otherwise unchanged. The text above is kept as written; this note records the change.
+
+Where raw bytes live and how jobs run when hosted are now decided by [0016](0016-object-storage.md) (the `raw`
+object store, not `var/raw/`) and [0019](0019-processes-and-release-gates.md) (a `worker` process running
+`run_jobs --loop`, or Heroku Scheduler running `run_jobs`; the same locks either way).

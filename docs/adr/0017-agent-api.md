@@ -1,6 +1,6 @@
 # 0017 — Agents work through an authenticated API, never the database
 
-**Status:** accepted (November 2026)
+**Status:** proposed (November 2026)
 
 ## Context
 

@@ -1,6 +1,6 @@
 # 0019 — Production's processes locally, health and alerts, and release gates
 
-**Status:** accepted (November 2026)
+**Status:** proposed (November 2026); amends [0012](0012-ingestion.md) (how jobs run when hosted)
 
 ## Context
 

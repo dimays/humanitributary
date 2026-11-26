@@ -45,7 +45,7 @@ import: dump ## Dump, then upsert it into Postgres (idempotent; leaves Revisions
 	$(M) import_legacy var/legacy.json --retract-missing
 
 publish: ## A release in the object store (gates first; with var/legacy.json until the cutover), latest -> it
-	$(M) publish $(if $(wildcard $(LEGACY)),--legacy $(LEGACY))
+	$(M) publish $$(test -f $(LEGACY) && echo --legacy $(LEGACY))
 
 release-pull: ## Mirror the latest release (or VERSION=…) from the store into var/releases/<version>/ (+ latest)
 	$(M) storage pull-release $(VERSION)

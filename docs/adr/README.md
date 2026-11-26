@@ -36,6 +36,10 @@ things work now; an ADR says why, and what was given up.
 | [0013](0013-source-policy.md) | Source policy: what jobs fetch, what they never do, and why | accepted |
 | [0014](0014-technical-guide.md) | A technical guide whose chapters are stamped against the code they cover | proposed |
 | [0015](0015-the-gate-and-hooks.md) | One gate before every pull request, a receipt for it, and hooks that hold the line | proposed |
+| [0016](0016-object-storage.md) | Object storage for everything that isn't a row | proposed |
+| [0017](0017-agent-api.md) | Agents work through an authenticated API, never the database | proposed |
+| [0018](0018-single-source-marker.md) | A "single source" marker, and additive snapshot keys | proposed |
+| [0019](0019-processes-and-release-gates.md) | Production's processes locally, health and alerts, and release gates | proposed |
 <!-- index:end -->
 
 ## Template
