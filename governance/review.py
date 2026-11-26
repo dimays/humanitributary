@@ -268,4 +268,14 @@ def _thin_task(f: Finding, today: date, actor: str) -> str:
     return "queued"
 
 
-__all__ = ["compute", "findings", "review", "snapshot", "fmt_year"]
+def digest_section() -> str:
+    """Open branch proposals, for `manage.py digest`."""
+    rows = list(BranchProposal.objects.filter(status__in=OPEN).order_by("-created_at")[:20])
+    out = [f"## Branch proposals ({len(rows)} open, {RULES_VERSION})", ""]
+    out += [f"- #{p.pk} {p.rule_id} {p.branch.slug if p.branch_id else '(new)'}: {p.summary[:160]}" for p in rows]
+    thin = AgentTask.objects.filter(kind="audit", dedupe_key__startswith="thin:", status__in=["queued", "claimed"]).count()
+    out.append(f"\nFill-in tasks for thin branches: {thin} open.")
+    return "\n".join(out) + "\n"
+
+
+__all__ = ["compute", "digest_section", "findings", "review", "snapshot", "fmt_year"]

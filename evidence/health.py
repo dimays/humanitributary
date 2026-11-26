@@ -50,17 +50,25 @@ def collect(today: date | None = None) -> dict:
         by_era[era][status] += 1
         by_region[region][status] += 1
 
-    rows = defaultdict(list)
-    for row in Evidence.objects.filter(claim__field="as_written", claim__key="", claim__entry_id__in=published).values_list("claim_id", *EVIDENCE_FIELDS):
-        rows[row[0]].append(row[1:])
+    rows, claim_entry = defaultdict(list), {}
+    for row in Evidence.objects.filter(claim__field="as_written", claim__key="", claim__entry_id__in=published).values_list("claim_id", "claim__entry_id", *EVIDENCE_FIELDS):
+        rows[row[0]].append(row[2:])
+        claim_entry[row[0]] = row[1]
     wiki_only = sum(1 for r in rows.values() if wikipedia_only(r))
+    wiki_only_events = sum(1 for c, r in rows.items() if claim_entry[c] in ev_y and wikipedia_only(r))
+    from .publishing import says_sources_differ
+
+    contested_silent = 0
+    for entry_id, text in Entry.objects.filter(pk__in=published, claims__parent__isnull=True, claims__status="contested").distinct().values_list("pk", "text"):
+        if not says_sources_differ(text):
+            contested_silent += 1
     due = Claim.objects.filter(entry_id__in=published, recheck_after__isnull=False)
     dead = policy.get("dead_http_status")
     from work.models import AgentTask
 
     return {
         "today": today.isoformat(), "rules_version": policy.RULES_VERSION, "total": total, "by_era": by_era, "by_region": by_region, "atomic": atomic,
-        "wikipedia_only": wiki_only, "as_written": len(rows),
+        "wikipedia_only": wiki_only, "as_written": len(rows), "wikipedia_only_events": wiki_only_events, "contested_silent": contested_silent,
         "due_now": due.filter(recheck_after__lte=today).count(),
         "due_30": due.filter(recheck_after__gt=today, recheck_after__lte=today + timedelta(days=30)).count(),
         "due_365": due.filter(recheck_after__gt=today, recheck_after__lte=today + timedelta(days=365)).count(),
@@ -89,6 +97,10 @@ def markdown(data: dict | None = None, *, detail: bool = True) -> str:
         f"{n} record claims on published entries: " + ", ".join(f"{t[s]} {s.replace('_', ' ')} ({_pct(t[s], n)})" for s in STATUSES) + "."
     )
     out.append(f"{d['wikipedia_only']} of {d['as_written']} entries ({_pct(d['wikipedia_only'], d['as_written'])}) rest on Wikipedia alone.")
+    out.append(
+        f"Publishing rule: {d['wikipedia_only_events']} published events have no non-Wikipedia source and {d['contested_silent']} entries are "
+        "contested without saying the sources differ (published before the rule; the sweep queues tasks for them)."
+    )
     out.append(
         f"Rechecks: {d['due_now']} due now, {d['due_30']} more within 30 days, {d['due_365']} within a year. "
         f"Citations: {d['checked_citations']} of {d['citations']} link-checked, {d['dead_citations']} dead. "
