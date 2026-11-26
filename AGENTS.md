@@ -24,15 +24,16 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 | `timeline/` | Canonical content: `Region`, `Entry` (the shared id namespace) with `Branch` and `Event`, `BranchLink`, `EventLink`, `Connection`, `Location`, `PaleoPin`, `Image`. `services.py` is the write path (`save_branch`, `save_event`, `apply_changes`, `place`); `dates.py` derives precision and exact dates from date text; `ordering.py` is the snapshot order (`Entry.sort_key`, a fractional index: ADR 0008). |
 | `evidence/` | Canonical: `Publisher`, `Citation`, `Claim` (record claims and their atomic parts), `Evidence`. `confidence.py` computes status and confidence (independent witnesses: `independence.py`); `claims.py` splits entries into date, location, number and actor claims; `staleness.py` schedules rechecks; `conflicts.py` records disagreeing sources; `sweep.py` is `manage.py facts sweep`; `health.py` is `facts report`; `services.py` (`record_evidence`) and `publishing.py` (the publishing rule) are the agents' doors; every threshold is in `policy.py`. `publishers.py` holds the starting ratings for known publishers. See `docs/fact-checking.md`. |
 | `revisions/` | The audit log. `revising(actor, reason, task)` (`context.py`) is the only door to canonical tables; the trigger in `sql.py` refuses writes without it and records every changed row (ADR 0006). `admin_mixins.py` runs admin edits as `human:<username>`. |
-| `ingest/` | Collection, not canonical: `Feed`, `FetchRun`, `Document` + `DocumentVersion`, `Entity` (Wikidata), `DocumentEntity`, `BranchEntity` (routing), `Candidate`. Scrapers arrive later; the tables are ready. |
+| `ingest/` | Collection, not canonical (ADR 0012): `Feed`, `FetchRun`, `Document` + `DocumentVersion`, `Entity` (Wikidata) + `WikiTitle`, `DocumentEntity`, `BranchEntity` (routing), `Candidate`, `LinkCheck`, `SuggestedSource`, `JobState`. `jobs.py` (registry, runner, lock) and `job_defs.py` (every job, in run order) behind `manage.py run_jobs` / `run_job`; `http.py` + `policy.py` (the one fetcher and the source policy, ADR 0013); `seed.py` (sources, terms verdicts); `sources_wiki.py` (Current events portal, "<Year> in X"), `sources_news.py` (WHO, Federal Register, Gazette, Nobel, permitted RSS, Office of the Historian); `wikidata.py`, `wikitext.py`, `extract.py`, `store.py`; `routing.py` (branch scores, BranchEntity seeding); `process.py` (duplicates, clusters, priority, write_event tasks, new-branch signals); `linkhealth.py`; `lookup.py` (open-API adapters) and `second_source.py`; `manage.py digest`. |
 | `work/` | The agents' queue: `AgentTask`, `queue.py` (leases under `FOR UPDATE SKIP LOCKED`), `manage.py tasks`. |
 | `governance/` | `BranchMetric`, `BranchProposal`, and `manage.py branches`: `metrics.py` (each branch's shape on the page's time scale), `rules.py` (SPLIT-PLACE, SPLIT-TIME, MERGE-OVERLAP, END-STALE, NEW-BRANCH, THIN), `thresholds.py` (every threshold), `review.py` (proposals, tasks, hysteresis), `operations.py` (apply and revert). See `docs/branch-rules.md`. |
 | `publish/` | `Release`; the snapshot format (`content.py`: key order and a writer byte-compatible with `JSON.stringify`), `export.py` (Postgres → content), `legacy.py` (dump → Postgres), `release.py`, and the `import_legacy`, `publish` and `compare_content` commands. |
-| `tests/` | The suite: import idempotency, the round trip, entry order, revision enforcement, the queue, dates, the fact base and branch governance. |
-| `var/` | Gitignored: `legacy.json` dumps, `releases/<version>/` snapshots (`releases/latest` → newest), and later `raw/` fetched documents by content hash. |
-| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions; the data model with an ER sketch; how claims are checked; the branch rules. |
+| `tests/` | The suite: import idempotency, the round trip, entry order, revision enforcement, the queue, dates, the fact base, branch governance and ingestion (`test_ingest.py` on recorded cassettes in `fixtures/ingest/`: `cassette.py` replays them, `record_fixtures.py` re-records). |
+| `var/` | Gitignored: `legacy.json` dumps, `releases/<version>/` snapshots (`releases/latest` → newest), `raw/` fetched documents by content hash, `logs/` (the scheduled runs). |
+| `ops/` | The local schedule: `run-jobs.sh` (start Docker/Postgres or skip, then `run_jobs`), `launchd/run-jobs.plist` (template), `schedule.sh` (install / uninstall / status). |
+| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions (ingestion: 0012, source policy: 0013); the data model with an ER sketch; how claims are checked; the branch rules. |
 | `scripts/` | `make_env.py`; `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`). |
-| `.claude/skills/` | Agent skills: `review-branch-proposals`, `verify-claims`. |
+| `.claude/skills/` | Agent skills: `drain-write-events`, `review-branch-proposals`, `verify-claims`, `verify-stale-claims`. |
 
 ## Rules
 
@@ -108,6 +109,17 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
     `--legacy-file`, or the next import undoes it. Thresholds live in
     `governance/thresholds.py`; changing one means bumping `RULES_VERSION`.
     (ADR 0011)
+13. **Jobs fetch only what the source policy allows.** Every request goes
+    through `ingest.http.Fetcher`, which refuses `NEVER_FETCH` hosts
+    (`ingest/policy.py`: Britannica, OpenStax, the Guardian, BBC, NPR, AP,
+    Al Jazeera, Olympedia), non-`allowed` publishers and anything robots.txt
+    disallows, honors Crawl-delay and backs off. Never call `httpx`,
+    `requests` or `urllib` directly in a job. From news-like feeds keep the
+    headline, date, link and a short lead at most, never full text. A new
+    source gets its terms read first, and its verdict (with the clause) goes
+    in its Publisher's `access_notes` and ADR 0013. Keys come from `.env`
+    only and never reach logs, errors or fixtures. Lookup hits are
+    suggestions (`SuggestedSource`), never Evidence. (ADR 0013)
 
 ## Working
 
@@ -130,10 +142,21 @@ uv run python manage.py branches review  # the branch rules' weekly job: proposa
 uv run python manage.py branches list    # open proposals (show / apply / reject / revert <id>)
 ```
 
-`facts sweep` and `branches review` belong in the job runner's schedule
-(daily and weekly); `evidence.health.digest_section()` and
-`governance.review.digest_section()` are their sections for `manage.py
-digest`.
+Ingestion (ADR 0012):
+
+```bash
+uv run python manage.py digest                     # read this first: the queue by kind, top stories, signals, runs
+uv run python manage.py run_jobs                   # whatever is due, once (make jobs); --list shows the registry
+uv run python manage.py run_job portal --opt days=30          # one job now (backfill 30 days of Current events)
+uv run python manage.py run_job year_pages --opt branches=senegal,france
+uv run python manage.py run_job link_health --opt limit=200
+make schedule-install   # launchd: run_jobs every 15 minutes (the owner decides; schedule-status / schedule-uninstall)
+```
+
+`facts sweep` (daily, right after `link_health`) and `branches review`
+(weekly) run from the job runner as `facts_sweep` and `branches_review`;
+`manage.py digest` includes `evidence.health.digest_section()` and
+`governance.review.digest_section()`.
 
 Writing canonical content from a shell (an agent with a task):
 
@@ -163,7 +186,10 @@ Not deployed yet. The layout is Heroku-ready: `Procfile` (release phase runs
 migrations; web is gunicorn), whitenoise for the admin's static files,
 `DATABASE_URL`, `SECRET_KEY` and `ALLOWED_HOSTS` from config vars
 (`ENVIRONMENT=prod`). The `pg_trgm` extension is created by a migration
-(allowed on Heroku Postgres). The public site is a separate static deploy of a
+(allowed on Heroku Postgres). Scheduled jobs run there from Heroku Scheduler
+as `python manage.py run_jobs` every 10 minutes (the same command as local
+launchd; the advisory lock keeps runs from overlapping); move `var/raw/` to
+object storage first (dynos are ephemeral) and set `INGEST_CONTACT`. The public site is a separate static deploy of a
 release's `timeline.html`, `images/` and `outlines.js` to a CDN (ADR 0001).
 
 ## Style

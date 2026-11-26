@@ -1,6 +1,6 @@
 # The data model
 
-30 tables in seven apps (27 models and 3 many-to-many join tables), plus
+34 tables in seven apps (31 models and 3 many-to-many join tables), plus
 Django's own. **Canonical** tables (every one in `timeline` and `evidence`)
 accept writes only inside `revisions.revising()`, and each changed row leaves
 a Revision (ADR 0006). Everything else is working state. Every enum is a
@@ -40,6 +40,8 @@ erDiagram
     Candidate }o--o{ Document : "from"
     Candidate }o--o{ Entity : "about"
     Candidate }o--o| Event : "possible duplicate of"
+    Citation ||--o{ LinkCheck : "re-checked"
+    Claim ||--o{ SuggestedSource : "may be supported by"
 
     Branch ||--o{ BranchMetric : "measured"
     Branch ||--o{ BranchProposal : "proposed change"
@@ -91,22 +93,28 @@ entries to a **release** snapshot, and the site is built from it.
 
 ## ingest
 
+Working state, not canonical (ADR 0012). The jobs that fill these tables are listed in `ingest/job_defs.py`.
+
 | Table | What it's for |
 |---|---|
-| `Feed` | Something a job reads on a schedule: publisher, URL, kind (api, rss, sitemap, html), interval, enabled, kind-specific config, and conditional-request state (ETag, Last-Modified, cursor). |
-| `FetchRun` | One run of a feed: timings, status, counts (fetched, new, changed, unchanged, errors), error. |
-| `Document` | A fetched page or record by canonical URL (latest version): fetch time and status, sha256 content hash (raw bytes in `var/raw/<hash[:2]>/<hash>`), title, published date, language, license, extracted text, metadata JSON (wikilinks, categories, og: tags), `version` and `changed_at`. |
+| `Feed` | Something a job reads on a schedule: publisher, URL, kind (api, rss, sitemap, html), interval, enabled, `config` (`job` names the handler; lookup adapters are feeds with `job: lookup`, for their on/off switch), and conditional-request state (ETag, Last-Modified, cursor). |
+| `FetchRun` | One run of a job (`job`), with its feed if it reads one: timings, status (running, ok, partial, failed), counts, error (keys masked). |
+| `Document` | A fetched page or record by canonical URL (latest version): fetch time and status, sha256 content hash (raw bytes in `var/raw/<hash[:2]>/<hash>`), title, published date, language, license, extracted text (for news: a lead of at most 60 words), metadata JSON (wikilinks, revision id, categories, attribution …), `version` and `changed_at`. |
 | `DocumentVersion` | Every distinct content hash a document has had, so changed pages are detectable and old versions findable. |
-| `Entity` | A Wikidata item (QID unique): label, kind (person, place, polity, org, work, event, concept), coordinates, aliases. |
+| `Entity` | A Wikidata item (QID unique): label, kind (person, place, polity, org, work, event, concept), coordinates, aliases, its English article, `facts` (P31, P17, P131, P27, dates, ISO code), pageviews, when it was read. |
+| `WikiTitle` | English Wikipedia title → QID (redirects followed); an empty QID means no page or no item. The exact-resolution cache. |
 | `DocumentEntity` | Which entities a document mentions, with salience and mention count. |
-| `BranchEntity` | Which entities belong to a branch, with role and weight: the deterministic routing of new material to branches. |
-| `Candidate` | A proposed timeline item from one or more documents: kind (new_event, update, new_branch_signal), title, date guess and precision, entities, branch scores, possible duplicate event and its trigram similarity, cluster key, priority, status (queued, claimed, accepted, rejected, merged), and the entry it became. |
+| `BranchEntity` | Which entities belong to a branch, with role and weight: the deterministic routing of new material to branches. Seeded by exact Wikidata matches (`seed_branch_entities`); agents add the rest (`map_branch_entities` tasks). |
+| `Candidate` | A proposed timeline item from one or more documents: kind (new_event, update, new_branch_signal), title, date guess and precision, entities, documents, branch scores, possible duplicate event and its trigram similarity, cluster key, priority, status (queued, claimed, accepted, rejected, merged), the entry it became, a stable `source_key` and `details` (what the job read, routing hits, priority parts). |
+| `LinkCheck` | One link-health re-check of a citation: method (api, head, get), HTTP status, final URL, content hash, outcome (ok, changed, redirected, dead, error, blocked, skipped), ETag / Last-Modified, archive URL. The citation keeps the latest; this keeps the history. |
+| `SuggestedSource` | A lookup adapter's hit for a claim or a candidate (adapter, URL, title, ≤ 25-word snippet, score): a suggestion for an agent, never evidence; status suggested / accepted / rejected. |
+| `JobState` | A job's bookmark between runs (the second-source walk, the terms verdicts applied). |
 
 ## work
 
 | Table | What it's for |
 |---|---|
-| `AgentTask` | The queue: kind (write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation), target (entry, claim, candidate, proposal or a free reference), payload, priority, status, `dedupe_key` (one open task per kind and key), the lease (`claimed_by`, `claimed_at`, `lease_until`, attempts of `max_attempts`), result, error, and who created it. |
+| `AgentTask` | The queue: kind (write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation, map_branch_entities), target (entry, claim, candidate, proposal or a free reference), payload, priority, status, `dedupe_key` (one open task per kind and key), the lease (`claimed_by`, `claimed_at`, `lease_until`, attempts of `max_attempts`), result, error, and who created it. |
 
 ## governance
 
