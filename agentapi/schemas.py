@@ -85,6 +85,21 @@ RESULTS = {
         },
         "allOf": [{"if": {"properties": {"decision": {"const": "accept"}}}, "then": {"required": ["operations"]}}],
     },
+    "fill_gap": {
+        "type": "object", "additionalProperties": False, "required": ["decision"],
+        "properties": {
+            "decision": {"enum": ["written", "nothing_notable"]},
+            "events": {"type": "array", "minItems": 1, "maxItems": 3, "items": EVENT,
+                       "description": "On the task's branch, each inside the task's window (y in it, or its span overlapping it)."},
+            "sources_read": {"type": "array", "items": HTTPS, "maxItems": 50},
+            "note": {**NOTE, "description": "nothing_notable: what you searched and read, and why nothing is notable or sourceable."},
+        },
+        "allOf": [
+            {"if": {"properties": {"decision": {"const": "written"}}}, "then": {"required": ["events"]}},
+            {"if": {"properties": {"decision": {"const": "nothing_notable"}}},
+             "then": {"required": ["note"], "properties": {"note": {"minLength": 20}}, "not": {"required": ["events"]}}},
+        ],
+    },
     "map_branch_entities": {
         "type": "object", "additionalProperties": False, "required": ["branch", "entities"],
         "properties": {

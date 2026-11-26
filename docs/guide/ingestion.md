@@ -117,6 +117,8 @@ seeded feed's `interval_minutes` (`ingest/seed.py` `FEEDS`), shown in the third 
 | `facts_sweep` | day | — | The fact base's sweep (`evidence/sweep.py`, [ADR 0009](../adr/0009-fact-base.md)); runs right after `link_health`. |
 | `branches_review` | week | — | Branch governance's rules (`governance/review.py`, [ADR 0011](../adr/0011-branch-governance.md)). |
 | `second_source` | day | — | Suggested second sources for claims only Wikipedia supports. |
+| `gap_waves` | day | — | Content waves (`governance/waves.py`, [content waves](content-waves.md)): gaps in each branch's windows become `fill_gap` tasks (at most `FILL_GAP_TASKS_PER_DAY` new a day); the active wave advances. No requests. |
+| `gap_pointers` | 60 min | — | Pointers for queued `fill_gap` tasks (`governance/pointers.py`): the branch's Wikipedia history sections that name years in the window, and lookup hits, 20 tasks a run. |
 
 The lookup adapters also have `Feed` rows (`config.job` = `lookup`), but no job is named `lookup`: those rows are
 only on/off switches the adapters read.
@@ -570,7 +572,7 @@ after ([evidence and fact-checking](evidence-and-fact-checking.md), [how claims 
 `manage.py digest` (`make digest`) prints the Markdown overview the owner reads first (it needs the database, so
 agents working through the API go by their task payloads and the API's reads instead): open tasks by kind, the top
 `write_event` stories (`--top`, default 12), `write_event` tasks by top branch, `verify_claim` reasons and waiting
-suggestions, new-branch signals, the fact base's and branch governance's own sections, candidate counts, and the last
+suggestions, new-branch signals, the fact base's, branch governance's and the content waves' own sections, candidate counts, and the last
 24 hours of job runs with recent failures. `--sources` adds every feed (on or off, with its publisher's policy and
 tier) and the sources considered and skipped (`ingest/seed.py` `SKIPPED`). If no run happened in 24 hours it says
 so and points at `make schedule-status`.

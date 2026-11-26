@@ -5,6 +5,9 @@ order: 70
 covers:
   - governance/**
   - "!governance/migrations/**"
+  - "!governance/waves.py"
+  - "!governance/pointers.py"
+  - "!governance/management/commands/waves.py"
   - tests/test_governance.py
   - scripts/validate_branch_rules.sh
 ---
@@ -151,6 +154,13 @@ review`), in one transaction:
 5. Every open proposal this job created whose finding didn't come up this
    run is **withdrawn** ("the rule no longer fires"), and its queued task is
    cancelled. A claimed task stays with its agent.
+
+THIN looks at a branch as a whole. Content waves look at it window by
+window: the daily `gap_waves` job reuses these metrics to find the windows in
+which a branch has no event, or far fewer than its peers, and queues them as
+`fill_gap` tasks ([content waves](content-waves.md)). Its code lives here
+(`governance/waves.py`, `governance/pointers.py`, `manage.py waves`) and is
+described in that chapter.
 
 `--dry-run` does it all and rolls the transaction back. The result lists each
 finding with what happened to it: `proposed`, `refreshed`, `unchanged`,
@@ -349,7 +359,7 @@ Run it after changing a threshold or a rule. What it printed last time is in
 |---|---|
 | A threshold | `governance/thresholds.py` (or `settings.BRANCH_RULES`). If it changes what the rules propose, bump `RULES_VERSION`, run `scripts/validate_branch_rules.sh`, and update [branch rules](../branch-rules.md) and the table here. |
 | A rule's logic | Its function in `governance/rules.py`. Bump its id's version if it changes what it finds, and `RULES_VERSION`. Tests in `tests/test_governance.py` (`RuleTests`). A new rule goes in `RULES`, with a row here and a section in branch rules. |
-| A metric | `governance/metrics.py`; bump `METRICS_VERSION` (every branch then gets a new snapshot). `MetricTests` covers the scale and clustering. |
+| A metric | `governance/metrics.py`; bump `METRICS_VERSION` (every branch then gets a new snapshot). `MetricTests` covers the scale and clustering. Content waves read `events`, `region`, `links`, `structure` and the event rows: check [content waves](content-waves.md) too. |
 | The hysteresis | `review._propose()` and the `reject_*` and `undo_factor` thresholds. `ProposalTests` covers refresh, rejected proposals held back and withdrawal. A change of policy belongs in ADR 0011. |
 | A new operation | `operations.validate()` and `run()`. Revert works from Revisions, so it needs nothing new unless the op writes non-canonical rows. |
 | A new proposal kind or status | The model's choices and check constraints: a migration. |

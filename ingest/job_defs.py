@@ -166,3 +166,24 @@ def branches_review(ctx):
 def second_source_(ctx):
     """Suggested second sources for claims only Wikipedia supports (verify_claim tasks)."""
     second_source.run_second_source(ctx)
+
+
+@job("gap_waves", interval=DAY)
+def gap_waves(ctx):
+    """Content waves (governance/waves.py): gaps in each branch's windows → fill_gap tasks; the active wave advances."""
+    from governance import waves
+
+    per_day = ctx.opt("per_day")
+    out = waves.run(per_day=int(per_day) if per_day is not None else None, dry_run=bool(ctx.opt("dry_run", False)))
+    ctx.counts.update({k: v for k, v in out["counts"].items() if isinstance(v, int)})
+    for w, n in out["gaps"].items():
+        ctx.counts[f"{w}.gaps"] = n
+    ctx.counts["advanced"] = len(out["advanced_to"])
+
+
+@job("gap_pointers", interval=60)
+def gap_pointers(ctx):
+    """Pointers for queued fill_gap tasks (governance/pointers.py): Wikipedia history sections, lookup hits (unread)."""
+    from governance import pointers
+
+    pointers.run(ctx)

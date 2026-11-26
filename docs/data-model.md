@@ -108,13 +108,13 @@ Working state, not canonical (ADR 0012). The jobs that fill these tables are lis
 | `Candidate` | A proposed timeline item from one or more documents: kind (new_event, update, new_branch_signal), title, date guess and precision, entities, documents, branch scores, possible duplicate event and its trigram similarity, cluster key, priority, status (queued, claimed, accepted, rejected, merged), the entry it became, a stable `source_key` and `details` (what the job read, routing hits, priority parts). |
 | `LinkCheck` | One link-health re-check of a citation: method (api, head, get), HTTP status, final URL, content hash, outcome (ok, changed, redirected, dead, error, blocked, skipped), ETag / Last-Modified, archive URL. The citation keeps the latest; this keeps the history. |
 | `SuggestedSource` | A lookup adapter's hit for a claim or a candidate (adapter, URL, title, ≤ 25-word snippet, score): a suggestion for an agent, never evidence; status suggested / accepted / rejected. |
-| `JobState` | A job's bookmark between runs (the second-source walk, the terms verdicts applied). |
+| `JobState` | A job's bookmark between runs (the second-source walk, the terms verdicts applied, the active content wave and the last `gap_waves` run). |
 
 ## work
 
 | Table | What it's for |
 |---|---|
-| `AgentTask` | The queue: kind (write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation, map_branch_entities), target (entry, claim, candidate, proposal or a free reference), payload, priority, status, `dedupe_key` (one open task per kind and key), the lease (`claimed_by`, `claimed_at`, `lease_until`, attempts of `max_attempts`), result, error, and who created it. |
+| `AgentTask` | The queue: kind (write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation, map_branch_entities, fill_gap), target (entry, claim, candidate, proposal or a free reference), payload, priority, status, `dedupe_key` (one open task per kind and key), the lease (`claimed_by`, `claimed_at`, `lease_until`, attempts of `max_attempts`), result, error, and who created it. |
 
 ## agentapi
 

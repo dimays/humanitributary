@@ -142,7 +142,7 @@ rather than making a duplicate.
 
 ## The kinds of task
 
-`AgentTask.Kind` has seven kinds. Five are queued by jobs; two exist only for
+`AgentTask.Kind` has eight kinds. Six are queued by jobs; two exist only for
 people or agents to queue by hand with `tasks add`.
 
 | Kind | Queued by | Dedupe key | Priority | Target | Skill |
@@ -153,6 +153,7 @@ people or agents to queue by hand with `tasks add`.
 | `review_branch_proposal` | `governance/review.py` (`job:branches_review`, weekly) | `proposal:<id>` | 30 + min(20, ⌊10 × strength⌋) | `target_proposal`, `target_entry` (the branch) | `review-branch-proposals` |
 | `audit` | `governance/review.py`, for THIN findings | `thin:<branch slug>` | 15 | `target_entry` (the branch) | none |
 | `map_branch_entities` | `ingest/routing.py` (`job:seed_branch_entities`, weekly) | `branch:<slug>` | 1 | `target_entry` (the branch) | none |
+| `fill_gap` | `governance/waves.py` (`job:gap_waves`, daily) | `gap:<branch slug>:<from>:<to>` | 10–69: ten per wave (W1 60–69 … W6 10–19) plus the branch's importance | `target_entry` (the branch) | `fill-gaps` |
 | `enrich` | nothing (by hand) | | | | none |
 | `recheck_citation` | nothing (by hand) | | | | none |
 
@@ -273,6 +274,27 @@ landmark events and completes with `{"events": [...]}` (up to 30, each in the
 `write_event` event shape); the API creates them in `review` and stores
 their slugs in `result.entries`. No skill covers it yet.
 
+### fill_gap
+
+Built by `governance/waves.py` `payload()` for each gap in a branch's window
+of a content wave, at most `FILL_GAP_TASKS_PER_DAY` (20) new a day and one
+open per branch. How gaps, waves and priorities are computed, and every
+payload key, is in [content waves](content-waves.md#the-payload). In short:
+`wave`, `window` (`from`, `to`, `label`), `gap` (`kind`, counts, `run`),
+`branch` (its text, span, region, lineage, links, `id_prefixes`, Wikipedia
+articles and QIDs), `before` / `after` (the published events around the
+window), `in_window`, `priority_parts`, `instructions`, and later `pointers`
+(the `gap_pointers` job: Wikipedia history sections and lookup hits, unread).
+
+On a re-run, `gap_waves` refreshes a queued task's payload and priority if
+they changed, keeping `pointers`, and cancels a queued task whose window is
+no longer a gap.
+
+What the agent does: read about the branch in that window and complete with
+`{"decision": "written", "events": [1–3 events]}` or `{"decision":
+"nothing_notable", "note": "…"}`. The events land in review; a
+`nothing_notable` result keeps the job off that window for 180 days.
+
 ### map_branch_entities
 
 Built by `ingest/routing.py` when no exact Wikidata match was found for a
@@ -325,6 +347,7 @@ production URL.
 | `verify-claims` | `verify_claim` | Claim; read each cited page; complete with a stance per page and part as `evidence` rows; what to do per reason (`no_second_source` on the atomic parts, `conflict` with a `proposed_text` for the owner, the recheck reasons). |
 | `verify-stale-claims` | `verify_claim` from ingestion | The dead-link and changed-page cases (archived copies, replacements, re-recording `supports` to stamp a new hash) and suggested second sources (read each, add it as evidence only if it explicitly supports the claim, list it in `suggestions.accepted` or `rejected`). |
 | `review-branch-proposals` | `review_branch_proposal` | What to ask of each rule; fill every `needs_agent` field; accept with the operations (for the owner's `branches apply`) or reject with a note. |
+| `fill-gaps` | `fill_gap` | Claim; read the window, the events around it and the pointers; check duplicates with `GET search`; write 1–3 events in SCHEMA style on the branch's id prefix (titles ≤ 60, verbatim excerpts, contested claims attributed, a non-Wikipedia source each), or complete `nothing_notable` with what was read. |
 
 ## From a task to the records
 
@@ -419,6 +442,7 @@ results, so `process` reads `result.entry` unchanged.
 | `verify_claim` | `claim`, `evidence` (`url`, `stance`, optional `claim` for a part, `excerpt`, `method`, `title`, `found`), optional `suggestions`, `proposed_text`, `note` | Each row through `record_evidence()` on the claim or one of its entry's claims; `SuggestedSource` rows marked `accepted` or `rejected`. `proposed_text` is stored, not applied. |
 | `review_branch_proposal` | `decision` (`accept` with `operations`, or `reject`), `proposal`, `note` | Reject: recorded on the proposal. Accept: the operations are checked and stored on the proposal with status `accepted`, for the owner's `branches apply`. |
 | `map_branch_entities` | `branch`, `entities` (`qid`, `role`, `label`; up to 20) | A `BranchEntity` per item, and a stub `Entity` for a QID not yet fetched. |
+| `fill_gap` | `decision`: `written` (with `events`, 1 to 3) or `nothing_notable` (with a `note` of at least 20 characters, and no events); optional `sources_read` | Each event must be on the task's branch and inside its window (else `ApplyError`), then is created as for `write_event`; the slugs go in `result.entries`. `nothing_notable` writes nothing. |
 
 `complete` runs in this order:
 
@@ -434,7 +458,8 @@ results, so `process` reads `result.entry` unchanged.
    task you don't hold is a 409.
 3. A result that is well-formed but can't be applied (an id that exists, an
    unknown branch, an uncitable URL, a task about another claim or
-   proposal, operations with placeholders left) raises `ApplyError`: a 422
+   proposal, operations with placeholders left, a `fill_gap` event outside
+   its window) raises `ApplyError`: a 422
    with the reason, everything rolled back, the task still held.
 
 Nothing the API writes is published: events land in `review`, evidence is
