@@ -21,16 +21,18 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 |---|---|
 | `site/` | The static site: `template.html`, `build.mjs` (builds `site/timeline.html` from `data/*.js`, or from a snapshot with `--from-json`; `--dump-json` writes the resolved content for import), `canonical.mjs` (the one content shape both directions share), `restructure.mjs`, `SCHEMA.md` (the content model and the citation rules), `images/` and `outlines.js` (inputs, kept beside the page), `globe-assets.json`, and the content tools (`build-outlines.mjs`, `fetch-images.mjs`, …). `data/*.js` is the legacy content, imported until the cutover (ADR 0001). |
 | `config/` | Settings (`SITE_NAME`, `DATABASE_URL`, `VAR_DIR`, `TASK_LEASE_MINUTES`), URLs (the admin only), WSGI/ASGI. |
-| `timeline/` | Canonical content: `Region`, `Entry` (the shared id namespace) with `Branch` and `Event`, `BranchLink`, `EventLink`, `Connection`, `Location`, `PaleoPin`, `Image`. `services.py` is the write path (`save_branch`, `save_event`, `apply_changes`); `dates.py` derives precision and exact dates from date text. |
-| `evidence/` | Canonical: `Publisher`, `Citation`, `Claim`, `Evidence`. `confidence.py` computes a claim's status and confidence from its evidence; `publishers.py` holds the starting ratings for known publishers. |
+| `timeline/` | Canonical content: `Region`, `Entry` (the shared id namespace) with `Branch` and `Event`, `BranchLink`, `EventLink`, `Connection`, `Location`, `PaleoPin`, `Image`. `services.py` is the write path (`save_branch`, `save_event`, `apply_changes`, `place`); `dates.py` derives precision and exact dates from date text; `ordering.py` is the snapshot order (`Entry.sort_key`, a fractional index: ADR 0008). |
+| `evidence/` | Canonical: `Publisher`, `Citation`, `Claim` (record claims and their atomic parts), `Evidence`. `confidence.py` computes status and confidence (independent witnesses: `independence.py`); `claims.py` splits entries into date, location, number and actor claims; `staleness.py` schedules rechecks; `conflicts.py` records disagreeing sources; `sweep.py` is `manage.py facts sweep`; `health.py` is `facts report`; `services.py` (`record_evidence`) and `publishing.py` (the publishing rule) are the agents' doors; every threshold is in `policy.py`. `publishers.py` holds the starting ratings for known publishers. See `docs/fact-checking.md`. |
 | `revisions/` | The audit log. `revising(actor, reason, task)` (`context.py`) is the only door to canonical tables; the trigger in `sql.py` refuses writes without it and records every changed row (ADR 0006). `admin_mixins.py` runs admin edits as `human:<username>`. |
 | `ingest/` | Collection, not canonical: `Feed`, `FetchRun`, `Document` + `DocumentVersion`, `Entity` (Wikidata), `DocumentEntity`, `BranchEntity` (routing), `Candidate`. Scrapers arrive later; the tables are ready. |
 | `work/` | The agents' queue: `AgentTask`, `queue.py` (leases under `FOR UPDATE SKIP LOCKED`), `manage.py tasks`. |
-| `governance/` | Tables only for now: `BranchMetric`, `BranchProposal`. |
+| `governance/` | `BranchMetric`, `BranchProposal`, and `manage.py branches`: `metrics.py` (each branch's shape on the page's time scale), `rules.py` (SPLIT-PLACE, SPLIT-TIME, MERGE-OVERLAP, END-STALE, NEW-BRANCH, THIN), `thresholds.py` (every threshold), `review.py` (proposals, tasks, hysteresis), `operations.py` (apply and revert). See `docs/branch-rules.md`. |
 | `publish/` | `Release`; the snapshot format (`content.py`: key order and a writer byte-compatible with `JSON.stringify`), `export.py` (Postgres → content), `legacy.py` (dump → Postgres), `release.py`, and the `import_legacy`, `publish` and `compare_content` commands. |
-| `tests/` | The suite: import idempotency, the round trip, revision enforcement, the queue, dates and confidence. |
+| `tests/` | The suite: import idempotency, the round trip, entry order, revision enforcement, the queue, dates, the fact base and branch governance. |
 | `var/` | Gitignored: `legacy.json` dumps, `releases/<version>/` snapshots (`releases/latest` → newest), and later `raw/` fetched documents by content hash. |
-| `docs/adr/`, `docs/data-model.md` | Decisions, and the data model with an ER sketch. |
+| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions; the data model with an ER sketch; how claims are checked; the branch rules. |
+| `scripts/` | `make_env.py`; `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`). |
+| `.claude/skills/` | Agent skills: `review-branch-proposals`, `verify-claims`. |
 
 ## Rules
 
@@ -64,7 +66,11 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
    `Claim` on an entry, backed by `Evidence` rows tying it to `Citation`s, each
    with a stance (supports, partial, conflicts, unrelated), who checked it and
    how. Claim status and confidence are computed (`evidence.confidence`),
-   never typed in. Excerpts are at most 25 words. A citation must be a page
+   never typed in: corroborated means two independent publishers (Wikipedia
+   counts once). Record what you read with `manage.py facts record` (it
+   stamps the check and recomputes the claim); put new sources on the atomic
+   parts (date, place, number, actor), since the import owns the record
+   claim's citations. Excerpts are at most 25 words. A citation must be a page
    that was actually fetched and read, and must explicitly support the claim
    (`site/SCHEMA.md`, "Citation rules"). Only supporting evidence is published
    as a source. (ADR 0004)
@@ -89,6 +95,20 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
     --apply`, `apply-fixes.mjs --apply`, `fetch-images.mjs` and friends
     rewrite `site/data/`; run them only when that is the task.
 
+11. **Publish through the rule.** An entry becomes `published` with
+    `manage.py facts publish <slug>` (`evidence.publishing`): no contested
+    claim unless its text says the sources differ, and no event without a
+    non-Wikipedia source after the 14-day grace for current events. An
+    override needs a reason, which is recorded. (ADR 0010)
+12. **Branch structure changes come from proposals.** `manage.py branches
+    review` (a job) proposes splits, merges, end dates and new branches by
+    fixed rules; an agent or the owner decides each with `branches apply`
+    (the operations run through the services and can be reverted with
+    `branches revert`) or `branches reject`. Until the cutover apply with
+    `--legacy-file`, or the next import undoes it. Thresholds live in
+    `governance/thresholds.py`; changing one means bumping `RULES_VERSION`.
+    (ADR 0011)
+
 ## Working
 
 ```bash
@@ -103,7 +123,17 @@ make roundtrip    # dump → import → publish → diff the JSON and both built
 make test         # uv run python manage.py test (needs the database)
 make check        # Django checks, missing migrations, the site's data validation
 make serve        # the admin at http://localhost:8000/admin/ (manage.py createsuperuser first)
+
+uv run python manage.py facts sweep      # the fact base's daily job: split claims, schedule rechecks, queue verify_claim tasks
+uv run python manage.py facts report     # its health: corroborated / single source / contested / stale, by era and region
+uv run python manage.py branches review  # the branch rules' weekly job: proposals + review_branch_proposal tasks
+uv run python manage.py branches list    # open proposals (show / apply / reject / revert <id>)
 ```
+
+`facts sweep` and `branches review` belong in the job runner's schedule
+(daily and weekly); `evidence.health.digest_section()` and
+`governance.review.digest_section()` are their sections for `manage.py
+digest`.
 
 Writing canonical content from a shell (an agent with a task):
 
@@ -118,7 +148,7 @@ with revising("agent:claude-writer", reason="write_event from candidate 412", ta
 
 New entries start as `draft`; only `published` ones reach a snapshot.
 The tests run against the same Docker Postgres (Django creates a
-`test_tributaries` database); the suite takes a few seconds. The full round
+`test_<your database>` database); the suite takes about 15 seconds. The full round
 trip on the real content takes about 5 seconds when nothing changed (the
 first import into an empty database, about 20).
 

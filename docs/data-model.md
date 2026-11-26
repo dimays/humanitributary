@@ -80,8 +80,8 @@ entries to a **release** snapshot, and the site is built from it.
 |---|---|
 | `Publisher` | A cited site by domain (Wikipedia editions are one): reliability `tier` 1–4 (empty = unrated), license, `fetch_policy` (allowed, browser_only, forbidden) and access notes. Starting ratings for known sites: `evidence/publishers.py`. |
 | `Citation` | One cited URL (https only, never openstax.org), shared by every claim citing it: canonical URL, title, kind, and the last check (when, HTTP status, content hash, archive URL). |
-| `Claim` | An atomic statement about an entry: `field` (as_written, date, title, text, location, origin, why, connection, link) and `key`, its `value` as JSON, and the computed `status` and `confidence`, plus `recheck_after`. Legacy content has one `as_written` claim per entry and `why` / `origin` claims where they exist. |
-| `Evidence` | A claim ↔ citation pair in cite order: `stance`, an excerpt of ≤ 25 words, `checked_at`, `checked_by` (agent / human / job), `method` (legacy, fetch_match, agent_read, browser_read, human), and the title and kind as the entry cites it. Only supporting evidence is published. |
+| `Claim` | An atomic statement about an entry: `field` (as_written, date, title, text, location, origin, why, connection, link, number, actor) and `key`, its `value` as JSON, the computed `status` and `confidence`, and when to re-read it (`recheck_after`, `recheck_reason`, `recheck_requested_at`). Legacy content has one `as_written` claim per entry and `why` / `origin` claims where they exist (the record claims); the splitter adds date, location, number and actor claims as their children (`parent`). See `docs/fact-checking.md`. |
+| `Evidence` | A claim ↔ citation pair in cite order: `stance`, an excerpt of ≤ 25 words, `checked_at`, `checked_by` (agent / human / job), `method` (legacy, fetch_match, agent_read, browser_read, human), the title and kind as the entry cites it, what the source says when it differs (`found_value`), and the page's hash when checked (`content_hash`). Only supporting evidence is published. |
 
 ## revisions
 
@@ -108,12 +108,12 @@ entries to a **release** snapshot, and the site is built from it.
 |---|---|
 | `AgentTask` | The queue: kind (write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation), target (entry, claim, candidate, proposal or a free reference), payload, priority, status, `dedupe_key` (one open task per kind and key), the lease (`claimed_by`, `claimed_at`, `lease_until`, attempts of `max_attempts`), result, error, and who created it. |
 
-## governance (tables only for now)
+## governance
 
 | Table | What it's for |
 |---|---|
-| `BranchMetric` | A job's snapshot of a branch's shape: counts per time window, density, region spread, link degree (JSON), with the rules version. |
-| `BranchProposal` | A rule's proposed split, merge, rename, new branch or ending, with the rule id, its evidence and the proposed change (JSON), and the decision (status, by whom, when, note). Applying one goes through the timeline's services. |
+| `BranchMetric` | `manage.py branches metrics`'s snapshot of a branch's shape (events, span, windows, density against peers, gaps, phases, links, geographic clusters, structure; JSON, see `docs/branch-rules.md`), stored when it changes, with the metrics version. |
+| `BranchProposal` | A rule's proposed split, merge, new branch or ending (`rule_id` such as `SPLIT-PLACE-v1`), with what it saw (`evidence`), the change (`payload`: its key, strength, operations and the fields an agent must write), and the decision (status proposed → applied / rejected / withdrawn, by whom, when, note). `branches apply` runs the operations through the timeline's services and records the transaction in `payload.applied`; `branches revert` undoes it from the Revisions. |
 
 ## publish
 
