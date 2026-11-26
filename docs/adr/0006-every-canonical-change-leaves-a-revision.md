@@ -12,7 +12,8 @@ layer" is only as good as the least careful writer, and `QuerySet.update()`,
 
 ## Decision
 
-The database enforces it. A trigger (`tributaries_audit()`, `revisions/sql.py`)
+The database enforces it. A trigger (`humanitributary_audit()`, `revisions/sql.py`; named
+`tributaries_audit()` until the rename, revisions 0003)
 sits on every table of the canonical apps, `timeline` and `evidence`. For each
 inserted, updated or deleted row it:
 

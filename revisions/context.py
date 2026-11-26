@@ -6,7 +6,7 @@
         timeline.services.save_event(...)
 
 It opens a transaction and sets three transaction-local Postgres settings that the audit trigger reads:
-`tributaries.actor`, `tributaries.reason` and `tributaries.task_id`. Outside it, the trigger rejects the write.
+`humanitributary.actor`, `humanitributary.reason` and `humanitributary.task_id`. Outside it, the trigger rejects the write.
 Nesting is allowed (an inner block may name a different actor or reason; the outer one is restored on exit).
 """
 
@@ -37,8 +37,8 @@ def current() -> Revising | None:
 
 def _set(cursor, actor: str, reason: str, task_id: str):
     cursor.execute(
-        "SELECT set_config('tributaries.actor', %s, true), set_config('tributaries.reason', %s, true),"
-        " set_config('tributaries.task_id', %s, true)",
+        "SELECT set_config('humanitributary.actor', %s, true), set_config('humanitributary.reason', %s, true),"
+        " set_config('humanitributary.task_id', %s, true)",
         [actor, reason, task_id],
     )
 
@@ -52,8 +52,8 @@ def revising(actor: str, reason: str = "", task=None):
     with transaction.atomic():
         with connection.cursor() as c:
             c.execute(
-                "SELECT current_setting('tributaries.actor', true), current_setting('tributaries.reason', true),"
-                " current_setting('tributaries.task_id', true)"
+                "SELECT current_setting('humanitributary.actor', true), current_setting('humanitributary.reason', true),"
+                " current_setting('humanitributary.task_id', true)"
             )
             prev = [v or "" for v in c.fetchone()]
             _set(c, ctx.actor, ctx.reason, str(ctx.task_id or ""))
