@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "governance",
     "work",
     "publish",
+    "guide",  # the technical guide's tools (manage.py guide): no models
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

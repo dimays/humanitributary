@@ -3,7 +3,7 @@ PY := uv run python
 M := $(PY) manage.py
 TODAY := $(shell date +%F)
 
-.PHONY: help env db db-stop psql migrate dump import publish build build-release roundtrip test check serve jobs digest schedule-install schedule-uninstall schedule-status
+.PHONY: help env db db-stop psql migrate dump import publish build build-release roundtrip test check check-adr adr-index check-guide guide-stamp guide-status guide-index check-pr serve jobs digest schedule-install schedule-uninstall schedule-status
 
 help: ## List the commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -53,6 +53,28 @@ check: ## Django checks, missing migrations, and the site's data validation
 	$(M) check
 	$(M) makemigrations --check --dry-run
 	node site/build.mjs --check | tail -1
+
+check-adr: ## The ADRs agree: names, numbers, Status lines, amendments both ways, the index
+	@python3 scripts/check_adr.py
+
+adr-index: ## Rewrite docs/adr/README.md's index
+	@python3 scripts/check_adr.py --write
+
+check-guide: ## Every guide chapter reviewed against the code it covers (names what to read)
+	@$(M) guide check
+
+guide-stamp: ## After reviewing a chapter against the change: make guide-stamp CHAPTER=ingestion
+	@test -n "$(CHAPTER)" || { echo "name it: make guide-stamp CHAPTER=<chapter> (make guide-status lists them)"; exit 2; }
+	@$(M) guide stamp $(CHAPTER)
+
+guide-status: ## Every guide chapter, when it was reviewed, fresh or not
+	@$(M) guide status
+
+guide-index: ## Rewrite docs/guide/README.md's chapter list
+	@$(M) guide index
+
+check-pr: ## The gate before a pull request (and CI): guide, ADRs, checks, tests, round trip; writes a receipt
+	@$(PY) scripts/check_pr.py
 
 serve: ## The admin (the owner's review screen) at http://localhost:8000/admin/
 	$(M) runserver 8000
