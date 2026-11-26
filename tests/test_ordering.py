@@ -4,7 +4,7 @@ import random
 
 from django.test import SimpleTestCase, TestCase
 
-from publish.content import dumps
+from publish.content import dumps, legacy_view
 from publish.export import build_content
 from publish.legacy import import_content
 from revisions import revising
@@ -77,7 +77,7 @@ class ImportOrderTests(TestCase):
         import_content(data)
         after = dict(Entry.objects.values_list("slug", "sort_key"))
         self.assertEqual({s: k for s, k in after.items() if s != "an-extra"}, keys)
-        self.assertEqual(dumps(build_content()), dumps(data))
+        self.assertEqual(dumps(legacy_view(build_content())), dumps(data))
 
     def test_services_append_and_place(self):
         import_content(small())

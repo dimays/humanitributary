@@ -43,6 +43,10 @@ written exactly as the source supports it: "c. 3100 BCE", "4.54 ± 0.05 billion 
 }
 ```
 
+Snapshots from Postgres (`manage.py publish`) may also carry `singleSource: true` on an event: everything that
+supports its facts comes from one independent publisher (Wikipedia counts as one). It is derived at publish time
+from the evidence, never written in `data/*.js`; the event panel shows it as a quiet "Single source" note (ADR 0018).
+
 ## Extra sources for an existing entry
 
 ```js

@@ -12,7 +12,7 @@ from django.test import TestCase, override_settings
 
 from evidence.models import Citation, Claim, Evidence, Publisher
 from publish.compare import differences
-from publish.content import KEYS, dumps, js_number, read_js_keys
+from publish.content import ADDITIVE, KEYS, dumps, js_number, legacy_view, read_js_keys
 from publish.export import build_content
 from publish.legacy import changes, import_content
 from publish.models import Release
@@ -100,10 +100,35 @@ class ImportTests(TestCase):
 
 class RoundTripTests(TestCase):
     def test_import_then_export_gives_back_the_input(self):
+        """Exact on every key the legacy dump has; the additive keys (ADR 0018) are the only difference."""
         import_content(small())
         out = build_content()
-        self.assertEqual(differences(small(), out), [])
-        self.assertEqual(dumps(out), dumps(small()))
+        self.assertEqual(differences(small(), legacy_view(out)), [])
+        self.assertEqual(dumps(legacy_view(out)), dumps(small()))
+        extra = {k for e in out["events"] for k in e} - {k for e in small()["events"] for k in e}
+        self.assertLessEqual(extra, set(ADDITIVE["event"]))
+
+    def test_single_source_marks_events_resting_on_one_publisher(self):
+        import_content(small())
+        flagged = {e["id"] for e in build_content()["events"] if e.get("singleSource")}
+        # Wikipedia only, and one non-Wikipedia publisher: one witness each. Wikipedia + Britannica: two.
+        self.assertIn("an-punic-wars", flagged)
+        self.assertIn("un-charter", flagged)
+        self.assertNotIn("an-caesar-assassinated", flagged)
+        # A second publisher on an atomic part (the date) lifts the marker.
+        from evidence.services import record_evidence
+        from timeline.services import apply_changes
+
+        record = Claim.objects.get(entry__slug="un-charter", field="as_written", key="")
+        with revising("agent:test", reason="second source"):
+            part = Claim(entry=record.entry, parent=record, field="date", key="")
+            apply_changes(part, {"value": {"when": "1945"}})
+            record_evidence(part, url="https://avalon.law.yale.edu/subject_menus/unmenu.asp", stance="supports", checked_by="agent:test", title="UN documents")
+        self.assertNotIn("un-charter", {e["id"] for e in build_content()["events"] if e.get("singleSource")})
+
+    def test_single_source_is_deterministic(self):
+        import_content(small())
+        self.assertEqual(dumps(build_content()), dumps(build_content()))
 
     def test_unpublished_entries_and_links_to_them_stay_out(self):
         import_content(small())
@@ -123,22 +148,19 @@ class RoundTripTests(TestCase):
         self.assertEqual(ev["cites"], [])
 
     def test_publish_writes_a_snapshot_once_per_content(self):
+        from infra import storage
+
         import_content(small())
-        tmp = Path(tempfile.mkdtemp())
-        try:
-            with override_settings(VAR_DIR=tmp):
-                r1, created1 = publish(actor="job:test")
-                r2, created2 = publish(actor="job:test")
-            self.assertTrue(created1)
-            self.assertFalse(created2)
-            self.assertEqual(r1.pk, r2.pk)
-            body = (tmp / r1.snapshot_path).read_text()
-            self.assertEqual(json.loads(body), small())
-            self.assertEqual((tmp / "releases" / "latest" / "content.json").read_text(), body)
-            self.assertEqual(r1.counts["events"], 4)
-            self.assertEqual(Release.objects.count(), 1)
-        finally:
-            shutil.rmtree(tmp)
+        r1, created1 = publish(actor="job:test", skip_gates=("build",))
+        r2, created2 = publish(actor="job:test", skip_gates=("build",))
+        self.assertTrue(created1)
+        self.assertFalse(created2)
+        self.assertEqual(r1.pk, r2.pk)
+        body = storage.read(storage.RELEASES, r1.snapshot_path)
+        self.assertEqual(legacy_view(json.loads(body)), small())
+        self.assertEqual(storage.read_pointer()["version"], r1.version)
+        self.assertEqual(r1.counts["events"], 4)
+        self.assertEqual(Release.objects.count(), 1)
 
     @skipUnless(shutil.which("node"), "needs Node")
     def test_site_builds_from_the_snapshot_identically(self):
@@ -147,7 +169,7 @@ class RoundTripTests(TestCase):
         tmp = Path(tempfile.mkdtemp())
         try:
             (tmp / "a.json").write_text(dumps(small()))
-            (tmp / "b.json").write_text(dumps(build_content()))
+            (tmp / "b.json").write_text(dumps(legacy_view(build_content())))
             pages = []
             for name in ("a", "b"):
                 subprocess.run(

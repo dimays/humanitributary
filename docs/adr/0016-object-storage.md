@@ -1,6 +1,6 @@
 # 0016 — Object storage for everything that isn't a row
 
-**Status:** accepted (November 2026)
+**Status:** proposed (November 2026)
 
 ## Context
 

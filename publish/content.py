@@ -14,7 +14,7 @@ from django.conf import settings
 # Must equal KEYS in site/canonical.mjs (tests/test_content_format.py checks it).
 KEYS = {
     "branch": ["id", "name", "region", "start", "end", "startWhen", "endWhen", "parents", "into", "text", "cites", "origin", "geo", "images", "why", "connections", "whyCites"],
-    "event": ["id", "branch", "y", "end", "when", "title", "text", "imp", "link", "cites", "geo", "images", "why", "connections", "whyCites"],
+    "event": ["id", "branch", "y", "end", "when", "title", "text", "imp", "link", "cites", "geo", "images", "why", "connections", "whyCites", "singleSource"],
     "cite": ["t", "u", "k"],
     "origin": ["note", "links", "cites"],
     "originLink": ["id", "how", "note"],
@@ -22,6 +22,17 @@ KEYS = {
     "image": ["src", "w", "h", "title", "credit", "license", "page"],
     "connection": ["id", "note"],
 }
+
+
+# Keys Postgres derives at publish time that the legacy files never had (ADR 0018 amends ADR 0007): the round trip
+# compares a release with a legacy dump after dropping them, and must still be exact for every other key.
+ADDITIVE = {"event": ["singleSource"]}
+
+
+def legacy_view(content: dict) -> dict:
+    """The snapshot as the legacy files would write it: the additive keys left out, everything else untouched."""
+    drop = set(ADDITIVE["event"])
+    return {**content, "events": [{k: v for k, v in e.items() if k not in drop} for e in content["events"]]}
 
 
 def read_js_keys(path: Path | None = None) -> dict[str, list[str]]:

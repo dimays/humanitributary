@@ -112,6 +112,8 @@ p.why { border-left: 3px solid var(--accent); padding: 2px 0 2px 11px; margin: 4
 .cites .k-primary { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); }
 .cites .k-textbook, .cites .k-paper, .cites .k-museum, .cites .k-archive { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--fg); }
 .synthetic-note { font-size: 12px; color: var(--muted); background: var(--chip); border-radius: 8px; padding: 6px 9px; margin: 8px 0; }
+.single { font-size: 12px; color: var(--muted); margin: -2px 0 8px; }
+.single b { font-weight: 600; font-size: 10.5px; padding: 0 6px; border-radius: 9px; background: var(--chip); margin-right: 5px; vertical-align: 1px; }
 
 @media (max-width: 1500px) { header h1 span { display: none; } .btn kbd { display: none; } }
 .grip { display: none; }
@@ -1753,7 +1755,10 @@ function renderPanel() {
     html += `<p>${esc(ev.text)}</p>`;
     if (ev.link && B.get(ev.link)) html += `<div class="rel">Connects with</div>${chip(B.get(ev.link))}`;
     html += whyBlock(ev);
-    html += `<h3>Sources</h3>${citeList([...ev.cites, ...(ev.whyCites || [])])}`;
+    html += `<h3>Sources</h3>`;
+    // Set at publish time when everything behind the event comes from one publisher (Wikipedia counts as one).
+    if (ev.singleSource) html += `<div class="single"><b>Single source</b>Everything here rests on one publisher so far.</div>`;
+    html += citeList([...ev.cites, ...(ev.whyCites || [])]);
   } else if (ev.kind === "pos") {
     html += `<div class="synthetic-note">You're on this branch at a moment between its recorded events. Use ← → to step to its nearest events.</div>`;
   } else {

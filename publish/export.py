@@ -3,10 +3,16 @@
 Only `published` entries go out; links to anything unpublished are left out. A claim's citations go out in their
 order, except evidence an agent has found to conflict with the claim or be unrelated to it: the page lists a source
 only where it supports (or partly supports) what the entry says.
+
+An event whose facts rest on one independent publisher carries `"singleSource": true` (docs/adr/0018-single-
+source-marker.md): every supporting piece of evidence on its record claim and that claim's atomic parts (date, place,
+numbers, actors) comes from one witness (evidence/independence.py; all of Wikipedia is one). It is derived from the
+evidence rows alone, never from the date or a stored status, so the same database always gives the same snapshot.
 """
 
 from collections import defaultdict
 
+from evidence.independence import witness
 from evidence.models import Claim, Evidence
 from timeline.models import Branch, BranchLink, Connection, Event, EventLink, Image, Location, Status
 
@@ -70,6 +76,8 @@ def build_content() -> dict:
             c["k"] = k
         cites[claim_of[cid]].append(c)
 
+    single = single_source_events([e.pk for e in events])
+
     def common(o, x):
         if x.pk in geo:
             o["geo"] = geo[x.pk]
@@ -107,5 +115,19 @@ def build_content() -> dict:
         if e.pk in first_link:
             o["link"] = slug[first_link[e.pk]]
         common(o, e)
+        if e.pk in single:
+            o["singleSource"] = True
         out_e.append(_ordered(o, "event"))
     return {"branches": out_b, "events": out_e}
+
+
+def single_source_events(event_ids: list[int]) -> set[int]:
+    """The events among `event_ids` whose supporting evidence (record claim and its atomic parts) has one witness."""
+    record = dict(Claim.objects.filter(entry_id__in=event_ids, field="as_written", key="", parent__isnull=True).values_list("id", "entry_id"))
+    of_claim = dict(record)
+    of_claim |= dict(Claim.objects.filter(parent_id__in=record).values_list("id", "entry_id"))
+    witnesses = defaultdict(set)
+    rows = Evidence.objects.filter(claim_id__in=of_claim, stance__in=SHOWN_STANCES).values_list("claim_id", "citation__publisher__domain")
+    for cid, domain in rows:
+        witnesses[of_claim[cid]].add(witness(domain))
+    return {e for e, w in witnesses.items() if len(w) == 1}

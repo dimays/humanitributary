@@ -8,7 +8,7 @@
 
 export const KEYS = {
   branch: ["id", "name", "region", "start", "end", "startWhen", "endWhen", "parents", "into", "text", "cites", "origin", "geo", "images", "why", "connections", "whyCites"],
-  event: ["id", "branch", "y", "end", "when", "title", "text", "imp", "link", "cites", "geo", "images", "why", "connections", "whyCites"],
+  event: ["id", "branch", "y", "end", "when", "title", "text", "imp", "link", "cites", "geo", "images", "why", "connections", "whyCites", "singleSource"],
   cite: ["t", "u", "k"],
   origin: ["note", "links", "cites"],
   originLink: ["id", "how", "note"],
