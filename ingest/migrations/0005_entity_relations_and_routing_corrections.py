@@ -3,7 +3,7 @@
 from django.db import migrations, models
 
 
-# The two seeding mistakes the first run found (docs/adr/0021-ingestion-tuning.md): "Ireland" mapped to the island,
+# The two seeding mistakes the first run found (docs/adr/0022-ingestion-tuning.md): "Ireland" mapped to the island,
 # "Former Yugoslav states" to SFR Yugoslavia. Removed here so routing is right as soon as the code is deployed; the
 # next seed_branch_entities run adds the right items (ingest/routing.py CORRECTIONS).
 WRONG = [("ireland", "Q22890"), ("post-yugoslav-states", "Q83286")]

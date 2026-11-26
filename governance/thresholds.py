@@ -10,7 +10,7 @@ means bumping RULES_VERSION, so proposals record which rules made them.
 from django.conf import settings
 
 METRICS_VERSION = "metrics-v1"
-RULES_VERSION = "branch-rules-v2"  # v2: NEW-BRANCH proposes only what can be a branch, parents from Wikidata relations (ADR 0021)
+RULES_VERSION = "branch-rules-v2"  # v2: NEW-BRANCH proposes only what can be a branch, parents from Wikidata relations (ADR 0022)
 
 DEFAULTS = {
     # ── metrics ──

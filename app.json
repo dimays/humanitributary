@@ -1,0 +1,19 @@
+{
+  "name": "Humanitributary",
+  "description": "The data platform behind an interactive, cited timeline of all history: the admin, the agent API and the scheduled jobs (docs/adr/0020-heroku-hosting.md).",
+  "repository": "https://github.com/dimays/humanitributary",
+  "stack": "heroku-24",
+  "buildpacks": [{ "url": "heroku/python" }],
+  "formation": {
+    "web": { "quantity": 1, "size": "basic" },
+    "worker": { "quantity": 0, "size": "basic" }
+  },
+  "addons": [{ "plan": "heroku-postgresql:essential-1", "options": { "version": "16" } }],
+  "env": {
+    "ENVIRONMENT": { "description": "Anything but dev turns on production safety (staging, prod).", "value": "staging" },
+    "SECRET_KEY": { "description": "Django's signing key.", "generator": "secret" },
+    "ALLOWED_HOSTS": { "description": "Comma-separated host names: the app's herokuapp.com domain, later the custom domain.", "required": true },
+    "INGEST_CONTACT": { "description": "The contact in the bot's User-Agent: a project URL, never a person.", "value": "https://github.com/dimays/humanitributary" },
+    "STORAGE_BACKEND": { "description": "local accepts a dyno's throwaway disk until the S3_* variables are set (ADR 0016); remove it then.", "value": "local", "required": false }
+  }
+}

@@ -148,7 +148,7 @@ under the parent its Wikidata relations name: what it replaces or follows
 (P17, unless it is a state), its class (P279, P31); the first that names
 exactly one branch. With none, no parent, and the proposal says it needs
 review. v1 chose the branch its co-mentioned entities routed to most, which
-put El Salvador under Haiti (ADR 0021).
+put El Salvador under Haiti (ADR 0022).
 
 *Example:* the first ingestion run (November 2026) signalled 17 entities. v2
 proposes nine: Somalia, the Netherlands, El Salvador, the International
@@ -200,7 +200,7 @@ the survivor (events, event links, parents and into, connections, origin
 links; location and image if the survivor has none; citations it lacks) and
 retracts the old branch.
 
-Since the cutover (ADR 0020) nothing imports over Postgres, so an applied
+Since the cutover (ADR 0021) nothing imports over Postgres, so an applied
 change stays applied until it is reverted.
 
 `revert` undoes exactly the rows the apply transaction changed, newest first,

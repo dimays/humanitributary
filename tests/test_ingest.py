@@ -305,7 +305,7 @@ FIRST_RUN_DAY = date(2026, 11, 26)
 
 class FirstRunTests(TestCase):
     """Regression tests on the first ingestion run's own data: the stories it misrouted, and the new branches it
-    proposed (docs/adr/0021-ingestion-tuning.md)."""
+    proposed (docs/adr/0022-ingestion-tuning.md)."""
 
     def setUp(self):
         now = timezone.now()

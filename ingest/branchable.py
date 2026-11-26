@@ -1,5 +1,5 @@
 """Can an entity be a branch, and under which parent? The NEW-BRANCH rule's two questions (governance/rules.py,
-docs/adr/0021-ingestion-tuning.md), answered from Wikidata statements alone: deterministic, no co-occurrence.
+docs/adr/0022-ingestion-tuning.md), answered from Wikidata statements alone: deterministic, no co-occurrence.
 
 A branch is a long-lived lane of history. An entity that keeps coming up in the news can become one only if it is
 

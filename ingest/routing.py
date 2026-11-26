@@ -1,5 +1,5 @@
 """Routing new material to branches through `BranchEntity` (docs/adr/0012-ingestion.md, retuned by
-docs/adr/0021-ingestion-tuning.md), and seeding it.
+docs/adr/0022-ingestion-tuning.md), and seeding it.
 
 Score of a branch for one candidate (deterministic, documented):
 
@@ -178,7 +178,7 @@ def confident_match(variants: list[str], hits: list[dict], cited_qids: set, kind
 
 DISAMBIGUATION = {"Q4167410", "Q22808320", "Q4167836"}  # disambiguation page, human-name disambiguation, category
 
-# Hand-checked mappings that exact titles get wrong or can't reach (docs/adr/0021-ingestion-tuning.md). Applied by
+# Hand-checked mappings that exact titles get wrong or can't reach (docs/adr/0022-ingestion-tuning.md). Applied by
 # every seeding run, for these branches whether or not they have rows: `use` rows are created (qid, role, weight),
 # `never` rows are deleted and never created. Prefer fixing the rule (the guards in seed_branch_entities) to adding
 # a line here.

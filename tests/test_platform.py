@@ -271,6 +271,7 @@ class HealthTests(FreshStorage, TestCase):
         body = r.json()
         self.assertTrue(body["ok"] and body["db"]["ok"] and body["storage"]["raw"]["ok"])
         self.assertIsNotNone(body["jobs"]["process"]["last_ok"])
+        self.assertEqual(body["storage_backend"], "local")
         self.assertIn("queued_total", body["queue"])
 
     def test_unreachable_storage_is_a_503(self):
@@ -278,3 +279,27 @@ class HealthTests(FreshStorage, TestCase):
             r = self.client.get("/healthz")
         self.assertEqual(r.status_code, 503)
         self.assertFalse(r.json()["storage"]["releases"]["ok"])
+
+
+class HostedSettingsTests(TestCase):
+    """Outside dev (Heroku: docs/adr/0020-heroku-hosting.md) the settings refuse what a dyno can't keep."""
+
+    def settings_load(self, **env):
+        import os
+        import subprocess
+        import sys
+
+        # Empty, not absent: settings load .env, which never overrides a variable that is set.
+        base = dict(os.environ) | {"STORAGE_BACKEND": "", "S3_ENDPOINT_URL": "", "S3_BUCKET_RAW": ""}
+        base |= {"ENVIRONMENT": "staging", "SECRET_KEY": "test-only", "ALLOWED_HOSTS": "example.herokuapp.com",
+                 "DATABASE_URL": "postgres://u:p@localhost:1/x", **env}
+        code = "import django; django.setup(); from django.conf import settings as s; print(s.DATABASES['default']['OPTIONS'].get('sslmode'), s.SECURE_HSTS_SECONDS)"
+        return subprocess.run([sys.executable, "-c", code], env=base, capture_output=True, text=True, cwd=Path(__file__).resolve().parent.parent)
+
+    def test_local_storage_only_when_stated(self):
+        r = self.settings_load()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("STORAGE_BACKEND=local", r.stderr)
+        r = self.settings_load(STORAGE_BACKEND="local")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.split(), ["require", "3600"], "the database over TLS, and HSTS on")

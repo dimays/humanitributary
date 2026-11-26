@@ -1,4 +1,4 @@
-// Validates a published snapshot and inlines it into template.html -> timeline.html. Since the cutover (ADR 0020)
+// Validates a published snapshot and inlines it into template.html -> timeline.html. Since the cutover (ADR 0021)
 // the page is built only from snapshots that `manage.py publish` writes from Postgres:
 //   node build.mjs --from-json f.json           validate and build (refuses to build on errors)
 //   node build.mjs --from-json f.json --check   validate only
@@ -37,11 +37,11 @@ if (!fromJson === (archiveDir === null)) {
   console.error(fromJson
     ? "Name one source: --from-json or --archive, not both."
     : "build.mjs builds from a published snapshot: node site/build.mjs --from-json var/releases/latest/content.json (make build).\n" +
-      "The legacy data/*.js files are frozen in archive/site-data/ (ADR 0020); --archive reads them, for manage.py import_legacy --archive only.");
+      "The legacy data/*.js files are frozen in archive/site-data/ (ADR 0021); --archive reads them, for manage.py import_legacy --archive only.");
   process.exit(2);
 }
 if (archiveDir !== null && !dumpJson && !checkOnly) {
-  console.error("--archive only dumps (--dump-json) or checks (--check): the page is built from snapshots (ADR 0020).");
+  console.error("--archive only dumps (--dump-json) or checks (--check): the page is built from snapshots (ADR 0021).");
   process.exit(2);
 }
 

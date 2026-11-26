@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Replays the branch rules on the state before two of the owner's restructurings (docs/branch-rules.md, "Validation"):
 # the First Americans split (archive/site-data/91-first-americans.js) and the ECSC/EEC/EU merge
-# (archive/site-data/90-restructure.js), both in the frozen legacy files (ADR 0020).
+# (archive/site-data/90-restructure.js), both in the frozen legacy files (ADR 0021).
 # Dumps the archive without those two files into var/history/, imports it into a scratch database
 # (<your database>_history, created and dropped here; your own database is not touched), runs `branches review`,
 # and compares the proposals with what the owner decided.

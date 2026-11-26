@@ -2,7 +2,7 @@
 
 The timeline itself: `template.html` and the build. The content lives in Postgres and reaches the page only through
 a published release snapshot (schema and citation rules in [SCHEMA.md](SCHEMA.md)); the content files it was first
-written in are frozen in [`archive/site-data/`](../archive/README.md) since the cutover (ADR 0020). What the page does,
+written in are frozen in [`archive/site-data/`](../archive/README.md) since the cutover (ADR 0021). What the page does,
 how its content was gathered and audited, and every rebuild command are in the repository's
 [README](../README.md#the-site-site); how this folder fits the data platform is in [AGENTS.md](../AGENTS.md).
 

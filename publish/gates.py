@@ -1,5 +1,5 @@
 """Release gates: what must hold before `manage.py publish` writes a release (docs/adr/0019-processes-and-release-
-gates.md, amended at the cutover by docs/adr/0020-the-cutover.md). Each gate returns a list of problems; publish
+gates.md, amended at the cutover by docs/adr/0021-the-cutover.md). Each gate returns a list of problems; publish
 refuses while any is non-empty.
 
 1. **deterministic**: exporting the same rows twice gives the same bytes (publish/export.py reads rows alone, in a
@@ -14,7 +14,7 @@ refuses while any is non-empty.
    `latest` pointer (release.py), so a release without its report is never what readers get.
 
 Before the cutover a fifth gate compared the snapshot with a dump of the legacy files; Postgres is the only source
-now, so there is nothing to compare it with (ADR 0020).
+now, so there is nothing to compare it with (ADR 0021).
 """
 
 import shutil

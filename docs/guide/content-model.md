@@ -285,7 +285,7 @@ Where keys come from:
 | The loader (`publish/legacy.py` `_sort_keys`, `import_legacy`) | `reconcile()` against the file's order: removing an entry writes nothing, inserting or moving one writes one key. |
 | Migration `timeline/migrations/0003_entry_sort_key.py` | Gave existing rows evenly spaced keys in their old (position, slug) order, as `job:migrate`. |
 
-Since the cutover ([ADR 0020](../adr/0020-the-cutover.md)) nothing imports
+Since the cutover ([ADR 0021](../adr/0021-the-cutover.md)) nothing imports
 over Postgres, so an entry you `place()` stays where you put it. (Loading a
 file with `import_legacy` reorders the entries it has to that file's order.)
 

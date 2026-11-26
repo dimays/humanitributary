@@ -332,7 +332,7 @@ rows: "this Wikidata item belongs to this branch, with this weight".
 | mention: an indirect hit (country, citizenship) through a concept or a work | × 0.5 | `PASSING_MENTION`, `PASSING_KINDS` |
 | each further entity routing to the same branch | + 0.01 | `MORE_MENTIONS` |
 
-Why each part ([ADR 0021](../adr/0021-ingestion-tuning.md), from the first real run):
+Why each part ([ADR 0022](../adr/0022-ingestion-tuning.md), from the first real run):
 
 - **The strongest mention, not the sum.** Naming a port and its country, or three American politicians, is one
   mention of the place. The sum put "Ukrainian attacks on the Russian shadow fleet" on Libya, where the attacks
@@ -466,7 +466,7 @@ payload and priority are refreshed (keeping any `suggested_sources` that `enrich
 - **The threshold's method.** About the top 12.5% of clusters should qualify (the middle of 10–15%): 64 is the
   priority of the cluster at the 12.5th percentile from the top of the first real run's 682 clusters (64.86),
   rounded down, which lets 95 (13.9%) through. Re-derive it the same way when the formula or routing changes
-  ([ADR 0021](../adr/0021-ingestion-tuning.md)).
+  ([ADR 0022](../adr/0022-ingestion-tuning.md)).
 - **The daily cap.** At most `settings.WRITE_EVENT_TASKS_PER_DAY` (20; env `WRITE_EVENT_TASKS_PER_DAY`, or
   `--opt per_day=`) new tasks per local day, counting the tasks this job created since midnight whatever their
   state. A qualifying cluster without an open task waits when the day's cap is used (`tasks_held_by_daily_cap`),
@@ -589,7 +589,7 @@ Hand-made responses (`cassette.response`) cover what live services won't reliabl
 
 | Change | What it needs |
 |---|---|
-| A threshold or weight (64, the daily cap, 0.5, 2.0, the priority and routing weights, the signal counts) | Change the constant in `ingest/process.py`, `ingest/routing.py` or the setting, say why in the commit, and update this chapter and [ADR 0021](../adr/0021-ingestion-tuning.md) (the threshold is re-derived by its method). `test_priority_formula` restates the formula and `FirstRunTests` replays the first run's misroutes, so run them. |
+| A threshold or weight (64, the daily cap, 0.5, 2.0, the priority and routing weights, the signal counts) | Change the constant in `ingest/process.py`, `ingest/routing.py` or the setting, say why in the commit, and update this chapter and [ADR 0022](../adr/0022-ingestion-tuning.md) (the threshold is re-derived by its method). `test_priority_formula` restates the formula and `FirstRunTests` replays the first run's misroutes, so run them. |
 | A wrong mapping | A guard in `seed_branch_entities` if the mistake has a pattern, else a line in `routing.CORRECTIONS`; then `run_job seed_branch_entities --opt branches=<slug>`. |
 | What can be a branch, or how a parent is chosen | `ingest/branchable.py`; `FirstRunTests.test_new_branch_proposals` pins the first run's 17 signals. A change in what NEW-BRANCH proposes bumps `governance/thresholds.py` `RULES_VERSION`. |
 | A new job | A function in `ingest/job_defs.py` with `@job(name, interval=…)`, placed where it should run in the order. A feed job also needs a `Feed` row with `config.job` (add it to `ingest/seed.py` `FEEDS`). Add it to the table above and to ADR 0012. |

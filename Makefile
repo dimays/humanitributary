@@ -33,7 +33,7 @@ psql: ## A psql shell on the local database
 migrate: ## Apply migrations
 	$(M) migrate
 
-import-archive: ## Load the frozen legacy files (archive/site-data/) into an empty database (CI's corpus; ADR 0020)
+import-archive: ## Load the frozen legacy files (archive/site-data/) into an empty database (CI's corpus; ADR 0021)
 	$(M) import_legacy --archive
 
 publish: ## A release in the object store (gates first), latest -> it

@@ -16,7 +16,7 @@ An interactive, cited timeline of all history, from the Big Bang to today: about
                        var/releases/<version>/content.json ──(build.mjs --from-json)──▶ site/timeline.html ──▶ CDN
 ```
 
-The public page never touches the database (ADR 0001). Every change to canonical content goes through `revisions.revising()` and leaves a Revision, enforced by a Postgres trigger (ADR 0006). Postgres is the only source of truth: the content files the site was first written in are frozen in `archive/site-data/` since the cutover, and the page is built only from releases (ADR 0020). A snapshot loaded into an empty database exports to the same bytes (ADR 0007).
+The public page never touches the database (ADR 0001). Every change to canonical content goes through `revisions.revising()` and leaves a Revision, enforced by a Postgres trigger (ADR 0006). Postgres is the only source of truth: the content files the site was first written in are frozen in `archive/site-data/` since the cutover, and the page is built only from releases (ADR 0021). A snapshot loaded into an empty database exports to the same bytes (ADR 0007).
 
 | App | What it does |
 |---|---|
@@ -119,6 +119,6 @@ node site/build-outlines.mjs            # rebuild outlines.js from the latest re
 node site/build-paleo-points.mjs        # paleo positions for located deep-time entries in the latest release
 ```
 
-The tools that audited and rewrote the legacy files (`sample-cites.mjs`, `apply-fixes.mjs`, `apply-enrich-fixes.mjs`, `verify-geo.mjs`, `image-candidates.mjs`, `fetch-images.mjs`) are retired in `archive/site-tools/`: content changes go through the database now (ADR 0020).
+The tools that audited and rewrote the legacy files (`sample-cites.mjs`, `apply-fixes.mjs`, `apply-enrich-fixes.mjs`, `verify-geo.mjs`, `image-candidates.mjs`, `fetch-images.mjs`) are retired in `archive/site-tools/`: content changes go through the database now (ADR 0021).
 
 The globe data and images live next to `site/timeline.html` (`globe-assets.json` is inlined; `images/` and `outlines.js` must be kept alongside the page — `outlines.js`, about 1.5 MB, is loaded with a script tag when the page is idle, and without it the globe simply shows radius circles).

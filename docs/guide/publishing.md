@@ -23,7 +23,7 @@ gates.
 
 Postgres is the only source of truth
 ([ADR 0001](../adr/0001-postgres-is-the-truth-the-site-reads-snapshots.md),
-[ADR 0020](../adr/0020-the-cutover.md)). The content files the site was first
+[ADR 0021](../adr/0021-the-cutover.md)). The content files the site was first
 written in (site/data/*.js) were imported one last time at the cutover and
 frozen in `archive/site-data/` ([the archive](#the-archive)); nothing imports
 them over Postgres any more. A snapshot loaded into an empty database exports
@@ -245,7 +245,7 @@ origin later; cache headers are set when the CDN is (ADR 0016).
 
 `publish` refuses unless every gate passes
 ([ADR 0019](../adr/0019-processes-and-release-gates.md), amended by
-[ADR 0020](../adr/0020-the-cutover.md)):
+[ADR 0021](../adr/0021-the-cutover.md)):
 
 | Gate | Passes when | Where |
 |---|---|---|
@@ -398,7 +398,7 @@ Things to know before running it on a live database:
 Since the cutover the round trip is **DB → snapshot → DB**: a database's
 snapshot, loaded into an empty database, exports to the same bytes (derived
 keys included), and loading it again writes nothing
-([ADR 0020](../adr/0020-the-cutover.md), restating ADR 0007). Content written
+([ADR 0021](../adr/0021-the-cutover.md), restating ADR 0007). Content written
 in Postgres alone (an agent's event) comes back like the rest.
 
 - **On the fixture** (`tests/test_import_and_roundtrip.py`
@@ -483,7 +483,7 @@ the list. There is no filter for it (the page has no filter controls).
   for a check that needs the files in the store), with a test in
   `tests/test_platform.py` `ReleaseTests`, a line in `gates.GATES` (what
   `--check` names) and an ADR amending
-  [ADR 0020](../adr/0020-the-cutover.md)'s gate list.
+  [ADR 0021](../adr/0021-the-cutover.md)'s gate list.
 - **What counts as a shown source.** `SHOWN_STANCES` in `publish/export.py`.
   It changes the page: `publish --check` shows how many entries change.
 - **The publishing rule.** Thresholds and word lists live in
@@ -499,7 +499,7 @@ the list. There is no filter for it (the page has no filter controls).
   rule 7), a re-run on unchanged input writes nothing
   (`test_reimport_of_unchanged_input_changes_nothing`), and loading a snapshot
   this database exported writes nothing (`test_db_to_snapshot_to_db_is_exact`).
-- **The archive.** Never. It is frozen (ADR 0020); content changes go into
+- **The archive.** Never. It is frozen (ADR 0021); content changes go into
   Postgres.
 - **A new file in a release.** `FILES` and `publish()` in
   `publish/release.py` (the manifest lists `FILES`, and `pull_release()`

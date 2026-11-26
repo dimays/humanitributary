@@ -1,4 +1,4 @@
-"""The loader is idempotent, and since the cutover (ADR 0020) the round trip is DB → snapshot → DB: a snapshot loaded
+"""The loader is idempotent, and since the cutover (ADR 0021) the round trip is DB → snapshot → DB: a snapshot loaded
 into an empty database exports to the same bytes, and loading it again writes nothing. The legacy files are frozen."""
 
 import json
@@ -192,7 +192,7 @@ class RoundTripTests(TestCase):
         self.assertEqual(Release.objects.count(), 1)
 
     def test_the_legacy_archive_is_frozen(self):
-        """archive/site-data/ is what the cutover imported; content changes go into Postgres (ADR 0020)."""
+        """archive/site-data/ is what the cutover imported; content changes go into Postgres (ADR 0021)."""
         self.assertEqual(archive_hash(ARCHIVE_DIR), ARCHIVE_SHA256, "archive/site-data/ changed: it is frozen since the cutover")
         self.assertFalse((settings.SITE_DIR / "data").exists(), "site/data/ is archived: the page is built from snapshots")
 

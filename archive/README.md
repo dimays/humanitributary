@@ -1,7 +1,7 @@
 # The legacy content, frozen
 
 Until November 2026 the timeline's content lived in `site/data/*.js`, written by agents in sessions and imported
-into Postgres with `make import`. At the cutover ([ADR 0020](../docs/adr/0020-the-cutover.md)) a final import
+into Postgres with `make import`. At the cutover ([ADR 0021](../docs/adr/0021-the-cutover.md)) a final import
 brought them in (it wrote nothing: Postgres already held exactly this content), and the files moved here. **Postgres
 is the only source of truth now**: content changes go through the service layer (`timeline.services`, the agent
 API, the admin), and the page is built only from published snapshots (`make build`).

@@ -1,6 +1,6 @@
 # 0018 — A "single source" marker, and additive snapshot keys
 
-**Status:** proposed (November 2026); amends [0007](0007-one-snapshot-shape-byte-identical-both-ways.md); amended by [0020](0020-the-cutover.md)
+**Status:** proposed (November 2026); amends [0007](0007-one-snapshot-shape-byte-identical-both-ways.md); amended by [0021](0021-the-cutover.md)
 
 ## Context
 

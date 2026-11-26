@@ -1,6 +1,6 @@
 """`manage.py import_legacy`: load content in the snapshot shape into Postgres, leaving Revisions.
 
-Since the cutover (ADR 0020) Postgres is the only source of truth and nothing imports the legacy files routinely.
+Since the cutover (ADR 0021) Postgres is the only source of truth and nothing imports the legacy files routinely.
 Two uses remain, both explicit:
 
     manage.py import_legacy --archive            the frozen legacy files (archive/site-data/), dumped by

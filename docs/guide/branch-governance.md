@@ -125,7 +125,7 @@ Details the table leaves out:
   says it needs review, `parents` is empty, and `needs_agent` lists the
   branch's `parents` too. The parent is never chosen by co-occurrence (the
   first version did, and put El Salvador under Haiti and the Netherlands
-  under Italy: [ADR 0021](../adr/0021-ingestion-tuning.md)). The region is the
+  under Italy: [ADR 0022](../adr/0022-ingestion-tuning.md)). The region is the
   parent's, or `global`.
 - **Placeholders.** Fields a rule can't know hold `TODO`
   (`rules.PLACEHOLDER`): every new branch's `text`, and NEW-BRANCH's
@@ -287,7 +287,7 @@ Revisions:
 byte-identical snapshot.
 
 Postgres is the only record of an applied change: nothing imports over it
-since the cutover ([ADR 0020](../adr/0020-the-cutover.md)), so an applied
+since the cutover ([ADR 0021](../adr/0021-the-cutover.md)), so an applied
 proposal stays applied until `branches revert`. (Before the cutover
 `branches apply --legacy-file` also wrote the change into the legacy data
 files; the flag and `operations.legacy_js()` are gone.)

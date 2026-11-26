@@ -4,7 +4,7 @@ All content lives in Postgres and reaches the page as a release snapshot, `{"bra
 the shape below (`canonical.mjs`, `publish/content.py`); `node build.mjs --from-json <snapshot> --check` validates
 one, and without `--check` also writes `timeline.html`. The content was first written as JavaScript files calling
 `TL.add({ branches: [...], events: [...] })` and the other `TL.*` forms described here; those files are frozen in
-`archive/site-data/` since the cutover (ADR 0020), and each `TL.*` form maps onto the snapshot's keys.
+`archive/site-data/` since the cutover (ADR 0021), and each `TL.*` form maps onto the snapshot's keys.
 
 ## Dates
 

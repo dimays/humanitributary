@@ -1,6 +1,6 @@
 # 0012 — Ingestion: scheduled, deterministic collection into the agents' queue
 
-**Status:** accepted (November 2026); amended by [0016](0016-object-storage.md); amended by [0019](0019-processes-and-release-gates.md); amended by [0021](0021-ingestion-tuning.md)
+**Status:** accepted (November 2026); amended by [0016](0016-object-storage.md); amended by [0019](0019-processes-and-release-gates.md); amended by [0022](0022-ingestion-tuning.md)
 
 ## Context
 

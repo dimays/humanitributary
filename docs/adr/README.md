@@ -40,8 +40,9 @@ things work now; an ADR says why, and what was given up.
 | [0017](0017-agent-api.md) | Agents work through an authenticated API, never the database | proposed |
 | [0018](0018-single-source-marker.md) | A "single source" marker, and additive snapshot keys | proposed |
 | [0019](0019-processes-and-release-gates.md) | Production's processes locally, health and alerts, and release gates | proposed |
-| [0020](0020-the-cutover.md) | The cutover: Postgres is the only source of truth, and the legacy files are frozen | proposed |
-| [0021](0021-ingestion-tuning.md) | Ingestion tuned on its first run: a threshold from the data, a daily cap, routing by role, branches only where Wikidata says so | proposed |
+| [0020](0020-heroku-hosting.md) | Heroku hosts the platform: a pipeline, staging first | proposed |
+| [0021](0021-the-cutover.md) | The cutover: Postgres is the only source of truth, and the legacy files are frozen | proposed |
+| [0022](0022-ingestion-tuning.md) | Ingestion tuned on its first run: a threshold from the data, a daily cap, routing by role, branches only where Wikidata says so | proposed |
 <!-- index:end -->
 
 ## Template

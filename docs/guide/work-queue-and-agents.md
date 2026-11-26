@@ -346,7 +346,7 @@ opens them for it (`agentapi/apply.py`):
   command, which runs the proposal's operations (those an agent accepted it
   with, if any) through the services and marks the proposal applied.
 
-Postgres is the only record ([ADR 0020](../adr/0020-the-cutover.md)): what
+Postgres is the only record ([ADR 0021](../adr/0021-the-cutover.md)): what
 an agent writes and the owner publishes reaches readers with the next
 release, and nothing imports over it.
 

@@ -1,4 +1,4 @@
-"""The loader: content in the snapshot shape → Postgres. Since the cutover (ADR 0020) it runs only when asked:
+"""The loader: content in the snapshot shape → Postgres. Since the cutover (ADR 0021) it runs only when asked:
 `import_legacy --archive` (the frozen legacy files in archive/site-data/, read by `node site/build.mjs --archive
 --dump-json`) or `import_legacy <content.json>` (a release snapshot, e.g. to fill a fresh database). Loading a
 snapshot that this database exported writes nothing: export and load are exact inverses (tests/
@@ -30,7 +30,7 @@ from timeline.services import apply_changes, branch_date_fields, event_date_fiel
 
 ACTOR = "job:import_legacy"
 
-# The legacy content, frozen at the cutover (ADR 0020). ARCHIVE_SHA256 is archive_hash() of it then; a test fails if
+# The legacy content, frozen at the cutover (ADR 0021). ARCHIVE_SHA256 is archive_hash() of it then; a test fails if
 # a file there changes, is added or removed: content changes go into Postgres now.
 ARCHIVE_DIR = Path(settings.BASE_DIR) / "archive" / "site-data"
 ARCHIVE_SHA256 = "c7c9a06554112c6bef626642ec4d17f1237b5577406218f6f9509e0b893a706e"

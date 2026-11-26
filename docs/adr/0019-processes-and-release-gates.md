@@ -1,6 +1,6 @@
 # 0019 — Production's processes locally, health and alerts, and release gates
 
-**Status:** proposed (November 2026); amends [0012](0012-ingestion.md) (how jobs run when hosted); amended by [0020](0020-the-cutover.md) (the release gates)
+**Status:** proposed (November 2026); amends [0012](0012-ingestion.md) (how jobs run when hosted); amended by [0020](0020-heroku-hosting.md) (the worker runs as a dyno); amended by [0021](0021-the-cutover.md) (the release gates)
 
 ## Context
 

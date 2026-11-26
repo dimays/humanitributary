@@ -5,6 +5,8 @@ order: 100
 covers:
   - ops/**
   - Makefile
+  - Procfile
+  - app.json
   - docker-compose.yml
   - scripts/make_env.py
   - .env.example
@@ -23,7 +25,8 @@ This chapter is for whoever keeps the platform running. It covers setting up a l
 collection jobs every few minutes, checking that they are healthy, and what to do when a job keeps failing, a
 source changes its terms or a release has to be undone. It runs on one laptop, with production's patterns: Postgres
 and MinIO (a local stand-in for S3) in Docker, the `Procfile`'s `web` and `worker` processes (`make up`), a macOS
-launchd schedule for when they aren't running, and logs and a mirror of the latest release under `var/`.
+launchd schedule for when they aren't running, and logs and a mirror of the latest release under `var/`. The same
+`Procfile` runs on Heroku as the staging app ([Hosted: Heroku](#hosted-heroku)).
 
 ## Setting up a local copy
 
@@ -62,11 +65,12 @@ The other variables are in `.env.example`:
 
 | Variable | Needed for |
 |---|---|
-| `ENVIRONMENT` | `dev` locally. Anything else turns on production safety and requires `SECRET_KEY` and `ALLOWED_HOSTS`. |
+| `ENVIRONMENT` | `dev` locally. Anything else (`staging`, `prod`) turns on production safety and requires `SECRET_KEY` and `ALLOWED_HOSTS`: TLS to the database, HTTPS redirect, secure cookies, HSTS, logs to stdout. |
+| `SECURE_HSTS_SECONDS`, `LOG_LEVEL` | Outside `dev` only: HSTS's max-age (3600; a year at launch) and the console log level (`INFO`). |
 | `POSTGRES_PASSWORD`, `DATABASE_URL` | The database. Settings refuse to start without `DATABASE_URL`. |
 | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | The local MinIO. Without a password MinIO refuses to start (Postgres is unaffected). `MINIO_PORT`, `MINIO_CONSOLE_PORT` and `MINIO_IMAGE` override its ports and image. |
-| `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_BUCKET_RAW`, `S3_BUCKET_RELEASES` | Object storage ([ADR 0016](../adr/0016-object-storage.md)): MinIO locally, S3 or Cloudflare R2 in production (`S3_REGION=auto` and the account endpoint for R2; an empty endpoint for AWS). |
-| `STORAGE_BACKEND` | `local` keeps both stores in `var/storage/<bucket>/`, with no Docker. It is the default when neither `S3_ENDPOINT_URL` nor `S3_BUCKET_RAW` is set; `s3` otherwise. |
+| `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_BUCKET_RAW`, `S3_BUCKET_RELEASES` | Object storage ([ADR 0016](../adr/0016-object-storage.md)): MinIO locally, AWS S3 on staging ([Hosted: Heroku](#hosted-heroku)); any S3-compatible store works (an empty endpoint for AWS; `S3_REGION=auto` and the account endpoint for Cloudflare R2). |
+| `STORAGE_BACKEND` | `local` keeps both stores in `var/storage/<bucket>/`, with no Docker. It is the default when neither `S3_ENDPOINT_URL` nor `S3_BUCKET_RAW` is set; `s3` otherwise. Outside `dev` the settings refuse to start on the local backend unless `STORAGE_BACKEND=local` is set explicitly, since a dyno's disk is thrown away on restart. |
 | `INGEST_CONTACT` | The contact in the bot's User-Agent: a project address or URL, never a person's details. Defaults to the repository. |
 | `SMITHSONIAN_API_KEY`, `EUROPEANA_API_KEY` | Two lookup adapters. Empty means those adapters skip. |
 | `INGEST_START_DOCKER` | `0` stops `ops/run-jobs.sh` from starting Docker Desktop. |
@@ -172,11 +176,77 @@ next due. `run_jobs --only portal,process` limits a run to some jobs.
 
 ### Hosted
 
-Nothing is deployed yet. The `Procfile` is ready for Heroku: a `worker` dyno runs `run_jobs --loop`, or Heroku
-Scheduler runs `python manage.py run_jobs`; the locks keep either from overlapping with the other. A dyno's disk is
-thrown away on restart, which is why raw documents and releases live in object storage. Hosting also needs the
-`S3_*` variables and mail settings for alerts
-([ADR 0019](../adr/0019-processes-and-release-gates.md)).
+On Heroku a `worker` dyno runs `run_jobs --loop`, or Heroku Scheduler runs `python manage.py run_jobs`; the locks
+keep either from overlapping with the other. A dyno's disk is thrown away on restart, which is why raw documents
+and releases live in object storage, and why staging's worker stays at 0 until the `S3_*` variables are set
+([Hosted: Heroku](#hosted-heroku)).
+
+## Hosted: Heroku
+
+The Heroku pipeline `humanitributary` holds the hosted apps ([ADR 0020](../adr/0020-heroku-hosting.md)). Today that
+is staging; production joins it at launch, with its own database, and only production ever gets the custom domain.
+
+| | Staging |
+|---|---|
+| App | `humanitributary-staging` (region us, stack heroku-24), at https://humanitributary-staging-aeb697fb63be.herokuapp.com |
+| Build | The `heroku/python` buildpack: Python from `.python-version`, packages from `uv.lock`, then `collectstatic`. No Node: nothing hosted runs `site/build.mjs` yet. |
+| Processes | From the `Procfile`: `release` runs `migrate` before each release goes live (a failed migration stops the deploy); `web` 1 × Basic; `worker` 0 × Basic until the owner turns it on |
+| Object storage | AWS S3, us-east-1: `humanitributary-staging-raw` and `humanitributary-staging-releases`, private (public access blocked, SSE-S3). The IAM user `humanitributary-staging` has no console login and may only list those two buckets and read, write and delete their objects |
+| Database | Heroku Postgres Essential-1, Postgres 16 (10 GB, 20 connections), as `DATABASE_URL`; TLS required |
+| Deploys | Connected to `dimays/humanitributary`: `main` deploys automatically once CI has passed on it |
+
+Config vars (`heroku config -a humanitributary-staging` lists them; never paste their values anywhere):
+
+| Variable | Set by | Value |
+|---|---|---|
+| `SECRET_KEY` | the setup, generated on the spot | never printed; rotate with a new random value (it signs out every admin session) |
+| `ENVIRONMENT` | the setup | `staging` |
+| `ALLOWED_HOSTS` | the setup | the app's `herokuapp.com` host; add the custom domain only on production |
+| `INGEST_CONTACT` | the setup | the repository's URL |
+| `STORAGE_BACKEND` | the setup | `local` only until the access key is in; unset after, so the `S3_*` variables choose S3 |
+| `DATABASE_URL` | Heroku Postgres | managed by Heroku; it changes when Heroku rotates credentials |
+| `S3_REGION`, `S3_BUCKET_RAW`, `S3_BUCKET_RELEASES` | the setup | `us-east-1` and the two staging buckets; no `S3_ENDPOINT_URL` (it is AWS) |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | the owner | the IAM user's key, created straight into config vars (below); it lives nowhere else, not in a `.env` or GitHub's secrets |
+| `ALERT_EMAILS`, `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | the owner | alerts by mail; without them an alert is a log line |
+| `SMITHSONIAN_API_KEY` | the owner | its lookup adapter skips without it |
+| `EUROPEANA_API_KEY` | nobody yet | a Personal key is for non-production use only: leave it unset until a Project key exists ([Sources and terms](sources-and-terms.md)) |
+
+The domain, `humanitributary.com`, is registered at Namecheap with its DNS on Cloudflare (free plan) once its
+nameservers are moved there. No record points at Heroku yet: at launch production gets a subdomain for the admin
+and the agent API (a CNAME to its Heroku DNS target, then `ALLOWED_HOSTS`), and the bare domain serves the static
+page from the CDN ([ADR 0020](../adr/0020-heroku-hosting.md)).
+
+To create or rotate the access key, with the AWS CLI signed in (`aws login`), the owner runs, in zsh:
+
+```bash
+aws iam create-access-key --user-name humanitributary-staging --query 'AccessKey.[AccessKeyId,SecretAccessKey]' --output text | read -r AK SK && heroku config:set -a humanitributary-staging S3_ACCESS_KEY_ID="$AK" S3_SECRET_ACCESS_KEY="$SK" >/dev/null && unset AK SK && echo "key stored in Heroku"
+```
+
+The secret is never shown. A user holds at most two keys: to rotate, create the new one, check `/healthz`, then
+`aws iam delete-access-key --user-name humanitributary-staging --access-key-id <old id>` (`aws iam
+list-access-keys` shows the ids). If the `heroku` half fails, delete the key it made and run it again.
+
+Never copy a laptop's `.env` into config vars: its passwords are local-only, and its keys are the owner's to place.
+
+Everyday commands:
+
+```bash
+heroku logs --tail -a humanitributary-staging                  # web, worker, release and router lines
+heroku ps -a humanitributary-staging                           # dynos and their state
+heroku releases -a humanitributary-staging                     # each deploy; heroku releases:output shows a release phase's log
+heroku ps:scale worker=1 -a humanitributary-staging            # once the S3_* variables are set (Basic: $7 a month)
+heroku run python manage.py createsuperuser -a humanitributary-staging       # the owner types the password
+heroku run python manage.py agent_token create <name> --scope <kind> -a humanitributary-staging
+heroku pg:info -a humanitributary-staging                      # size against the plan's 10 GB
+```
+
+To deploy a branch to staging by hand (the dashboard's Deploy tab, "Manual deploy", does the same): `git push
+https://git.heroku.com/humanitributary-staging.git <branch>:main`. The next automatic deploy of `main` replaces it.
+To roll back, `heroku rollback -a humanitributary-staging` returns to the previous release's code and config; it
+doesn't undo a migration.
+
+Staging's database started empty and nothing is imported into it without the owner's say. Heroku keeps no
+scheduled backups of it unless `heroku pg:backups:schedule` is set; `heroku pg:backups:capture` takes one now.
 
 ## Is it healthy?
 
@@ -184,7 +254,7 @@ Read these, in this order.
 
 | Where | What it tells you |
 |---|---|
-| `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs) | JSON from `infra/health.py`: the database, both stores, the latest release's version, each job's last run, last run that finished ok or partial, last status and consecutive failures, and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
+| `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs; on staging, the app's URL + `/healthz`) | JSON from `infra/health.py`: the database, both stores and `storage_backend` (`local` when hosted means the dyno's throwaway disk), the latest release's version, each job's last run, last run that finished ok or partial, last status and consecutive failures, and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
 | `make storage-status` | The storage backend, whether each bucket answers, and the `latest` pointer: its version, why it was written and by whom. |
 | `make digest` (`manage.py digest`) | Open tasks by kind, the top `write_event` stories, `write_event` by branch, `verify_claim` reasons, new-branch signals, the fact base's and branch governance's sections, candidates by status, and every job's runs in the last 24 hours with the last three failed or partial errors. "No runs in the last 24 hours" means the schedule isn't running. `--sources` adds every feed and lookup adapter, on or off, with its publisher's policy, tier and disabled reason, plus the sources considered and skipped. |
 | `uv run python manage.py facts report` | The fact base: record claims by status (corroborated, single source, contested, stale, unverified), by era and region, and what is due, broken, contested or blocking publication. `--brief` drops the tables. |
@@ -222,9 +292,11 @@ Say it plainly: **there is no backup system.** Here is what exists.
 | What | Where it lives | Survives |
 |---|---|---|
 | The database | The Docker volume `humanitributary-pg` | Stopping or recreating the container (`make db-stop`, `docker compose down`). It does not survive `docker compose down -v`, `docker volume rm` or losing the laptop. |
-| Content (branches, events, cites) | Postgres only, since the cutover ([ADR 0020](../adr/0020-the-cutover.md)) | Only what the volume survives. What was published is also in every release in the object store (`import_legacy <content.json>` loads one into an empty database), and the content as it was at the cutover is frozen in git (`archive/site-data/`), but anything written since and not yet released exists nowhere else. |
+| Staging's database | Heroku Postgres Essential-1 | Dyno restarts and deploys. No scheduled backups unless `heroku pg:backups:schedule` is set; no point-in-time rollback on Essential plans. |
+| Content (branches, events, cites) | Postgres only, since the cutover ([ADR 0021](../adr/0021-the-cutover.md)) | Only what the volume survives. What was published is also in every release in the object store (`import_legacy <content.json>` loads one into an empty database), and the content as it was at the cutover is frozen in git (`archive/site-data/`), but anything written since and not yet released exists nowhere else. |
 | Review state, Revisions, evidence checks, ratings set in the admin, the queue, ingest state, agent tokens | Postgres only | Only what the volume survives. |
 | Raw documents and releases | The object store: the Docker volume `humanitributary-minio`, or `var/storage/` with `STORAGE_BACKEND=local` | The same as the database's volume. Nothing copies them elsewhere. Old `var/raw/` and `var/releases/` copies stay until you delete them. |
+| Staging's raw documents and releases | AWS S3, `humanitributary-staging-raw` and `-releases` | Dyno restarts and deploys (nothing is on the dyno's disk). Nothing copies them elsewhere. |
 | Logs, the release mirror | `var/`, gitignored | Nothing, but the mirror is rebuilt by `make release-pull`. |
 
 There is no `pg_dump` target, no scheduled dump and no copy off the machine. If you need a copy now, a one-off
@@ -350,7 +422,7 @@ the database is reset, the day's counter starts again at 1, and `publish` skips 
 | A job's interval | Plain job: `ingest/job_defs.py`. Feed job: the Feed row in the admin, and `FEEDS` in `ingest/seed.py` for new databases |
 | A new environment variable | `config/settings.py`, `.env.example`, and `scripts/make_env.py` if every developer needs it (today it adds only the storage keys to an existing `.env`) |
 | A different worker tick | `WORKER_TICK_SECONDS` in `.env` or the environment; the code default is in `config/settings.py` |
-| A new process | A line in the `Procfile`, the `make up` target if it should run locally, and this chapter |
+| A new process | A line in the `Procfile`, the `make up` target if it should run locally, its size and count in `app.json`'s `formation`, `heroku ps:scale` on each app, and this chapter |
 | A new `make` command | A target in the `Makefile` with a `## ` comment, so `make help` lists it, and `.PHONY` |
 | A backup system | An ADR first: what is copied (the database and the `raw` store), where, how often, and how a restore is tested; then the Backups section |
 | A new runbook | A `###` section under Runbooks, written from the code it depends on, with that code in `covers` |

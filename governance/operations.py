@@ -10,7 +10,7 @@
     {"op": "map_entity", "qid": "Q…", "branch": "…", "role": "…"}     (ingest routing, not canonical)
 
 These have the semantics of the legacy files' restructure operations (site/restructure.mjs: move, patch, merge, plus
-TL.add for a new branch). Since the cutover (ADR 0020) Postgres is the only record, so an applied change stays applied
+TL.add for a new branch). Since the cutover (ADR 0021) Postgres is the only record, so an applied change stays applied
 until it is reverted; nothing else writes it anywhere.
 
 `apply()` runs them in one `revising()` block and records its transaction id; `revert()` undoes exactly the rows that
