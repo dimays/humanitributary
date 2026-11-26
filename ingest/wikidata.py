@@ -2,7 +2,7 @@
 
 - Titles resolve through the MediaWiki API (`prop=pageprops`, redirects followed, 50 a request) into `WikiTitle`
   rows: exact, no guessing.
-- An item's facts come from the Wikidata Query Service in one long-form query per 100 items (only the statements
+- An item's facts come from the Wikidata Query Service in three small queries per 50 items (only the statements
   routing needs: P31 instance of, P17 country, P131 located in, P27 citizenship, P625 coordinates, P585 point in
   time, P580/P582 start/end, P571/P576 inception/dissolved, plus the English label, description, aliases and
   article). Cached on `Entity` for ENTITY_TTL_DAYS.
@@ -28,6 +28,7 @@ PAGEVIEWS = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.
 ENTITY_TTL_DAYS = 30
 MISSING_TTL_DAYS = 7
 PAGEVIEWS_TTL_DAYS = 3
+SPARQL_BATCH = 50
 PROPS = ["P31", "P17", "P131", "P27", "P625", "P585", "P580", "P582", "P571", "P576", "P297"]
 
 # P31 classes → kind. Anything unlisted falls back on the facts (see kind_of).
@@ -205,7 +206,8 @@ def sparql_queries(qids: list[str]) -> list[str]:
 
 
 def _sparql(fetcher, query: str) -> list:
-    r = fetcher.get(SPARQL, params={"query": query, "format": "json"}, headers={"Accept": "application/sparql-results+json"})
+    # The query service can take tens of seconds when it is busy; its own limit is 60 s.
+    r = fetcher.get(SPARQL, params={"query": query, "format": "json"}, headers={"Accept": "application/sparql-results+json"}, timeout=65)
     if not r.ok:
         raise RuntimeError(f"Wikidata Query Service answered HTTP {r.status}")
     return r.json()["results"]["bindings"]
@@ -217,8 +219,8 @@ def fetch_entities(fetcher, qids, *, refresh=False, counts=None, titles: dict | 
     have = {e.qid: e for e in Entity.objects.filter(qid__in=qids)}
     todo = [q for q in qids if refresh or q not in have or not _fresh(have[q].resolved_at, ENTITY_TTL_DAYS)]
     now = timezone.now()
-    for i in range(0, len(todo), 100):
-        batch = todo[i:i + 100]
+    for i in range(0, len(todo), SPARQL_BATCH):
+        batch = todo[i:i + SPARQL_BATCH]
         facts_q, labels_q, aliases_q = sparql_queries(batch)
         info: dict = {}
         parse_facts(_sparql(fetcher, facts_q), info)
