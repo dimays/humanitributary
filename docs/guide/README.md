@@ -100,8 +100,11 @@ for the chapter to be read again.
 When a chapter describes something another branch is changing, say so in a
 callout, so whoever merges it knows to update the chapter and stamp it:
 
-> **Pending: parity branch.** Object storage replaces `var/raw/` on Heroku;
-> update this section when it merges.
+> **Pending: `<branch>` branch.** What that branch changes here, in a
+> sentence; update this section when it merges.
+
+When the branch merges, replace the callout with the real description, in
+the chapter's own text.
 
 ## Style
 

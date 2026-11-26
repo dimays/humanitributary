@@ -161,14 +161,18 @@ pass, and it is what CI runs too:
      and `ruff check` when `pyproject.toml` or a `ruff.toml` configures
      ruff;
    - **tests**: `manage.py test` (on its own `test_<database>`);
-   - **roundtrip**: `make roundtrip` (dump, import, publish, and the two
-     byte-for-byte comparisons: [Publishing](publishing.md)).
+   - **roundtrip**: `make roundtrip` (dump, import, publish with its
+     release gates, mirror the release, the two byte-for-byte comparisons
+     on the legacy keys, and a build of the release itself:
+     [Publishing](publishing.md)).
 
-The tests and the round trip both need the Docker Postgres. The round trip
-writes to the database in `DATABASE_URL`, so a worktree that runs the gate
-while another session ingests should have a database of its own (a
-`humanitributary_<branch>` database on the same server, named in that
-worktree's `.env`).
+The tests and the round trip both need a Postgres: the Docker one locally,
+a service container in CI. The tests never touch object storage (the
+runner swaps in temporary directories), but the round trip writes to the
+database in `DATABASE_URL` and publishes a release into the store `.env`
+names. So a worktree that runs the gate while another session ingests
+should have a database of its own (a `humanitributary_<branch>` database
+on the same server, named in that worktree's `.env`).
 
 On a pass, the gate writes `var/gate-receipt.json`: the commit and the
 tree of the files as they were on disk when the gate began (a git tree hash,
@@ -178,9 +182,12 @@ made while the gate ran isn't what passed. `python3 scripts/check_pr.py
 then committed exactly what it checked. `var/` is per worktree, so each
 worktree keeps its own receipt.
 
-> **Pending: parity branch.** It adds CI (running `make check-pr`), health
-> checks and release gates; update this section with where CI runs and how
-> it gets a database when it merges.
+CI is GitHub Actions (`.github/workflows/check.yml`): `make check-pr` on
+every pull request and every push to main, after `uv sync --frozen` and
+`manage.py migrate`. It gets a throwaway Postgres 16 as a service container
+on port 5433, Node for the site's build, a full clone (`fetch-depth: 0`,
+since stamps are checked against git history) and `STORAGE_BACKEND=local`,
+so it uses no secrets and nothing reaches MinIO, S3 or the network.
 
 ## The hooks
 

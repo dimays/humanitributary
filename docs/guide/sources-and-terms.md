@@ -34,8 +34,12 @@ stays at zero).
 | 4 | Bot wall this run | `Fetcher.blocked` | The host answered with a CAPTCHA or challenge earlier in this run. |
 | 5 | robots.txt | `Fetcher._robots_allow()` | robots.txt disallows our User-Agent token (skipped for `ingest/policy.py` `API_HOSTS`). |
 
-> **Note:** The checks run on the URL a job asks for. The client follows redirects (`follow_redirects=True`) without
-> checking the target again; only a bot wall on the final host is recorded.
+**Redirects are checked too.** The HTTP client never follows a redirect itself (`follow_redirects=False`):
+`Fetcher._follow` takes each hop by hand and runs `refusal()` on the next URL before requesting it, with the same
+checks as the first URL. A redirect to a host the policy refuses raises `Refused` naming the hop ("<url> redirects to
+<next>: <reason>"), so a redirect never lands a job on a NEVER_FETCH host, a `browser_only` or `forbidden` publisher,
+a host that showed a bot wall, or a path robots.txt disallows. More than 10 hops (`Fetcher.MAX_REDIRECTS`) raise
+`FetchError`. A bot wall on the final host is recorded as well as one on the host first asked for.
 
 ### NEVER_FETCH
 
@@ -66,7 +70,7 @@ A subdomain with its own row keeps its own policy: `api.nobelprize.org` is seede
 ### robots.txt
 
 The Fetcher reads robots.txt once per host per run and matches it against its token, the part of the User-Agent
-before the first "/".
+before the first "/". Its redirects are checked like any other request's, except against robots.txt itself.
 
 | robots.txt answer | Treated as |
 |---|---|
@@ -74,6 +78,7 @@ before the first "/".
 | 401 or 403 | Disallow everything. |
 | Other 4xx (404 …) | Allow everything. |
 | 5xx or no answer | Disallow everything (RFC 9309). |
+| A redirect to a refused host | No answer: disallow everything. |
 
 Crawl-delay is honored: the wait before a request to a host is the longer of its `HOST_DELAY` and the Crawl-delay,
 capped at 30 seconds. `API_HOSTS` skip robots.txt: en.wikipedia.org, www.wikidata.org, query.wikidata.org,
@@ -104,8 +109,10 @@ User-Agent with contact.
 `looks_like_challenge()` checks the first 30,000 bytes of a 401, 403, 429 or 503 response, or of a 200 page shorter
 than 30,000 bytes, for CAPTCHA and challenge markers (`CHALLENGE_RE`: "captcha", Cloudflare's challenge pages,
 PerimeterX, DataDome, "are you a robot"). A match marks the response `blocked` and refuses the host for the rest of
-the run. Link health then skips that publisher for `ingest/policy.py` `BLOCKED_COOLDOWN_DAYS` (14). A 401 or 403 is
-recorded as `blocked`, never `dead`.
+the run. Link health then skips that publisher for `ingest/policy.py` `BLOCKED_COOLDOWN_DAYS` (14). A 401, 403 or
+429 is recorded as `blocked`, never `dead`: it doesn't overwrite the citation's last real status, and the fact sweep
+ignores those statuses (`evidence/policy.py` `blocked_http_statuses`), so a site that refuses automated readers
+never turns its citations into dead-link tasks ([ingestion](ingestion.md#link-health)).
 
 ## Publishers and their starting ratings
 
@@ -244,8 +251,8 @@ Each layer refuses it on its own:
 
 The lookup adapters ([ingest/lookup.py](../../ingest/lookup.py)) search open APIs for pages that may support a claim
 or a story. Each returns suggestions only (`SuggestedSource` rows and task payloads, with at most 25 words of
-snippet); an agent reads the page and records evidence itself with `manage.py facts record`. Nothing in the lookups
-writes Evidence or changes a claim's status.
+snippet); an agent reads the page and records evidence itself, in a `verify_claim` result through the agent API
+(the owner can use `manage.py facts record`). Nothing in the lookups writes Evidence or changes a claim's status.
 
 They run in `ADAPTERS` order, specialists first:
 

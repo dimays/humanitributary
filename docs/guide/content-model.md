@@ -341,6 +341,19 @@ page and null is dropped (`NULL_MEANS_SOMETHING`). Unknown keys are dropped and
 counted, and the build warns about them. How each row becomes a snapshot key
 is in [publishing](publishing.md#from-rows-to-the-snapshot).
 
+An event's keys, in order, are `id`, `branch`, `y`, `end`, `when`, `title`,
+`text`, `imp`, `link`, `cites`, `geo`, `images`, `why`, `connections`,
+`whyCites` and `singleSource`. The last is the one key no table stores and
+the legacy files never write: `manage.py publish` sets `"singleSource": true`
+on an event whose supporting evidence, on its record claim and that claim's
+atomic parts, comes from exactly one independent witness (all of Wikipedia
+counts as one), and leaves it out otherwise. It is an **additive** key
+(`publish/content.py` `ADDITIVE`): the round trip compares a release with the
+legacy dump without it ([ADR 0018](../adr/0018-single-source-marker.md)).
+In `site/template.html`, `renderPanel()` shows it as a quiet "Single source"
+note (the `.single` style) under the event's Sources heading, above the
+list; nothing else on the page reads it, and there is no filter for it.
+
 ## Changing it
 
 - **A new field on an entry that the page shows.** Change
@@ -350,6 +363,11 @@ is in [publishing](publishing.md#from-rows-to-the-snapshot).
   then run `make roundtrip` (see [publishing](publishing.md#changing-it)).
 - **A field only Postgres needs** (not in the snapshot). A model field and a
   migration; the round trip is unaffected.
+- **A key the page shows that is derived at publish time**, like
+  `singleSource`. No model field: compute it in `publish/export.py`, add it
+  to both `KEYS` lists and to `ADDITIVE`, and describe it in
+  [site/SCHEMA.md](../../site/SCHEMA.md) (see
+  [publishing](publishing.md#changing-it)).
 - **A new canonical table.** Its migration must call
   `revisions.sql.audit_table()`; `tests/test_revisions.py` fails until it does
   (see [revisions](revisions.md#changing-it)).

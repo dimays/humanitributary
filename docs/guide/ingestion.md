@@ -23,12 +23,12 @@ fill are described in [the data model](../data-model.md#ingest).
 
 1. A **source job** reads a feed (the Current events portal, a "<Year> in <Country>" page, an official API) through
    the one HTTP client, `ingest.http.Fetcher`.
-2. It stores what it read as a `Document` (the raw bytes go to disk by content hash) and turns each item into a
-   `Candidate`: a proposed timeline item with a title, a date guess and the Wikidata entities it mentions.
+2. It stores what it read as a `Document` (the raw bytes go to object storage by content hash) and turns each item
+   into a `Candidate`: a proposed timeline item with a title, a date guess and the Wikidata entities it mentions.
 3. The **`process` job** routes each candidate to branches, checks it against existing events for duplicates,
    groups candidates into clusters (one cluster per story), and gives each cluster a priority from 0 to 100.
-4. A cluster at or over the threshold becomes a `write_event` task. An agent claims it, writes the event, and the
-   candidates follow the task's outcome.
+4. A cluster at or over the threshold becomes a `write_event` task. An agent claims it through the agent API, writes
+   the event (it lands in review), and the candidates follow the task's outcome.
 5. Upkeep jobs re-check cited links, look for second sources, and raise signals for possible new branches.
 
 Nothing here is canonical content. `ingest` tables are working state; only an agent (or the owner) writes events,
@@ -41,6 +41,7 @@ through the service layer.
 | Command | What it does |
 |---|---|
 | `manage.py run_jobs` | Runs every job that is due, once, in registry order. `--only a,b` limits it; `--list` prints each job, its interval and when it is next due. `make jobs` runs it. |
+| `manage.py run_jobs --loop [--tick N]` | The worker process (Procfile `worker`): runs what is due every `WORKER_TICK_SECONDS` (60), or every `--tick` seconds, until stopped. `make worker` runs it alone; `make up` runs it beside `web`. |
 | `manage.py run_job <name> [--feed F] [--opt k=v …]` | Runs one job now, due or not. A feed job runs for every enabled feed, or for the one named by `--feed` (an id or exact name, even a disabled one; the Fetcher still applies the source policy). `--opt` values are parsed as JSON when they can be. |
 
 A **job** is a function `fn(ctx)` registered with `@job(name, interval=…, feed=…)`. Importing
@@ -59,6 +60,15 @@ stops. The lock belongs to the database connection, so a crashed process never l
 taken, `close_interrupted()` marks any run still `running` as failed ("interrupted"), since nobody else can be
 running.
 
+**The worker.** `jobs.loop()` (behind `run_jobs --loop`) holds a second advisory lock, the scheduler lock
+(`SCHEDULER_LOCK_KEY`), for its whole life, so only one worker schedules at a time. A second worker finds it taken,
+logs "another worker holds the scheduler lock; standing by" and tries again each tick, so a deploy that briefly runs
+two workers never schedules twice. Each tick calls `run_due()` under the usual runner lock, which also keeps a
+launchd `run_jobs` and the worker from overlapping. SIGTERM (Heroku's shutdown, honcho's Ctrl-C) and SIGINT set a
+stop flag that `run_due` checks before each job (its `stopping` callback): the job that is running finishes, and the
+ones not yet started wait for the next run. A job cut off by SIGKILL is closed as failed by the next runner
+([ADR 0019](../adr/0019-processes-and-release-gates.md)).
+
 **Every run is a `FetchRun`** with its job, its feed (if any), start and finish times, counts and errors. The job
 gets a `Context`: the run, a `Fetcher`, the feed, the options, a `counts` counter and `error()`. `ctx.opt(key)` reads
 a `--opt` value first, then the feed's `config`. The status is:
@@ -69,6 +79,12 @@ a `--opt` value first, then the feed's `config`. The status is:
 | `partial` | The job returned but called `ctx.error()` at least once (one bad day or page doesn't stop the rest). |
 | `failed` | The job raised. The exception and the last 3,000 characters of its traceback are recorded, and the next job still runs. |
 | `running` | Still going, or left behind by a crash (closed as `failed` by the next runner). |
+
+**Alerts.** After a failed run, `run_one` calls `infra.alerts.after_failure`. When that job (and feed) has now
+failed `ALERT_AFTER_FAILURES` (3) runs in a row, counted from `FetchRun` history, it sends one email to
+`ALERT_EMAILS`, else to `ADMINS`, through Django's mail settings (the console backend locally, so it shows in the
+worker's output). It goes out on exactly the third failure, not again on the fourth, and a success resets the count.
+With neither address set the alert is only logged; an alert that can't be sent never breaks the runner.
 
 Each error is cut to 2,000 characters and the whole error field to 20,000. Errors and the one-line log per run pass
 through `ingest.policy.mask_secrets`, so API keys never reach the database or the log
@@ -111,13 +127,17 @@ Locally, a launchd agent runs `ops/run-jobs.sh` every 900 seconds (`ops/launchd/
 
 1. If Postgres answers on port 5433, go on. Otherwise start Docker Desktop if it isn't running (unless
    `INGEST_START_DOCKER=0`), waiting up to 2 minutes, then `docker compose up -d --wait db`.
-2. If Docker, the database or `uv` isn't available, log "skipped: …" and exit 0, so launchd doesn't back off.
-3. Run `uv run python manage.py run_jobs`, logging to `var/logs/run-jobs-YYYY-MM-DD.log`.
+2. If `.env`'s `S3_ENDPOINT_URL` points at a local MinIO (`http://127.0.0.1:<port>` or `localhost`) and nothing
+   answers on that port, `docker compose up -d --wait minio`: raw documents are stored there.
+3. If Docker, the database, MinIO or `uv` isn't available, log "skipped: …" and exit 0, so launchd doesn't back off.
+4. Run `uv run python manage.py run_jobs`, logging to `var/logs/run-jobs-YYYY-MM-DD.log`.
 
 Ticks can't overlap because of the runner's lock.
 
-> **Pending: parity branch.** A worker process takes over running jobs in the hosted setup; update this section
-> (and the runner description above, if the entry point changes) when it merges.
+The same jobs also run as a process, the way production runs them: `make up` starts the Procfile's `web` and
+`worker` with honcho, and the worker runs `run_jobs --loop`. The launchd schedule stays for when `make up` isn't
+running; the two can run together, since the runner's lock lets only one of them run jobs at a time. Hosted, the
+Procfile's `worker` dyno is the scheduler ([ADR 0019](../adr/0019-processes-and-release-gates.md)).
 
 ## Fetching
 
@@ -137,6 +157,11 @@ requests it allows:
 - **Conditional requests.** Pass `etag=` / `last_modified=` and the Fetcher sends `If-None-Match` /
   `If-Modified-Since`; a 304 comes back with `not_modified` true. The `rss` job stores the feed's ETag and
   Last-Modified on its `Feed` row for this.
+- **Redirects, one hop at a time.** The underlying client never follows redirects itself
+  (`follow_redirects=False`). `_follow` takes each 301, 302, 303, 307 or 308 by hand and asks the source policy
+  about the next URL first, so a redirect never lands a job on a host it may not fetch: a refused hop raises
+  `Refused` naming it ("… redirects to …: …"). More than `MAX_REDIRECTS` (10) raises `FetchError`. A 303 turns the
+  method into GET (except HEAD). The result keeps the first URL, the final URL and the hops in between.
 - **Bot walls.** A response that looks like a CAPTCHA or challenge page is marked `blocked`, and its host (and the
   final host after redirects) is refused for the rest of the run.
 
@@ -146,20 +171,24 @@ The Fetcher counts its requests (`fetcher.requests`), which the runner adds to t
 
 [ingest/store.py](../../ingest/store.py) keeps documents:
 
-- **Raw bytes** go to `var/raw/<hash[:2]>/<hash>` (sha256 of the bytes), written once through a temporary file.
-  They never go into git or the database. For Wikipedia the raw bytes are the page's wikitext; for feed items they
-  are a JSON record of the item (title, summary, link, date), not the publisher's page.
-- **`Document`** holds the latest version of one canonical URL: fetch time, status, the hash and raw path, title,
-  date, language, license, extracted text and a metadata JSON.
+- **Raw bytes** go to the `raw` object store at `raw/<hash[:2]>/<hash>` (sha256 of the bytes), through
+  `infra/storage.py`, the one door to object storage ([ADR 0016](../adr/0016-object-storage.md)). `write_raw`
+  writes a key only if it isn't there yet (content-addressed: the same key always holds the same bytes, and the
+  store refuses different bytes under an existing key). `read_raw(key)` returns the bytes, or None when the store
+  doesn't have them (a document fetched before `make storage-migrate` copied `var/raw` in, say). Raw bytes never
+  go into git or the database. For Wikipedia they are the page's wikitext; for feed items, a JSON record of the
+  item (title, summary, link, date), not the publisher's page.
+- **Where the store is** depends on the environment, with the same `S3_*` variables everywhere: MinIO locally
+  (`make db` starts it beside Postgres and creates the buckets), S3 or Cloudflare R2 in production, or
+  `var/storage/<bucket>/` with `STORAGE_BACKEND=local`. Tests always use temporary directories.
+- **`Document`** holds the latest version of one canonical URL: fetch time, status, the hash and `raw_path` (the
+  storage key), title, date, language, license, extracted text and a metadata JSON.
 - **`DocumentVersion`** holds every distinct hash a document has had.
 
 `save_document()` returns `new`, `changed` or `unchanged`. Unchanged bytes only move `fetched_at`. Changed bytes
 bump `version`, set `changed_at` and add a `DocumentVersion`. The derived fields (title, text, metadata) are
 rewritten either way, so a parser fix shows up on the next run without a content change. `touch_document()` records
 a 304.
-
-> **Pending: parity branch.** Raw storage moves from `var/raw/` to object storage (a dyno's disk is ephemeral);
-> update this section when it merges.
 
 ## Pre-processing
 
@@ -455,19 +484,25 @@ round-robin across publishers so no host gets a burst. Skipped: NEVER_FETCH host
 | Kind | Method | Outcomes |
 |---|---|---|
 | Wikipedia articles | MediaWiki API, 50 titles a request | Missing → `dead` (404). Redirect → `redirected` (a rename). Otherwise `ok`, with the revision id as the hash: edits are not changes. |
-| Other pages | HEAD; if its ETag or Last-Modified matches the last check, `ok`. Otherwise GET, extract the main text and hash it | 404/410 → `dead`. A redirect to the site's home page → `dead`. 401/403/429, a bot wall or a policy refusal → `blocked`. Other 4xx/5xx and network errors → `error`. A different text hash from the citation's → `changed`. A new URL → `redirected`. |
+| Other pages | HEAD; if its ETag or Last-Modified matches the last check, `ok`. Otherwise GET, extract the main text and hash it | 404/410 → `dead`. A redirect to the site's home page → `dead`. 401/403/429, a bot wall or a policy refusal (including a redirect to a host the policy refuses) → `blocked`. Other 4xx/5xx and network errors → `error`. A different text hash from the citation's → `changed`. A new URL → `redirected`. |
 
 An `error` after two earlier failed rounds in a row (three in all) becomes `dead`. A dead link gets a Wayback
 Machine lookup (the availability API). Every check is a `LinkCheck` row; the `Citation` keeps the latest status,
 hash, canonical URL and archive URL, written as `job:link_health`. A link dead without a 4xx is recorded with
 status `UNREACHABLE` (599).
 
+**Blocked is not dead.** A `blocked` outcome says the site refuses automated readers, not that the page is gone, so
+it never overwrites the citation's `http_status`: the citation keeps its last real status, and the `LinkCheck` row
+keeps the 401, 403 or 429. The fact sweep also ignores those statuses (policy `blocked_http_statuses`), so a blocked
+page never becomes a `dead_link` task; an agent checks it in a browser when it next verifies the claim.
+
 Turning dead or changed links into stale claims and `verify_claim` tasks is the fact sweep's job, which runs right
 after ([evidence and fact-checking](evidence-and-fact-checking.md), [how claims are checked](../fact-checking.md)).
 
 ## The digest
 
-`manage.py digest` (`make digest`) prints the Markdown a Claude session reads first: open tasks by kind, the top
+`manage.py digest` (`make digest`) prints the Markdown overview the owner reads first (it needs the database, so
+agents working through the API go by their task payloads and the API's reads instead): open tasks by kind, the top
 `write_event` stories (`--top`, default 12), `write_event` tasks by top branch, `verify_claim` reasons and waiting
 suggestions, new-branch signals, the fact base's and branch governance's own sections, candidate counts, and the last
 24 hours of job runs with recent failures. `--sources` adds every feed (on or off, with its publisher's policy and

@@ -7,6 +7,8 @@ covers:
   - "!work/migrations/**"
   - .claude/skills/**
   - tests/test_queue.py
+  - agentapi/*.py
+  - agentapi/management/commands/*.py
 ---
 
 Scheduled jobs collect material and measure the timeline, but they never make
@@ -18,7 +20,9 @@ stepping on each other.
 
 The decision is [ADR 0003](../adr/0003-deterministic-jobs-and-an-agent-queue.md).
 The code is small: one model (`work/models.py` `AgentTask`), one module of
-queue operations (`work/queue.py`) and one command (`manage.py tasks`).
+queue operations (`work/queue.py`), the agent API that agents reach it
+through (`agentapi/`, [ADR 0017](../adr/0017-agent-api.md)), and the
+owner's command (`manage.py tasks`).
 
 ## What a task is
 
@@ -95,7 +99,8 @@ and leases it to the agent.
 
 The lease is `TASK_LEASE_MINUTES` in `config/settings.py`: 30 minutes, read
 from the environment variable of the same name. A caller may ask for another
-length (`tasks next --lease <minutes>`).
+length (`lease_minutes` in an API claim, 1 to 240; on the command line,
+`tasks next --lease <minutes>`).
 
 **Takeover.** A task whose lease ran out is offered again like a queued one.
 The next agent to claim it takes it over, and that claim counts as another
@@ -111,12 +116,12 @@ Every operation below first locks the row and checks that the task is
 `TaskError`. It does not check the clock: an agent whose lease has lapsed can
 still finish, as long as nobody has claimed the task since.
 
-| Function | Command | Effect |
-|---|---|---|
-| `complete(id, agent, result)` | `tasks complete <id> --result <file>` | `done`, stores `result`, sets `completed_at`, clears the lease. |
-| `fail(id, agent, error, retry=True)` | `tasks fail <id> --error "…" [--no-retry]` | Appends `<agent>: <error>` to `error` and clears the lease. Back to `queued` if `retry` and `attempts < max_attempts`; else `failed`. The attempt stays counted. |
-| `release(id, agent)` | `tasks release <id>` | Back to `queued`, untouched, and the attempt is given back (`attempts − 1`). |
-| `extend(id, agent, minutes)` | `tasks extend <id> [--minutes N]` | `lease_until` = now + `minutes` (default `TASK_LEASE_MINUTES`). Counted from now, not from the old lease end. |
+| Function | API (`/api/agent/…`) | Command | Effect |
+|---|---|---|---|
+| `complete(id, agent, result)` | `POST tasks/<id>/complete` | `tasks complete <id> --result <file>` | `done`, stores `result`, sets `completed_at`, clears the lease. The API first validates and applies the result ([below](#the-agent-api)). |
+| `fail(id, agent, error, retry=True)` | `POST tasks/<id>/fail` | `tasks fail <id> --error "…" [--no-retry]` | Appends `<agent>: <error>` to `error` and clears the lease. Back to `queued` if `retry` and `attempts < max_attempts`; else `failed`. The attempt stays counted. |
+| `release(id, agent)` | `POST tasks/<id>/release` | `tasks release <id>` | Back to `queued`, untouched, and the attempt is given back (`attempts − 1`). |
+| `extend(id, agent, minutes)` | `POST tasks/<id>/extend` | `tasks extend <id> [--minutes N]` | `lease_until` = now + `minutes` (default `TASK_LEASE_MINUTES`). Counted from now, not from the old lease end. |
 
 ## One open task per key
 
@@ -185,12 +190,13 @@ On a re-run, `process` rewrites a queued task's payload and priority if they
 changed, keeping `suggested_sources`.
 
 What the agent does: decide whether the story is a duplicate, not worth an
-event, or one event; read and cite its sources; write the event; complete the
-task with `{"entry": <slug or null>, "decision": …}`. `process`
-(`sync_task_states`) then moves the story's candidates: claimed while the task
-is claimed; `accepted` with `result_entry` set if `result.entry` names an
-existing entry, else `rejected`; back to queued if the task failed or was
-cancelled.
+event, or one event; read and cite its sources; complete the task with
+`{"decision": "written", "event": {…}}` (or `"duplicate"` with the existing
+`entry`, or `"rejected"` with a `note`). The API creates a written event in
+`review` and puts its slug in `result.entry`. `process` (`sync_task_states`)
+then moves the story's candidates: claimed while the task is claimed;
+`accepted` with `result_entry` set if `result.entry` names an existing entry,
+else `rejected`; back to queued if the task failed or was cancelled.
 
 ### Verify tasks from the sweep
 
@@ -226,10 +232,13 @@ Wikipedia alone supports, when the lookup adapters found something.
 If the sweep already queued the claim, `second_source` adds
 `suggested_sources` to that queued task's payload instead.
 
-What the agent does with either: read each cited or suggested page, record
-what it says with `manage.py facts record` (which recomputes the claim), fix
-the entry if it is wrong, and complete with `{"claim": <id>, "status": …,
-"recorded": [...], …}`.
+What the agent does with either: read each cited or suggested page and
+complete with `{"claim": <id>, "evidence": [{"url", "stance", "excerpt", …}],
+"suggestions": {"accepted": [...], "rejected": [...]}}`. The API records each
+evidence row (on the claim or one of its parts) with `record_evidence()`,
+which recomputes the claim, and marks the suggestions decided. A corrected
+entry text goes in `proposed_text`, which is stored for the owner and not
+applied.
 
 ### review_branch_proposal
 
@@ -243,10 +252,15 @@ Built by `governance/review.py` `_task_payload`:
 | `evidence` | What the rule saw (clusters, gaps, shared events, with event ids, titles, dates and places). |
 | `operations` | The exact operations `branches apply` would run. |
 | `needs_agent` | The fields the agent must write first (names, texts, cites, dates as written). |
-| `how_to_decide` | The apply and reject commands. |
+| `how_to_decide` | How to decide, and the two result shapes to complete with (accept with operations, or reject). |
 
-What the agent does: decide, then `branches apply` (with the fields written)
-or `branches reject`, and complete the task. See
+What the agent does: decide, and complete the task with `{"decision":
+"accept", "proposal": <id>, "operations": [...], "note": …}` (every
+`needs_agent` field written) or `{"decision": "reject", …}`. The API checks
+the operations (`governance.operations.validate`) and stores them on the
+proposal with status `accepted`; it doesn't apply them. The owner runs
+`manage.py branches apply <proposal>`, which uses them, because a structural
+change reaches the page at once. A rejection is recorded on the proposal. See
 [branch governance](branch-governance.md#deciding-a-proposal).
 
 ### audit (thin branches)
@@ -255,22 +269,30 @@ Built by `governance/review.py` `_thin_task` from a THIN finding: `rule`,
 `action` (`"fill"`), `summary`, then the finding's evidence (`events`,
 `density`, `relative_density`, `peers`, `gaps`, `empty_windows`,
 `window_years`, `existing`), and `how`. The agent writes the branch's missing
-landmark events and completes with their slugs. No skill covers it yet.
+landmark events and completes with `{"events": [...]}` (up to 30, each in the
+`write_event` event shape); the API creates them in `review` and stores
+their slugs in `result.entries`. No skill covers it yet.
 
 ### map_branch_entities
 
 Built by `ingest/routing.py` when no exact Wikidata match was found for a
 branch: `branch`, `name`, `variants` (the name forms searched),
 `cited_articles` and `cited_items` (up to 10 each), and `instructions`. The
-agent picks the Wikidata items the branch is about and adds `BranchEntity`
-rows (non-canonical routing data, in the admin or the ORM) with `created_by`
-set to itself. See [ingestion](ingestion.md).
+agent picks the Wikidata items the branch is about and completes with
+`{"branch": <slug>, "entities": [{"qid", "role", "label"}]}` (up to 20). The
+API adds the `BranchEntity` rows (non-canonical routing data) with
+`created_by` set to the agent, creating a stub `Entity` for a QID not yet
+fetched (the daily `refresh_entities` job reads its facts). See
+[ingestion](ingestion.md).
 
 ## The tasks command
 
-`work/management/commands/tasks.py`. Every subcommand prints JSON
-(`queue.as_json`: id, kind, status, priority, target, payload, lease,
-attempts, result, error), so an agent can read the answer back.
+`work/management/commands/tasks.py` is the owner's way into the queue from
+a shell with database access; agents use the API. Every subcommand prints
+JSON (`queue.as_json`: id, kind, status, priority, target, payload, lease,
+attempts, result, error), the same shape the API returns. `tasks complete`
+stores the result as given: it doesn't validate or apply it, and it is the
+only way to complete a kind without a result schema.
 
 | Subcommand | What |
 |---|---|
@@ -290,49 +312,144 @@ bad JSON come back as command errors.
 ## The agent skills
 
 Skills are instructions a Claude agent loads for one kind of work. They live
-in `.claude/skills/` and are part of the contract: when a payload or a command
-changes, the skill must change with it.
+in `.claude/skills/` and are part of the contract: when a payload, a result
+schema or an endpoint changes, the skill must change with it. Every skill
+works through the agent API: it reads the base URL from
+`HUMANITRIBUTARY_API` and the token from `HUMANITRIBUTARY_API_TOKEN` in its
+environment, so the same skill runs against `make up` locally and the
+production URL.
 
 | Skill | Works | What it covers |
 |---|---|---|
-| `drain-write-events` | `write_event` | Claim; read the payload; decide (duplicate, rejected, or one event); fetch and read every source cited (`browser_only` publishers in a browser, never openstax.org); aim for a non-Wikipedia source; write in `site/SCHEMA.md` style into `site/data/` until the cutover, then `make import`; complete with `entry`, `decision`, `sources_read`. |
-| `verify-claims` | `verify_claim` | Claim; read each cited page; record a stance per page and part with `facts record`; what to do per reason (`no_second_source`, `conflict`, the recheck reasons); complete with the claim's new status and the evidence recorded. |
-| `verify-stale-claims` | `verify_claim` from ingestion | The dead-link and changed-page cases (archived copies, replacements, re-recording `supports` to stamp a new hash) and suggested second sources (read each, record it only if it explicitly supports the claim, mark the `SuggestedSource` accepted or rejected). |
-| `review-branch-proposals` | `review_branch_proposal` | What to ask of each rule; fill every `needs_agent` field; `branches apply --legacy-file …` then `make roundtrip`, or `branches reject --note`; how to revert. |
+| `drain-write-events` | `write_event` | Claim over the API; read the payload (and `GET entries/<slug>`, `GET branches/<slug>`, `GET search`); decide (duplicate, rejected, or one event); fetch and read every source cited (`browser_only` publishers in a browser, marked `browser_read`; never openstax.org); aim for a non-Wikipedia source; complete with the event in `site/SCHEMA.md` style, which lands in review. It no longer edits `site/data/` or runs `make import`: the owner carries a published event into the data files until the cutover. |
+| `verify-claims` | `verify_claim` | Claim; read each cited page; complete with a stance per page and part as `evidence` rows; what to do per reason (`no_second_source` on the atomic parts, `conflict` with a `proposed_text` for the owner, the recheck reasons). |
+| `verify-stale-claims` | `verify_claim` from ingestion | The dead-link and changed-page cases (archived copies, replacements, re-recording `supports` to stamp a new hash) and suggested second sources (read each, add it as evidence only if it explicitly supports the claim, list it in `suggestions.accepted` or `rejected`). |
+| `review-branch-proposals` | `review_branch_proposal` | What to ask of each rule; fill every `needs_agent` field; accept with the operations (for the owner's `branches apply`) or reject with a note. |
 
 ## From a task to the records
 
 A task's `result` is a receipt. Only one job reads it: `process`, for
-`write_event`, to accept or reject the story's candidates. Everything else an
-agent does takes effect through the same doors any writer uses:
+`write_event`, to accept or reject the story's candidates. What an agent
+writes takes effect through the same doors any writer uses, and the API
+opens them for it (`agentapi/apply.py`):
 
 - **Content** goes through `timeline.services` inside
   `revising("agent:<name>", reason=…, task=task)`. The `task` argument puts
   the task's id on every Revision the block writes, so each change traces
-  back to why it was made ([revisions](revisions.md)). New entries start as
-  `draft` or `review`; only `manage.py facts publish` moves one to
+  back to why it was made ([revisions](revisions.md)). Entries an agent
+  writes start as `review`; only `manage.py facts publish` moves one to
   `published`, under the publishing rule ([publishing](publishing.md)).
-- **Evidence** goes through `manage.py facts record --task <id>`
-  (`evidence.services.record_evidence`), which recomputes the claim's status,
-  confidence and next recheck at once.
-- **Branch structure** goes through `manage.py branches apply --task <id>`,
-  which runs the proposal's operations through the services and marks the
-  proposal applied.
+- **Evidence** goes through `evidence.services.record_evidence`, which
+  recomputes the claim's status, confidence and next recheck at once. The
+  owner's `manage.py facts record --task <id>` uses the same function.
+- **Branch structure** goes through `manage.py branches apply`, the owner's
+  command, which runs the proposal's operations (those an agent accepted it
+  with, if any) through the services and marks the proposal applied.
 
-Until the cutover the legacy data files are still imported over Postgres, so
-the skills write new events and branch changes to `site/data/` as well
-([content model](content-model.md)).
+Until the cutover the legacy data files are still imported over Postgres
+([content model](content-model.md)). A published event that exists only in
+Postgres is retracted by the next `make import --retract-missing`, so the
+owner carries the events agents wrote into `site/data/` when publishing them,
+and runs `branches apply` with `--legacy-file`.
 
-> **Pending: parity branch.** An agent API arrives, so agents can claim,
-> extend and complete tasks without running `manage.py tasks` in a checkout;
-> update this section and the skills when it merges.
+## The agent API
+
+Agents never hold database credentials. They reach the queue and the reads
+they need over a small JSON API under `/api/agent/` (`agentapi/`), served by
+the `web` process (gunicorn; `make up` runs it on 127.0.0.1:8000), with a
+bearer token on every request ([ADR 0017](../adr/0017-agent-api.md)).
+
+### Endpoints
+
+From `agentapi/views.py` (routes in `agentapi/urls.py`):
+
+| Endpoint | What |
+|---|---|
+| `GET /api/agent/` | Who you are (`agent:<name>`), your scopes, the kinds with schemas, every endpoint. |
+| `GET schemas/<kind>` | The result schema `complete` checks for that kind (404 for a kind without one). |
+| `GET tasks/next?kind=…` | Peek at the best available task (`kind` repeats), changing nothing. |
+| `POST tasks/claim` | `{"kinds": [...], "lease_minutes": 30}` → `{"task": {…}}` leased to you, or `{"task": null}`. |
+| `GET tasks/<id>` | A task you claimed, or any queued task of a kind you may take (403 otherwise). |
+| `POST tasks/<id>/extend` | `{"minutes": N}` (1–240; default `TASK_LEASE_MINUTES`). |
+| `POST tasks/<id>/complete` | `{"result": {…}}` → validated, applied, done. |
+| `POST tasks/<id>/release` | Hand it back untouched. |
+| `POST tasks/<id>/fail` | `{"error": "…", "retry": true}`. |
+| `GET entries/<slug>` | An entry, its location and its claims (with status and confidence). |
+| `GET branches/<slug>` | A branch: its events (up to 300 listed), latest metrics, open proposals. |
+| `GET claims/<id>` | A claim with its evidence and parts, in the `verify_claim` payload's shape. |
+| `GET search?q=…&kind=event` | Events and branches by title or name (trigram similarity; `kind` is `event` or `branch`, `limit` up to 50). |
+
+The queue endpoints call `work.queue` unchanged: the same leases, the same
+`SKIP LOCKED` claims, the same ownership checks. A queue error (not your
+task, not claimed) is a 409, a body that isn't a JSON object a 400.
+
+### Tokens and scopes
+
+`manage.py agent_token` is the owner's command; agents never run it.
+
+| Subcommand | What |
+|---|---|
+| `agent_token create <name> --scope <kind> [--scope …] [--by WHO]` | A token for `agent:<name>`, printed once. `--scope` is a task kind with a result schema, or `*` for all of them. |
+| `agent_token list` | Every token as JSON: name, prefix, scopes, who made it, when last used, whether revoked. |
+| `agent_token revoke <name>` | Cuts that agent off; nobody else is touched. |
+
+A token is `hta_` and 32 random bytes; only its sha256 is stored
+(`AgentToken.token_hash`), with its first characters as a `prefix` to
+recognize it in a list. The admin shows tokens read-only. Scopes are task
+kinds: a token may peek at, claim and complete only those (asking for
+another kind is a 403), and every token may use the read endpoints. `*`
+covers the kinds with schemas, so `enrich` and `recheck_citation` are never
+offered over the API.
+
+**Rate limit.** Each token may make `AGENT_API_RATE_PER_MINUTE` (120)
+requests in a one-minute window. The count is kept on the token row and
+updated in one SQL statement, so it holds across gunicorn workers. Over the
+limit the answer is a 429 with `Retry-After` (and `retry_after` in the body).
+A missing, unknown or revoked token is a 401.
+
+### Results: validated, then applied
+
+Each kind an agent may complete has a JSON Schema (draft 2020-12) in
+`agentapi/schemas.py` `RESULTS`. Content follows `site/SCHEMA.md` (an
+event's keys and limits, a cite's `t`/`u`/`k`); decisions follow the old CLI
+results, so `process` reads `result.entry` unchanged.
+
+| Kind | Result | How it is applied |
+|---|---|---|
+| `write_event` | `decision`: `written` (with `event`), `duplicate` (with `entry`), `rejected` (with `note`) | A written event is created with status `review`: its record claim, one `supports` evidence row per cite (method `agent_read` unless the cite says `browser_read`, excerpt cut to 25 words), its location, its link, and its place after `after` if given. Its slug goes in `result.entry`. |
+| `audit` | `events`: up to 30 events | Each created as for `write_event`; the slugs go in `result.entries`. |
+| `verify_claim` | `claim`, `evidence` (`url`, `stance`, optional `claim` for a part, `excerpt`, `method`, `title`, `found`), optional `suggestions`, `proposed_text`, `note` | Each row through `record_evidence()` on the claim or one of its entry's claims; `SuggestedSource` rows marked `accepted` or `rejected`. `proposed_text` is stored, not applied. |
+| `review_branch_proposal` | `decision` (`accept` with `operations`, or `reject`), `proposal`, `note` | Reject: recorded on the proposal. Accept: the operations are checked and stored on the proposal with status `accepted`, for the owner's `branches apply`. |
+| `map_branch_entities` | `branch`, `entities` (`qid`, `role`, `label`; up to 20) | A `BranchEntity` per item, and a stub `Entity` for a QID not yet fetched. |
+
+`complete` runs in this order:
+
+1. The token must have the task's kind in scope (403), and the result must
+   match the kind's schema. If it doesn't, the answer is a 422 that lists
+   each problem as `path: message`, with the schema's URL; nothing is
+   written and the task stays yours to fix and resend. A kind without a
+   schema is refused the same way.
+2. In one transaction, the task row is locked (`queue._held`: it must be
+   yours), the result is applied (`agentapi/apply.py`) inside
+   `revising("agent:<name>", reason="<kind> #<id> (agent API)", task=task)`,
+   and the task is completed with the result plus an `applied` summary. A
+   task you don't hold is a 409.
+3. A result that is well-formed but can't be applied (an id that exists, an
+   unknown branch, an uncitable URL, a task about another claim or
+   proposal, operations with placeholders left) raises `ApplyError`: a 422
+   with the reason, everything rolled back, the task still held.
+
+Nothing the API writes is published: events land in `review`, evidence is
+evidence, a branch change waits for the owner.
 
 ## Changing it
 
 | Change | What it needs |
 |---|---|
-| A new task kind | Add it to `AgentTask.Kind` and make a migration (the choices are in the migration). Write its payload in the job that queues it, give it a dedupe key, and add a skill in `.claude/skills/` if agents will work it. Add a row to the kinds table here. |
+| A new task kind | Add it to `AgentTask.Kind` and make a migration (the choices are in the migration). Write its payload in the job that queues it, give it a dedupe key, and add a skill in `.claude/skills/` if agents will work it. For agents to complete it over the API, add its schema to `agentapi/schemas.py` `RESULTS` and its applier to `agentapi/apply.py` `APPLIERS`. Add a row to the kinds table here. |
 | A new payload key | Change the job that builds it and the skill that reads it, in the same pull request. |
+| A result field | The kind's schema in `agentapi/schemas.py`, its applier, and the skill, together; `tests/test_agent_api.py`. |
+| The rate limit | Set `AGENT_API_RATE_PER_MINUTE` in the environment; the default is in `config/settings.py`. |
 | The lease length | Set `TASK_LEASE_MINUTES` in the environment; the default is in `config/settings.py`. |
 | Retry limits | `max_attempts` is per task (default 3 in `work/models.py`); a job may pass another value when it creates tasks. Changing the default needs a migration. |
 | Claim order | `next_task`'s ordering and the `task_queued_idx` index must match; change both, with a migration. |

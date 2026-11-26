@@ -15,12 +15,15 @@ covers:
   - ingest/management/commands/*.py
   - publish/release.py
   - publish/management/commands/publish.py
+  - infra/*.py
+  - infra/management/commands/*.py
 ---
 
 This chapter is for whoever keeps the platform running. It covers setting up a local copy, running the
 collection jobs every few minutes, checking that they are healthy, and what to do when a job keeps failing, a
-source changes its terms or a release has to be undone. Main runs on one laptop: a Postgres database in Docker, a
-macOS launchd schedule, and files under `var/`.
+source changes its terms or a release has to be undone. It runs on one laptop, with production's patterns: Postgres
+and MinIO (a local stand-in for S3) in Docker, the `Procfile`'s `web` and `worker` processes (`make up`), a macOS
+launchd schedule for when they aren't running, and logs and a mirror of the latest release under `var/`.
 
 ## Setting up a local copy
 
@@ -28,14 +31,21 @@ You need Docker Desktop, [uv](https://docs.astral.sh/uv/) and Node (the site's b
 
 | Step | Command | What it does |
 |---|---|---|
-| 1 | `make env` | `scripts/make_env.py` writes `.env` with `ENVIRONMENT=dev`, a random `POSTGRES_PASSWORD` and a `DATABASE_URL` on port 5433. It leaves an existing `.env` alone. |
-| 2 | `make db` | Starts Docker Desktop if it isn't running, then `docker compose up -d --wait db`: Postgres 16, bound to `127.0.0.1:5433`, data in the `humanitributary-pg` volume. |
+| 1 | `make env` | `scripts/make_env.py` writes `.env` with `ENVIRONMENT=dev`, a random `POSTGRES_PASSWORD`, a `DATABASE_URL` on port 5433, and MinIO's credentials with the `S3_*` variables that point at it. On an existing `.env` it adds only the storage keys it lacks, and it never prints a value. |
+| 2 | `make db` | Starts Docker Desktop if it isn't running, then `docker compose up -d --wait db minio`: Postgres 16 on `127.0.0.1:5433` (volume `humanitributary-pg`) and MinIO on `127.0.0.1:9000`, its console on `127.0.0.1:9001` (volume `humanitributary-minio`). Then `make storage-init` creates the two buckets if they are missing. |
 | 3 | `uv sync` | Installs the Python dependencies into a .venv folder. |
 | 4 | `make migrate` | Applies migrations (they create `pg_trgm`, the audit triggers and every table). |
 | 5 | `make import` | Dumps `site/data/*.js` to `var/legacy.json` and imports it (idempotent: a second run writes nothing). |
-| 6 | `make publish` | Writes the first release to `var/releases/<version>/`. |
-| 7 | `make build-release` | Builds the page, timeline.html in `site/`, from `var/releases/latest`. |
-| 8 | `uv run python manage.py createsuperuser`, then `make serve` | The admin at http://localhost:8000/admin/. |
+| 6 | `make publish` | Runs the release gates, then writes the first release to the `releases` store and points `releases/latest.json` at it. Needs Node (the build gate). |
+| 7 | `make build-release` | Mirrors the latest release into `var/releases/<version>/` (`make release-pull`), then builds the page, timeline.html in `site/`, from it. |
+| 8 | `uv run python manage.py createsuperuser`, then `make up` | `web` (gunicorn on 127.0.0.1:8000: the admin at http://127.0.0.1:8000/admin/, the agent API, `/healthz`) and `worker` (`run_jobs --loop`), from the `Procfile`, via honcho. `make serve` is the admin alone, on Django's runserver. |
+
+A checkout made before object storage still has `var/raw/` and `var/releases/`. Run `make storage-migrate` once
+(`manage.py storage migrate_local`): it copies both into the store, checking each raw file's hash, writes
+`releases/latest.json` from the old `latest` symlink, and lists anything the database refers to that the store
+still lacks. It is idempotent and deletes nothing; `VAR=<dir>` copies from another checkout's `var/`, and
+`manage.py storage migrate_local --dry-run` shows what it would do. Until it has run, documents fetched before the
+change read as missing. Delete the old local copies yourself once its list is empty.
 
 `make test` runs the suite against the same Docker Postgres in a separate `test_<database>` database. `make check`
 runs Django's checks, looks for missing migrations and validates the site's data.
@@ -45,7 +55,8 @@ on 5433 (`docker-compose.yml` maps `127.0.0.1:5433` to the container's 5432), an
 `DATABASE_URL`.
 
 > **Note:** Docker reads `POSTGRES_PASSWORD` only when it first creates the volume. Changing it in `.env` later
-> doesn't change the database's password, so the two stop matching. Keep the password `make env` wrote.
+> doesn't change the database's password, so the two stop matching. Keep the password `make env` wrote. Locally,
+> `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` are MinIO's root user and password (`make env` writes them equal).
 
 The other variables are in `.env.example`:
 
@@ -53,20 +64,48 @@ The other variables are in `.env.example`:
 |---|---|
 | `ENVIRONMENT` | `dev` locally. Anything else turns on production safety and requires `SECRET_KEY` and `ALLOWED_HOSTS`. |
 | `POSTGRES_PASSWORD`, `DATABASE_URL` | The database. Settings refuse to start without `DATABASE_URL`. |
+| `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | The local MinIO. Without a password MinIO refuses to start (Postgres is unaffected). `MINIO_PORT`, `MINIO_CONSOLE_PORT` and `MINIO_IMAGE` override its ports and image. |
+| `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_BUCKET_RAW`, `S3_BUCKET_RELEASES` | Object storage ([ADR 0016](../adr/0016-object-storage.md)): MinIO locally, S3 or Cloudflare R2 in production (`S3_REGION=auto` and the account endpoint for R2; an empty endpoint for AWS). |
+| `STORAGE_BACKEND` | `local` keeps both stores in `var/storage/<bucket>/`, with no Docker. It is the default when neither `S3_ENDPOINT_URL` nor `S3_BUCKET_RAW` is set; `s3` otherwise. |
 | `INGEST_CONTACT` | The contact in the bot's User-Agent: a project address or URL, never a person's details. Defaults to the repository. |
 | `SMITHSONIAN_API_KEY`, `EUROPEANA_API_KEY` | Two lookup adapters. Empty means those adapters skip. |
 | `INGEST_START_DOCKER` | `0` stops `ops/run-jobs.sh` from starting Docker Desktop. |
+| `WORKER_TICK_SECONDS` | How often the worker looks for due jobs (60). |
+| `ALERT_AFTER_FAILURES`, `ALERT_EMAILS` | Alerts: after this many failed runs in a row (3), one email to these addresses (comma-separated). Outside `dev` the mail goes through `EMAIL_HOST`, `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD`. |
+| `AGENT_API_RATE_PER_MINUTE` | Requests per agent token per minute (120). Tokens themselves come from `manage.py agent_token create`, never from `.env`. |
 
 Never print, commit or paste `.env`. Keys must never reach logs or errors: `ingest/policy.py` `mask_secrets`
 masks configured key values and key-like query parameters in FetchRun errors and log lines.
 
 ## The schedule
 
-One command does all scheduled work: `manage.py run_jobs` (`make jobs`). Each time it runs, it takes the runner's
-advisory lock (`ingest/jobs.py` `LOCK_KEY`), closes any FetchRun a crashed process left `running`, and runs every
-due job once, in the order `ingest/job_defs.py` registers them. A second runner that finds the lock taken logs
-"another run_jobs holds the lock; exiting" and stops. The lock belongs to the database session, so it dies with
-the process: a crash never leaves it stuck.
+One command does all scheduled work: `manage.py run_jobs`. It runs in two ways, with the same jobs and the same
+lock.
+
+| How | Command | Where |
+|---|---|---|
+| Once | `run_jobs` (`make jobs`) | launchd every 15 minutes; Heroku Scheduler if it is used |
+| As a loop | `run_jobs --loop` (`make worker`, or `make up` with `web`) | The `Procfile`'s `worker` process |
+
+Each run takes the runner's advisory lock (`ingest/jobs.py` `LOCK_KEY`), closes any FetchRun a crashed process
+left `running`, and runs every due job once, in the order `ingest/job_defs.py` registers them. A second runner that
+finds the lock taken logs "another run_jobs holds the lock; exiting" and stops. The lock belongs to the database
+session, so it dies with the process: a crash never leaves it stuck.
+
+### The worker
+
+`run_jobs --loop` (`ingest/jobs.py` `loop()`) holds a second advisory lock, the scheduler lock
+(`SCHEDULER_LOCK_KEY`), for its whole life, and runs whatever is due every `WORKER_TICK_SECONDS` (60) under the
+runner's lock. A second worker finds the scheduler lock taken, logs "another worker holds the scheduler lock;
+standing by" and tries again each tick, so a deploy that briefly runs two workers never schedules twice. The worker
+and launchd can run at the same time: whichever holds the runner's lock runs the due jobs, and the other exits or
+waits for its next tick.
+
+SIGTERM (Heroku's shutdown, Ctrl-C under honcho) lets the job that is running finish, then stops before the next
+one and logs "worker stopped". A job cut off by SIGKILL is closed as failed on the next run. The worker's output
+goes to its terminal (honcho prefixes each line with the process's name), not to `var/logs/`.
+
+Use `make up` while you work; the launchd schedule runs the jobs when nothing else is running.
 
 ### Locally: launchd
 
@@ -84,8 +123,11 @@ Each tick of `ops/run-jobs.sh`:
 1. If something already answers on 5433 (from any checkout or worktree), go on.
 2. Otherwise, if Docker isn't running and `INGEST_START_DOCKER` isn't `0`, start Docker Desktop and wait up to two
    minutes; then `docker compose up -d --wait db`.
-3. If the database still isn't up, or `uv` isn't on the path, log a skip line and exit.
-4. Run `uv run --quiet python manage.py run_jobs` and log its output and exit status.
+3. If the database still isn't up, log a skip line and exit.
+4. If `S3_ENDPOINT_URL` in `.env` points at a local MinIO (`127.0.0.1` or `localhost`) and nothing answers on its
+   port, `docker compose up -d --wait minio`; if MinIO doesn't come up, log a skip line and exit.
+5. If `uv` isn't on the path, log a skip line and exit.
+6. Run `uv run --quiet python manage.py run_jobs` and log its output and exit status.
 
 The script always exits 0, so launchd never backs off. A Mac that is asleep runs nothing.
 
@@ -120,16 +162,20 @@ Plain intervals are in `ingest/job_defs.py` (`DAY, WEEK = 1440, 10080`). Feed in
 after the first run the admin is the place to change it.
 
 A job runs on the first tick after it is due, so its real period is its interval rounded up to the tick. With
-15-minute ticks, `process` (15 minutes) runs every 15 or 30 minutes, depending on how long the jobs before it took.
+launchd's 15-minute ticks, `process` (15 minutes) runs every 15 or 30 minutes, depending on how long the jobs before
+it took; under the worker, which waits `WORKER_TICK_SECONDS` after each pass, it runs a minute or so after it
+is due.
 
 `manage.py run_jobs --list` prints the registry: each job and feed, its interval, whether it is on, and when it is
 next due. `run_jobs --only portal,process` limits a run to some jobs.
 
-### Hosted: Heroku Scheduler
+### Hosted
 
-> **Pending: parity branch.** The plan is Heroku Scheduler running `python manage.py run_jobs` every 10 minutes,
-> the same command; the lock keeps runs from overlapping. Raw documents must move to object storage first,
-> because dynos are ephemeral, and a worker process joins the `Procfile`. Update this section when it merges.
+Nothing is deployed yet. The `Procfile` is ready for Heroku: a `worker` dyno runs `run_jobs --loop`, or Heroku
+Scheduler runs `python manage.py run_jobs`; the locks keep either from overlapping with the other. A dyno's disk is
+thrown away on restart, which is why raw documents and releases live in object storage. Hosting also needs the
+`S3_*` variables and mail settings for alerts
+([ADR 0019](../adr/0019-processes-and-release-gates.md)).
 
 ## Is it healthy?
 
@@ -137,9 +183,11 @@ Read these, in this order.
 
 | Where | What it tells you |
 |---|---|
+| `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs) | JSON from `infra/health.py`: the database, both stores, the latest release's version, each job's last run, last run that finished ok or partial, last status and consecutive failures, and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
+| `make storage-status` | The storage backend, whether each bucket answers, and the `latest` pointer: its version, why it was written and by whom. |
 | `make digest` (`manage.py digest`) | Open tasks by kind, the top `write_event` stories, `write_event` by branch, `verify_claim` reasons, new-branch signals, the fact base's and branch governance's sections, candidates by status, and every job's runs in the last 24 hours with the last three failed or partial errors. "No runs in the last 24 hours" means the schedule isn't running. `--sources` adds every feed and lookup adapter, on or off, with its publisher's policy, tier and disabled reason, plus the sources considered and skipped. |
 | `uv run python manage.py facts report` | The fact base: record claims by status (corroborated, single source, contested, stale, unverified), by era and region, and what is due, broken, contested or blocking publication. `--brief` drops the tables. |
-| `make schedule-status` | Whether launchd runs the ticks, and the last log lines. |
+| `make schedule-status` | Whether launchd runs the ticks, and the last log lines. The worker's output is in the terminal that runs `make up`. |
 | `manage.py run_jobs --list` | What is due, and which feeds are off and why. |
 | The admin's FetchRun list | Every run, filterable by status, job and feed, with counts and the full error. |
 | `var/logs/` | `run-jobs-YYYY-MM-DD.log`: one file per day, with each tick's start, a line per run (`job [feed]: status {counts} (seconds)`), the run count and the exit status, and any skip. launchd's own output goes to `launchd.out.log` and `launchd.err.log`. Nothing rotates or deletes these. |
@@ -156,16 +204,27 @@ A FetchRun's status:
 `manage.py run_jobs` prints "N run(s), M failed" and exits 0 either way. `manage.py run_job` exits with an error
 when a run failed.
 
+### Alerts
+
+A job (on one feed, for a feed job) that fails `ALERT_AFTER_FAILURES` (3) runs in a row sends one email
+(`infra/alerts.py`), on exactly that run: not again on the next failure, and a run that doesn't fail resets the
+count. It is counted from FetchRun history, so nothing extra is stored. It goes to `ALERT_EMAILS`, or else to
+Django's `ADMINS`; with neither set it is only a log line ("ALERT (no ALERT_EMAILS or ADMINS set): …"). In `dev`
+the mail uses the console backend, so with `ALERT_EMAILS` set the message is printed in the run's output (the
+worker's terminal or the day's log) instead of sent. Error text in the mail is masked like the logs. An alert that can't be sent is logged and
+never stops the runner.
+
 ## Backups
 
-Say it plainly: **main has no backup system.** Here is what exists.
+Say it plainly: **there is no backup system.** Here is what exists.
 
 | What | Where it lives | Survives |
 |---|---|---|
 | The database | The Docker volume `humanitributary-pg` | Stopping or recreating the container (`make db-stop`, `docker compose down`). It does not survive `docker compose down -v`, `docker volume rm` or losing the laptop. |
 | Content (branches, events, cites) | `site/data/*.js` in git | Anything git survives. `make import` rebuilds it into an empty database until the cutover. |
-| Review state, Revisions, evidence checks, ratings set in the admin, the queue, ingest state | Postgres only | Only what the volume survives. |
-| Raw documents, releases, logs | `var/`, gitignored | Nothing: not in git, not copied anywhere. |
+| Review state, Revisions, evidence checks, ratings set in the admin, the queue, ingest state, agent tokens | Postgres only | Only what the volume survives. |
+| Raw documents and releases | The object store: the Docker volume `humanitributary-minio`, or `var/storage/` with `STORAGE_BACKEND=local` | The same as the database's volume. Nothing copies them elsewhere. Old `var/raw/` and `var/releases/` copies stay until you delete them. |
+| Logs, the release mirror, dumps | `var/`, gitignored | Nothing, but the mirror is rebuilt by `make release-pull` and the dumps by `make dump`. |
 
 There is no `pg_dump` target, no scheduled dump and no copy off the machine. If you need a copy now, a one-off
 dump works while the database runs:
@@ -177,26 +236,28 @@ docker compose exec -T db pg_dump -U humanitributary -Fc humanitributary > var/b
 
 Restore a dump into an empty database with `pg_restore`, schema and data together. A data-only restore runs into
 the revision trigger, which refuses canonical rows written outside `revising()`. Never restore over the live
-database while the schedule is running.
+database while the worker or the schedule is running.
 
-> **Pending: parity branch.** Hosted environments bring Heroku Postgres (with its own backups) and object storage
-> for `var/`; update this section when it merges.
+A lost `releases` store can be rebuilt from the database (see [Restore a release](#restore-a-release)). Lost raw
+documents can't: Postgres keeps only their hashes and extracted text, so the page diffs in `verify_claim` payloads
+skip them.
 
 ## Runbooks
 
 ### A job keeps failing
 
-1. **Find the error.** `make digest` shows the job's runs and the first line of the last failures. The admin's
-   FetchRun list (filter by job and status) has the full error and the counts. `var/logs/run-jobs-<date>.log` has
-   what the run printed.
+1. **Find the error.** After three failures in a row an alert names the job and carries the latest error.
+   `make digest` shows the job's runs and the first line of the last failures, and `/healthz` its consecutive
+   failures. The admin's FetchRun list (filter by job and status) has the full error and the counts.
+   `var/logs/run-jobs-<date>.log` (launchd) or the worker's terminal has what the run printed.
 2. **Reproduce it.** `uv run python manage.py run_job <name>` runs it now, due or not; for a feed job add
-   `--feed "<feed name>"` to run one feed. It takes the same lock, so if a scheduled tick is running it exits
-   with "another run_jobs holds the lock". Options go in with `--opt key=value`.
+   `--feed "<feed name>"` to run one feed. It takes the same lock, so if the worker or a launchd tick is running
+   jobs it exits with "another run_jobs holds the lock". Options go in with `--opt key=value`.
 3. **Read the cause.**
 
    | The error says | Usually |
    |---|---|
-   | "interrupted (the runner exited before finishing)" | The process died mid-run (sleep, a killed shell, Docker stopping). It runs again next time. |
+   | "interrupted (the runner exited before finishing)" | The process died mid-run (sleep, a killed shell, SIGKILL, Docker stopping). It runs again next time. |
    | "publisher … is browser_only", a `NEVER_FETCH` reason, "robots.txt … disallows" | The source policy refused the request. The policy is right; the feed or URL is wrong. |
    | "answered with a bot challenge" | The host showed a CAPTCHA. The fetcher stops asking that host for the rest of the run, and link health skips it for `ingest/policy.py` `BLOCKED_COOLDOWN_DAYS` (14). |
    | `FetchError`, timeouts, HTTP 5xx | The source is down. It is retried on the next due run. |
@@ -225,53 +286,59 @@ database while the schedule is running.
    `VERDICTS` is applied only once per database (the `JobState` named `terms_verdicts_v1`), so a new verdict does
    not reach an existing database by itself. That is why step 2 happens in the admin.
 5. **What already exists stays.** Citations to the publisher remain, and agents re-read them in a browser
-   (`browser_read`). Documents already fetched stay in `var/raw/`. If the terms also limit what we may keep
+   (`browser_read`). Documents already fetched stay in the `raw` store. If the terms also limit what we may keep
    (some ask for deletion within a time limit), that is a separate clean-up to plan.
 
 [Sources and terms](sources-and-terms.md) explains the policy layers.
 
 ### Restore a release
 
-What `publish/release.py` writes:
+What `publish/release.py` writes, in the `releases` store:
 
-- `var/releases/<version>/content.json`: the snapshot. `<version>` is `YYYY.MM.DD.N`, where N counts that day's
-  Release rows.
-- `var/releases/<version>/manifest.json`: the version, sha256 `content_hash`, creation time, counts and
-  `revision_high_water` (the last Revision included).
-- `var/releases/latest`: a relative symlink to the newest version's directory, replaced on every new release.
-- A `Release` row with the same hash, path and counts.
+- `releases/<version>/content.json`: the snapshot. `<version>` is `YYYY.MM.DD.N`, where N counts that day's
+  Release rows, skipping any number whose files a failed run left in the store.
+- `releases/<version>/manifest.json`: the version, sha256 `content_hash`, creation time, counts,
+  `revision_high_water` (the last Revision included) and the release readers had before (`previous`).
+- `releases/<version>/changes.json` and `changes.md`: the change report against that previous release.
+- `releases/<version>/timeline.html`: the page the build gate built.
+- `releases/latest.json`: the pointer, with the version, its hash and snapshot key, when and by whom it was
+  written, why (`publish` or `rollback`) and the version before. It is the only object that is ever rewritten.
+- A `Release` row with the same hash, the snapshot's key and the counts.
 
-A release directory is never changed after it is written. `publish` makes a new one only when the content's hash
-differs from the newest Release row's (or with `--force`).
+Nothing under `releases/<version>/` is changed after it is written (`infra/storage.py` raises `Immutable` on
+different bytes). `publish` makes a new release only when the content's hash differs from the newest Release row's
+(or with `--force`), and only when every gate passes.
 
 To serve an earlier release:
 
 ```bash
-ls var/releases/                                   # pick a version
-shasum -a 256 var/releases/<version>/content.json  # must match content_hash in its manifest.json
-ln -sfn <version> var/releases/latest              # repoint latest (relative, as publish writes it)
-make build-release                                 # the page from that snapshot
+uv run python manage.py publish --rollback <version>   # pick one from the admin's Release list
+make build-release                                     # make release-pull, then the page from that release
 ```
 
-This changes what the page shows, not the database. The next `make publish` compares the database's content with
-the newest Release row, not with `latest`.
+`--rollback` refuses a version with no Release row, or whose snapshot is missing from the store or doesn't match
+the row's hash; otherwise it rewrites `releases/latest.json` (reason `rollback`, actor `job:publish` unless
+`--actor` says otherwise). `make release-pull` (`manage.py storage pull-release`) mirrors the pointer's version into
+`var/releases/<version>/` and repoints `var/releases/latest`; `make build-release` runs it first.
+
+This changes what readers get, not the database. The next `make publish` compares the database's content with the
+newest Release row, not with the pointer.
 
 - If the content hasn't changed since that newest release, `publish` prints "Unchanged since <version>" and
-  leaves `latest` where you put it.
-- If it has, `publish` writes a new version and points `latest` at it.
+  leaves the pointer where you put it.
+- If it has, `publish` runs the gates, writes a new version (its change report against the release you rolled back
+  to) and points `latest` at it.
 
 So to undo a change for good, fix the rows (for a branch operation, `manage.py branches revert <id>`), then
 publish a new release. Releases only go forward.
 
-If `var/releases/` is lost, the database still produces the same bytes: `manage.py publish --force` writes the
-current content as a new version, and its hash matches the old Release row's if nothing changed since.
+If the `releases` store is lost, the database still produces the same bytes: `manage.py publish --force` writes
+the current content as a new version, and its hash matches the old Release row's if nothing changed since. After
+the database is reset, the day's counter starts again at 1, and `publish` skips any version already in the store.
 
-> **Note:** `publish` creates the version directory and refuses one that already exists. The day's counter comes
-> from Release rows, so after the database is reset it starts again at 1, and publishing fails if that version's
-> directory is still on disk. Move the old directories out of `var/releases/` first.
-
-> **Pending: parity branch.** Release gates and rollback by repointing the served release in object storage;
-> update this runbook when it merges.
+> **Note:** a refusal (`publish refused:` and the failing gates) writes nothing. The usual causes: `var/legacy.json`
+> is stale (run `make import`, which re-dumps), Node is missing (the build gate), or a published entry has a
+> contested record claim its text doesn't flag. `manage.py publish --check` runs the gates without writing.
 
 ## Changing it
 
@@ -279,7 +346,9 @@ current content as a new version, and its hash matches the old Release row's if 
 |---|---|
 | A different local tick | `StartInterval` in `ops/launchd/run-jobs.plist` and the comments in `ops/run-jobs.sh` and `ops/schedule.sh`, then `make schedule-install` again |
 | A job's interval | Plain job: `ingest/job_defs.py`. Feed job: the Feed row in the admin, and `FEEDS` in `ingest/seed.py` for new databases |
-| A new environment variable | `config/settings.py`, `.env.example`, and `scripts/make_env.py` if every developer needs it |
+| A new environment variable | `config/settings.py`, `.env.example`, and `scripts/make_env.py` if every developer needs it (today it adds only the storage keys to an existing `.env`) |
+| A different worker tick | `WORKER_TICK_SECONDS` in `.env` or the environment; the code default is in `config/settings.py` |
+| A new process | A line in the `Procfile`, the `make up` target if it should run locally, and this chapter |
 | A new `make` command | A target in the `Makefile` with a `## ` comment, so `make help` lists it, and `.PHONY` |
-| A backup system | An ADR first: what is copied, where, how often, and how a restore is tested; then the Backups section |
+| A backup system | An ADR first: what is copied (the database and the `raw` store), where, how often, and how a restore is tested; then the Backups section |
 | A new runbook | A `###` section under Runbooks, written from the code it depends on, with that code in `covers` |

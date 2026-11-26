@@ -39,8 +39,8 @@ metrics differ from its latest row.
 | `branch`, `other_branches` | The branch it concerns (the survivor, for a merge; empty for a new branch), and the others involved. |
 | `rule_id` | The rule that fired, e.g. `SPLIT-PLACE-v1`. |
 | `summary`, `evidence` | One paragraph, and what the rule saw (clusters, gaps, shared events, with event ids, titles, dates, places). |
-| `payload` | `key`, `strength`, `operations`, `needs_agent`, `rules_version`; later `applied`, `reverted`, `legacy_file`. |
-| `status` | `proposed`, `accepted`, `rejected`, `applied`, `withdrawn`. |
+| `payload` | `key`, `strength`, `operations`, `needs_agent`, `rules_version`; later `accepted`, `applied`, `reverted`, `legacy_file`. |
+| `status` | `proposed`, `accepted` (an agent accepted it over the API; waiting for the owner's apply), `rejected`, `applied`, `withdrawn`. |
 | `created_by`, `decided_by`, `decided_at`, `decision_note` | Who and when. |
 
 ## Measuring a branch
@@ -181,20 +181,46 @@ needs 2 × `min_clusters` to split by place again, and 2 × `min_gap_s` and
 `min_shift_km` to split in time.
 
 **A proposal waits for its decision.** An unchanged open proposal returns
-before its task is re-queued, so if an agent completes the task without
-applying or rejecting, no new task appears until the finding itself changes.
+before its task is re-queued, so if a task is completed without accepting,
+applying or rejecting (from the CLI; the API's schema requires a decision),
+no new task appears until the finding itself changes.
 
 ## Deciding a proposal
 
 `apply`, `reject` and `revert` are decisions: `manage.py branches` refuses a
-`job:` actor for them (only `agent:` or `human:`). The
+`job:` actor for them (only `agent:` or `human:`). An agent decides over the
+agent API instead (the CLI stays for the owner), and the owner applies. The
 `review-branch-proposals` skill walks an agent through it.
+
+### Accepting, over the API
+
+An agent claims a `review_branch_proposal` task and completes it with a
+result its schema accepts (`agentapi/schemas.py`): the `proposal` id,
+`decision` `accept` with the full `operations` and a `note`, or `reject` with
+a `note`.
+`agentapi/apply.py` `review_branch_proposal()` applies it inside the API's
+`revising("agent:<name>", task=…)`, in the same transaction that completes
+the task:
+
+1. Lock the proposal. Refuse if it doesn't exist, if the task targets another
+   proposal, or if it isn't `proposed`.
+2. **Reject**: status `rejected`, with the decider, time and note.
+3. **Accept**: `operations.validate()` the agent's operations (a problem is
+   a 422, nothing is kept, and the task stays held), store them as `payload.accepted`
+   (`operations`, `by`, `at`, `task`, `note`), and set the status to
+   `accepted` with the decider, time and note.
+
+An accepted proposal changes nothing yet. Structure changes reach the page at
+once, so the owner runs `branches apply <id>`, which uses the accepted
+operations. See [the work queue chapter](work-queue-and-agents.md) for the
+API itself.
 
 ### Applying
 
 `governance/operations.py` `apply(proposal, ops, actor=…, task=…)`:
 
-1. Take the agent's final operations (`--ops <file>`), or the proposal's own.
+1. Take the final operations: `--ops <file>` if given, else the ones an agent
+   accepted it with (`payload.accepted.operations`), else the proposal's own.
 2. `validate()` them. A `create_branch` needs `name`, `text`, `start_when`
    and `region` written (not empty, no `TODO`), at least one cite, and a slug
    not in use. A `patch` may not hold `TODO`. A `move` needs the event and its
@@ -202,8 +228,7 @@ applying or rejecting, no new task appears until the finding itself changes.
    branches. An unknown op is refused. `needs_agent` fields that are not
    placeholders (a merge survivor's name, a split's `end_when`) are not
    checked: writing them well is the agent's job.
-3. The proposal must be `proposed` or `accepted`. (Nothing in the code sets
-   `accepted`; a person may, in the admin.)
+3. The proposal must be `proposed` or `accepted`.
 4. Inside `revising(actor, reason="apply branch proposal <id> (<rule>): <note>",
    task=task)`, note the transaction id and the range of Revision ids, and
    run the operations in the static site's order: creations, patches,
@@ -226,9 +251,11 @@ The same operations as the static site's `site/restructure.mjs`, run through
 
 ### Rejecting
 
-`branches reject <id> --note "…"` sets a `proposed` proposal to `rejected`
-with the decider, time and note. The note matters: it is how the owner tunes
-thresholds. The agent then completes its task.
+`branches reject <id> --note "…"` sets a `proposed` or `accepted` proposal
+to `rejected` with the decider, time and note, so the owner can turn down
+operations an agent accepted; an agent rejects a `proposed` one by
+completing its task with `decision` `reject`. The note matters: it is how
+the owner tunes thresholds.
 
 ### Reverting
 
@@ -286,7 +313,9 @@ doesn't re-propose what was already decided.
 | `branches revert <id> --agent A [--task T] [--force]` | Revert. |
 
 `governance.review.digest_section()` lists up to 20 open proposals and the
-count of open THIN tasks in `manage.py digest`.
+count of open THIN tasks in `manage.py digest`: the `proposed` ones and the
+`accepted` ones waiting for the owner (marked "accepted: apply or reject").
+`branches list --status accepted` shows the latter alone.
 
 ## Checking the rules against history
 

@@ -244,10 +244,12 @@ citation's latest link check (`Citation.last_checked_at`, `http_status`,
 last check, there is no problem. Otherwise:
 
 - `dead_link`: the citation's `http_status` is at least `dead_http_status`
-  (400). The code reads only the number, so a 403 or 429 from a site that
-  refused the checker, or a 5xx, counts as dead too. Link health writes 599
-  (`ingest/linkhealth.py` `UNREACHABLE`) for a page dead without an HTTP
-  answer.
+  (400) and not one of `blocked_http_statuses` (401, 403, 429). Those say the
+  site refused an automated reader, not that the page is gone; link health
+  records them as `blocked` and doesn't write them to the citation anyway, so
+  the exclusion covers statuses stored before it did. A 5xx still counts as
+  dead. Link health writes 599 (`ingest/linkhealth.py` `UNREACHABLE`) for a
+  page dead without an HTTP answer.
 - `content_changed`: the evidence's `content_hash` and the citation's are
   both set and differ.
 
@@ -266,7 +268,9 @@ refuses the `as_written` claim, whose evidence the import owns. If the page
 already has evidence on the claim that an agent recorded as supporting, that
 reading stands and the conflict isn't written.
 
-Agents record conflicts with `facts record --stance conflicts --found '{…}'`.
+Agents record conflicts as evidence with stance `conflicts` and a `found`
+value in a `verify_claim` result through the agent API (the owner's
+equivalent is `facts record --stance conflicts --found '{…}'`).
 Jobs find date conflicts in ingestion's output with `from_candidates()`:
 
 1. Take each `Candidate` that ingestion matched to an existing event
@@ -337,6 +341,15 @@ reason's plus 4 for an imp-1 entry, 2 for imp 2 (and for branches), 0 for
 imp 3. The payload is described in
 [the work queue chapter](work-queue-and-agents.md#verify-tasks-from-the-sweep).
 
+For a changed page the payload carries `page_changes`, from ingestion's
+documents (`sweep._page_diff`): when the page's `Document` has an earlier
+version, its raw bytes are read from the `raw` object store with
+`ingest.store.read_raw` and diffed, sentence by sentence, against the current
+extracted text (at most 80 lines). If the store doesn't have that version
+(`read_raw` returns None, e.g. a document fetched before
+`make storage-migrate`), the diff is skipped and the payload gives the first 1,500
+characters of the new text instead.
+
 ## The self-healing loop
 
 The parts above make a loop that repairs the fact base without anyone
@@ -347,7 +360,8 @@ watching it:
 2. The sweep sees a dead or changed page, pulls the claim's recheck to
    today (stale) and queues a `verify_claim` task with the page's diff.
 3. An agent reads the page, or its archived copy, or a replacement, and
-   records what it says with `facts record`.
+   records what it says in the task's result, which the agent API applies
+   through `record_evidence()` ([work queue](work-queue-and-agents.md#the-agent-api)).
 4. That evidence is checked after the citation's last check and carries
    its current hash, so the problem is answered. The claim is recomputed at
    once, and its next recheck counts from this check.
@@ -359,8 +373,10 @@ The same loop runs for scheduled rechecks, changed wording
 
 ## Recording evidence
 
-`evidence/services.py` `record_evidence()` is the door agents use (through
-`manage.py facts record`). Inside `revising()`:
+`evidence/services.py` `record_evidence()` is the door agents use: the agent
+API calls it for each evidence row of a `verify_claim` result, inside
+`revising("agent:<name>", task=…)`, and the owner's `manage.py facts record`
+calls it from a shell. Inside `revising()`:
 
 1. The stance must be one of the four.
 2. `citation_for(url, title)` finds or creates the Citation, and its
@@ -378,10 +394,18 @@ The same loop runs for scheduled rechecks, changed wording
 
 ## What may be published
 
-`evidence/publishing.py` holds the publishing rule (no contested claim unless
-the text says the sources differ; no event without a non-Wikipedia source
-after the grace period) and `publish_entry()`, the only door to `published`.
-The rule and its overrides are in [publishing](publishing.md).
+`evidence/publishing.py` holds the publishing rule and `publish_entry()`,
+the only door to `published`:
+
+1. No record claim is contested unless the text says the sources differ
+   (`unflagged_contested()`, which the release gate asks too).
+2. An event needs supporting evidence (stance `supports` or `partial`) that
+   isn't all Wikipedia, after the grace period. Evidence that only conflicts
+   (or is unrelated) supports nothing: an event with no supporting row is
+   held like one with only Wikipedia.
+
+The rule and its overrides are in [publishing](publishing.md). Nothing the
+agent API writes is published: it creates events in `review`.
 
 ## The health report
 
@@ -413,10 +437,8 @@ entries:
 | `facts record --claim ID --url U --stance S --agent A [--excerpt E] [--title T] [--method M] [--found JSON] [--task ID]` | Record evidence (method `agent_read` by default; also `browser_read`, `human`, `fetch_match`). Runs inside `revising(agent, task=…)` and prints the claim's new status and confidence. |
 | `facts publish <slug> --agent A [--task ID] [--override "why"]` | Publish under the rule. |
 
-> **Pending: parity branch.** A changed page's diff (`sweep._page_diff`)
-> reads the previous version's raw bytes from `var/raw/` under
-> `settings.VAR_DIR`; object storage replaces that on Heroku, so this read
-> will go through the storage layer. Update this section when it merges.
+These are the owner's commands (and a job's); agents reach the same services
+through the agent API ([work queue](work-queue-and-agents.md#the-agent-api)).
 
 ## Changing it
 
