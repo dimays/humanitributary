@@ -3,10 +3,10 @@
   "description": "The data platform behind an interactive, cited timeline of all history: the admin, the agent API and the scheduled jobs (docs/adr/0020-heroku-hosting.md).",
   "repository": "https://github.com/dimays/humanitributary",
   "stack": "heroku-24",
-  "buildpacks": [{ "url": "heroku/python" }],
+  "buildpacks": [{ "url": "heroku/nodejs" }, { "url": "heroku/python" }],
   "formation": {
     "web": { "quantity": 1, "size": "basic" },
-    "worker": { "quantity": 0, "size": "basic" }
+    "worker": { "quantity": 1, "size": "basic" }
   },
   "addons": [{ "plan": "heroku-postgresql:essential-1", "options": { "version": "16" } }],
   "env": {

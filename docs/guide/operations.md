@@ -191,7 +191,7 @@ database; the bare domain is reserved for the public page.
 | | Staging |
 |---|---|
 | App | `humanitributary-staging` (region us, stack heroku-24), at https://data.humanitributary.com (Heroku-managed certificate) and https://humanitributary-staging-aeb697fb63be.herokuapp.com. Agents use `https://data.humanitributary.com/api/agent` as `HUMANITRIBUTARY_API` |
-| Build | The `heroku/python` buildpack: Python from `.python-version`, packages from `uv.lock`, then `collectstatic`. No Node: nothing hosted runs `site/build.mjs` yet. |
+| Build | Two buildpacks, in order: `heroku/nodejs` (Node 24.x from `package.json`, which has no dependencies; it runs `site/build.mjs` for the publish gates) and `heroku/python` (Python from `.python-version`, packages from `uv.lock`, then `collectstatic`). `heroku buildpacks -a humanitributary-staging` lists them. |
 | Processes | From the `Procfile`: `release` runs `migrate` before each release goes live (a failed migration stops the deploy); `web` 1 × Basic; `worker` 1 × Basic (`run_jobs --loop`): the only place jobs run |
 | Object storage | AWS S3, us-east-1: `humanitributary-staging-raw` and `humanitributary-staging-releases`, private (public access blocked, SSE-S3). The IAM user `humanitributary-staging` has no console login and may only list those two buckets and read, write and delete their objects |
 | Database | Heroku Postgres Essential-1, Postgres 16 (10 GB, 20 connections), as `DATABASE_URL`; TLS required; a backup daily at 03:00 Chicago time (`heroku pg:backups`) |
@@ -249,6 +249,8 @@ heroku ps:scale worker=0 -a humanitributary-staging            # stop collection
 heroku run python manage.py createsuperuser -a humanitributary-staging       # the owner types the password
 heroku run python manage.py agent_token create <name> --scope <kind> -a humanitributary-staging
 heroku pg:info -a humanitributary-staging                      # size against the plan's 10 GB
+heroku run python manage.py publish --check -a humanitributary-staging       # the release gates, writing nothing
+heroku run python manage.py publish -a humanitributary-staging               # a release in the S3 releases bucket
 ```
 
 To deploy a branch to staging by hand (the dashboard's Deploy tab, "Manual deploy", does the same): `git push

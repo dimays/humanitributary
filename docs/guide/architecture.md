@@ -6,6 +6,7 @@ covers:
   - config/*.py
   - Procfile
   - app.json
+  - package.json
   - Makefile
   - docker-compose.yml
   - pyproject.toml
@@ -211,8 +212,8 @@ checking the snapshot's hash ([Operations](operations.md#restore-a-release)).
 
 Publishing is run by hand, from Postgres alone, into whichever `releases` store the settings name: MinIO (or
 `var/storage/` with `STORAGE_BACKEND=local`) locally, and on staging the S3 bucket `humanitributary-staging-releases`.
-Nothing hosted publishes yet: staging has no Node, so the build gate refuses there. Nothing deploys the page yet
-either; the `releases` bucket is meant to be the CDN's origin.
+Staging publishes with `heroku run python manage.py publish` (Node is in its build for the build gate). Nothing
+deploys the page yet; the `releases` bucket is meant to be the CDN's origin.
 
 ## The legacy files, frozen
 
@@ -244,7 +245,8 @@ needs judgment becomes a task.
 | `Makefile` | The commands (`make help`): database and storage, publish, build (from a release), the release gates (`roundtrip`), tests, processes, jobs, schedule; `import-archive` for an empty database. |
 | `docker-compose.yml` | The local services: Postgres 16 on host port 5433, and MinIO (the local S3) on `127.0.0.1:9000`, its console on 9001. |
 | `Procfile` | The processes: `release` runs migrations, `web` runs gunicorn (admin, agent API, `/healthz`), `worker` runs `manage.py run_jobs --loop`. `make up` runs `web` and `worker` locally with honcho. |
-| `app.json` | Heroku's description of the app: the `heroku/python` buildpack, the formation (`web` 1, `worker` 0, Basic), Postgres Essential-1 (16) and the config vars. Read by review apps and a rebuild from scratch, not by ordinary deploys. |
+| `package.json` | No dependencies: it pins Node 24.x for `site/build.mjs` (the publish gates' build) on Heroku, whose `heroku/nodejs` buildpack reads it. |
+| `app.json` | Heroku's description of the app: the `heroku/nodejs` and `heroku/python` buildpacks, the formation (`web` 1, `worker` 1, Basic), Postgres Essential-1 (16) and the config vars. Read by review apps and a rebuild from scratch, not by ordinary deploys. |
 | `.github/workflows/check.yml` | CI: `make check-pr` on every pull request and push to main, with a Postgres 16 service container and `STORAGE_BACKEND=local`, no secrets. |
 | `pyproject.toml` | Python 3.12, Django 6, psycopg 3, httpx, trafilatura, feedparser, dateparser, gunicorn, whitenoise, django-storages and boto3, jsonschema; honcho for development. |
 

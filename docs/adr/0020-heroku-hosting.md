@@ -39,10 +39,11 @@ never in a reader's path.
   stays on MinIO), not in GitHub's secrets (CI has none, and Heroku's integration deploys without them).
   Production gets its own buckets and its own user at launch. The owner chose S3 over Cloudflare R2, which would
   have cost nothing at this size, to stay in the AWS account they already have.
-- **One buildpack, `heroku/python`**, which installs from `uv.lock` on the Python in `.python-version` and runs
-  `collectstatic`. Node is not installed: no hosted process runs `site/build.mjs` until publishing moves to Heroku
-  (after the cutover, ADR 0001), and the build gate refuses cleanly without it. Adding it then needs a
-  `package.json` and the `heroku/nodejs` buildpack first.
+- **Two buildpacks, `heroku/nodejs` then `heroku/python`.** Python installs from `uv.lock` on the Python in
+  `.python-version` and runs `collectstatic`. Node runs `site/build.mjs`, the publish gates' build, now that
+  publishing happens on staging (after the cutover, Postgres is the only source: ADR 0001). `package.json` exists
+  only to pin it (`engines.node` 24.x, CI's version) and declares no dependencies: the build uses Node's built-ins
+  alone, so `npm` installs nothing.
 - **Settings outside dev** (`config/settings.py`): the database connection requires TLS (`sslmode=require`);
   HTTPS redirect, secure cookies and HSTS for an hour (`SECURE_HSTS_SECONDS`; a year at launch, no subdomains or
   preload); logs to stdout at `LOG_LEVEL` (Django prints nothing with `DEBUG` off otherwise; staging runs
