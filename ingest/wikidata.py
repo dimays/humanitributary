@@ -64,8 +64,15 @@ KIND_ORDER = ["person", "polity", "event", "org", "work", "place"]
 MOVEMENT_CLASSES = {"Q49773", "Q2198855", "Q1792379", "Q12909644", "Q7257", "Q9174", "Q4392985", "Q10737", "Q12124693", "Q3329412"}
 
 
+# Classes that are never people, places, polities or events, whatever dates or coordinates they carry (a currency has
+# a start date; a calendar month is not an event).
+CONCEPT_CLASSES = {"Q8142", "Q4167410", "Q13442814", "Q11862829", "Q47018901", "Q577", "Q3186692", "Q14083", "Q1047113", "Q17537576"}
+
+
 def kind_of(classes: list[str], facts: dict) -> str:
     cs = set(classes)
+    if cs & CONCEPT_CLASSES and not cs & (KIND_CLASSES["polity"] | KIND_CLASSES["person"]):
+        return "concept"
     for kind in KIND_ORDER:
         if cs & KIND_CLASSES[kind]:
             return kind

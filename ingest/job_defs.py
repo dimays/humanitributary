@@ -83,6 +83,12 @@ def refresh_entities(ctx):
     cutoff = timezone.now() - timedelta(days=wikidata.ENTITY_TTL_DAYS)
     qids = list(Entity.objects.filter(Q(resolved_at__isnull=True) | Q(resolved_at__lt=cutoff)).order_by("resolved_at").values_list("qid", flat=True)[: int(ctx.opt("per_run", 2000))])
     wikidata.fetch_entities(ctx.fetcher, qids, refresh=True, counts=ctx.counts)
+    # Re-derive every kind from the stored facts (no requests), so a change to the class table applies to all.
+    for e in Entity.objects.only("pk", "kind", "facts").iterator(chunk_size=2000):
+        k = wikidata.kind_of((e.facts or {}).get("P31", []), e.facts or {})
+        if k != e.kind:
+            Entity.objects.filter(pk=e.pk).update(kind=k)
+            ctx.counts["kinds_changed"] += 1
 
 
 @job("pageviews", interval=360)

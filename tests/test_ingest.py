@@ -145,6 +145,7 @@ class EntityTests(TestCase):
         self.assertEqual(wikidata.kind_of(["Q999999"], {"P585": "2026-01-01"}), "event")
         self.assertEqual(wikidata.kind_of(["Q999999"], {"P625": True}), "place")
         self.assertEqual(wikidata.kind_of([], {}), "concept")
+        self.assertEqual(wikidata.kind_of(["Q8142"], {"P580": "1792-04-02"}), "concept", "a currency is not an event")
 
     def test_facts_parsing(self):
         out = wikidata.parse_facts([
