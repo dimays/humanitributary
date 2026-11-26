@@ -262,7 +262,7 @@ The job order in `ingest/job_defs.py`:
 | | Local | Staging (Heroku `humanitributary-staging`) | Production |
 |---|---|---|---|
 | Database | Postgres 16 in Docker on 5433 (`make db`) | Heroku Postgres Essential-1, Postgres 16; starts empty | Heroku Postgres (at launch) |
-| Raw documents and releases | MinIO in Docker on `127.0.0.1:9000` (`make db` creates the buckets), or `var/storage/<bucket>/` with `STORAGE_BACKEND=local` | The dyno's disk (`STORAGE_BACKEND=local`) until the `S3_*` variables are set | S3 or Cloudflare R2, by the same `S3_*` variables (planned) |
+| Raw documents and releases | MinIO in Docker on `127.0.0.1:9000` (`make db` creates the buckets), or `var/storage/<bucket>/` with `STORAGE_BACKEND=local` | AWS S3 (us-east-1): `humanitributary-staging-raw` and `-releases`, through a user limited to them | S3, its own buckets and user (at launch) |
 | Processes | `make up`: `web` (gunicorn on 127.0.0.1:8000) and `worker` via honcho | The `Procfile`: `release` (`migrate`), one Basic `web` dyno, the `worker` at 0 | The same `Procfile` (at launch) |
 | Scheduled jobs | The worker while `make up` runs, and launchd every 15 minutes if installed (`make schedule-install`); the locks keep them from overlapping | None until object storage exists; then the `worker` dyno | A `worker` dyno, or Heroku Scheduler running `run_jobs` |
 | The page | timeline.html in `site/`, built from the mirror in `var/releases/` | Not served | a CDN serving the `releases` bucket (planned) |

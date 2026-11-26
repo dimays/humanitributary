@@ -253,13 +253,15 @@ Heroku, in the pipeline `humanitributary` (ADR 0020): the staging app
 `humanitributary-staging` now, production at launch. `main` deploys to staging
 automatically once CI has passed on it. The `Procfile`'s `release` runs
 migrations; `web` (gunicorn: the admin, the agent API and `/healthz`) is one
-Basic dyno; `worker` (`run_jobs --loop`) stays at 0 until the `S3_*` variables
-(S3 or Cloudflare R2) are set, because a dyno's disk is thrown away. Heroku
+Basic dyno; `worker` (`run_jobs --loop`) is at 0 until the owner turns it on.
+Raw documents and releases are in AWS S3 (us-east-1, `humanitributary-staging-raw`
+and `-releases`, through an IAM user limited to them), because a dyno's disk is
+thrown away. Heroku
 Postgres Essential-1 (Postgres 16) is `DATABASE_URL`, over TLS. Config vars:
 `SECRET_KEY`, `ENVIRONMENT=staging`, `ALLOWED_HOSTS`, `INGEST_CONTACT`,
-`STORAGE_BACKEND=local` until object storage exists (outside dev the settings
-refuse the local backend unless it is stated); keys, `S3_*` and mail settings
-are the owner's to set, never copied from a `.env`. Only the `heroku/python`
+`S3_REGION`, `S3_BUCKET_*` (outside dev the settings refuse the local storage
+backend unless `STORAGE_BACKEND=local` is stated); the S3 access key, API keys
+and mail settings are the owner's to set, never copied from a `.env`. Only the `heroku/python`
 buildpack: nothing hosted runs Node yet. Never attach the custom domain to
 staging, and never import data into a hosted database without the owner. The
 public site is a separate static deploy of a release's `timeline.html`,

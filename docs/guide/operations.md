@@ -189,7 +189,8 @@ is staging; production joins it at launch, with its own database, and only produ
 |---|---|
 | App | `humanitributary-staging` (region us, stack heroku-24), at https://humanitributary-staging-aeb697fb63be.herokuapp.com |
 | Build | The `heroku/python` buildpack: Python from `.python-version`, packages from `uv.lock`, then `collectstatic`. No Node: nothing hosted runs `site/build.mjs` yet. |
-| Processes | From the `Procfile`: `release` runs `migrate` before each release goes live (a failed migration stops the deploy); `web` 1 × Basic; `worker` 0 × Basic until object storage is configured |
+| Processes | From the `Procfile`: `release` runs `migrate` before each release goes live (a failed migration stops the deploy); `web` 1 × Basic; `worker` 0 × Basic until the owner turns it on |
+| Object storage | AWS S3, us-east-1: `humanitributary-staging-raw` and `humanitributary-staging-releases`, private (public access blocked, SSE-S3). The IAM user `humanitributary-staging` has no console login and may only list those two buckets and read, write and delete their objects |
 | Database | Heroku Postgres Essential-1, Postgres 16 (10 GB, 20 connections), as `DATABASE_URL`; TLS required |
 | Deploys | Connected to `dimays/humanitributary`: `main` deploys automatically once CI has passed on it |
 
@@ -201,9 +202,10 @@ Config vars (`heroku config -a humanitributary-staging` lists them; never paste 
 | `ENVIRONMENT` | the setup | `staging` |
 | `ALLOWED_HOSTS` | the setup | the app's `herokuapp.com` host; add the custom domain only on production |
 | `INGEST_CONTACT` | the setup | the repository's URL |
-| `STORAGE_BACKEND` | the setup | `local`, until the `S3_*` variables exist; then unset it |
+| `STORAGE_BACKEND` | the setup | `local` only until the access key is in; unset after, so the `S3_*` variables choose S3 |
 | `DATABASE_URL` | Heroku Postgres | managed by Heroku; it changes when Heroku rotates credentials |
-| `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_BUCKET_RAW`, `S3_BUCKET_RELEASES` | the owner, once S3 or R2 is chosen | separate buckets per app (staging must never write production's) |
+| `S3_REGION`, `S3_BUCKET_RAW`, `S3_BUCKET_RELEASES` | the setup | `us-east-1` and the two staging buckets; no `S3_ENDPOINT_URL` (it is AWS) |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | the owner | the IAM user's key, created straight into config vars (below); it lives nowhere else, not in a `.env` or GitHub's secrets |
 | `ALERT_EMAILS`, `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | the owner | alerts by mail; without them an alert is a log line |
 | `SMITHSONIAN_API_KEY` | the owner | its lookup adapter skips without it |
 | `EUROPEANA_API_KEY` | nobody yet | a Personal key is for non-production use only: leave it unset until a Project key exists ([Sources and terms](sources-and-terms.md)) |
@@ -212,6 +214,16 @@ The domain, `humanitributary.com`, is registered at Namecheap with its DNS on Cl
 nameservers are moved there. No record points at Heroku yet: at launch production gets a subdomain for the admin
 and the agent API (a CNAME to its Heroku DNS target, then `ALLOWED_HOSTS`), and the bare domain serves the static
 page from the CDN ([ADR 0020](../adr/0020-heroku-hosting.md)).
+
+To create or rotate the access key, with the AWS CLI signed in (`aws login`), the owner runs, in zsh:
+
+```bash
+aws iam create-access-key --user-name humanitributary-staging --query 'AccessKey.[AccessKeyId,SecretAccessKey]' --output text | read -r AK SK && heroku config:set -a humanitributary-staging S3_ACCESS_KEY_ID="$AK" S3_SECRET_ACCESS_KEY="$SK" >/dev/null && unset AK SK && echo "key stored in Heroku"
+```
+
+The secret is never shown. A user holds at most two keys: to rotate, create the new one, check `/healthz`, then
+`aws iam delete-access-key --user-name humanitributary-staging --access-key-id <old id>` (`aws iam
+list-access-keys` shows the ids). If the `heroku` half fails, delete the key it made and run it again.
 
 Never copy a laptop's `.env` into config vars: its passwords are local-only, and its keys are the owner's to place.
 
