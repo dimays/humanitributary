@@ -46,6 +46,7 @@ things work now; an ADR says why, and what was given up.
 | [0023](0023-edit-files.md) | A reviewer's verdicts are applied as one audited edit file | proposed |
 | [0024](0024-the-app-serves-the-page.md) | The web process serves the public page until a CDN does | proposed |
 | [0025](0025-edit-files-add-entries-and-junk-actors.md) | Edit files add branches, events and connections; the splitter rejects junk actors and keeps the old ones for the owner | proposed |
+| [0026](0026-content-waves.md) | Content waves: gaps found window by window, newest history first, queued as fill_gap tasks under a daily cap | proposed |
 <!-- index:end -->
 
 ## Template

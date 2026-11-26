@@ -40,6 +40,7 @@ Table and field names are as they appear in the code.
 | **Cluster** | Candidates about the same story, grouped by a cluster key, so one story gets one `write_event` task. | [Ingestion](ingestion.md) |
 | **Confidence** | A number from 0 to 1, computed from a claim's evidence: independent witnesses weighted by tier, stance, method and freshness, lowered by conflicts. Never typed in. | [Evidence and fact-checking](evidence-and-fact-checking.md) |
 | **Connection** | A sourced link from one entry to another, with a short note. | [Content model](content-model.md) |
+| **Content wave** | A stretch of history cut into equal windows (W1 1925 to this year in 5-year windows … W6 3500–1000 BCE in 250-year ones; four times wider for faith and culture branches). The `gap_waves` job measures every branch window by window, newest wave first, and queues its gaps; the active wave moves back in time when it is nearly done. | [Content waves](content-waves.md) |
 | **Contested** | A claim status: conflicting sources weigh enough against it. A contested claim is published only if the entry says the sources differ. | [Evidence and fact-checking](evidence-and-fact-checking.md) |
 | **Corroborated** | A claim status: at least two independent witnesses fully support it. All of Wikipedia counts as one. | [Evidence and fact-checking](evidence-and-fact-checking.md) |
 | **Covers** | A chapter's list of the files it explains, in its front matter. A change to one of them asks for the chapter to be read again. | [This guide](this-guide.md) |
@@ -60,7 +61,9 @@ Table and field names are as they appear in the code.
 | **fetch_policy** | How jobs may read a publisher: `allowed`, `browser_only` or `forbidden`. | [Sources and terms](sources-and-terms.md) |
 | **Fetcher** | `ingest.http.Fetcher`, the one HTTP client every job uses. It refuses what the source policy forbids before a request leaves the machine. | [Sources and terms](sources-and-terms.md) |
 | **FetchRun** | One run of one job (on one feed, for feed jobs): timings, status (running, ok, partial, failed), counts and the error, with keys masked. | [Operations](operations.md#is-it-healthy) |
+| **Fill-gap task** | A `fill_gap` task: write 1–3 events for one branch in one window of a content wave, or report that nothing notable is sourceable. | [Content waves](content-waves.md) |
 | **forbidden** | A Publisher's `fetch_policy` for a site that must never be fetched or cited, such as OpenStax. | [Sources and terms](sources-and-terms.md) |
+| **Gap** | A window of a content wave in which a branch has no published event (empty), or fewer than a third of its peers' median (sparse). | [Content waves](content-waves.md#what-counts-as-a-gap) |
 | **Gate** | `make check-pr`: every check and the tests a pull request must pass, and what CI runs. A pass writes a receipt. | [How this guide stays true](this-guide.md) |
 | **Grace period** | How long a newly written current event may stay published on Wikipedia alone before it needs another source. | [Evidence and fact-checking](evidence-and-fact-checking.md) |
 | **Hysteresis** | The rules that stop branch review from proposing the same change over and over: an open proposal is refreshed, a decided one isn't proposed again, a rejected one returns only after a cool-down and stronger, and undoing an applied change needs extra strength. | [Branch governance](branch-governance.md) |

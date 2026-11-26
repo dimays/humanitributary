@@ -82,7 +82,7 @@ class Command(BaseCommand):
             w("")
 
         # The fact base and branch governance contribute their own sections.
-        for mod, fn in (("evidence.health", "digest_section"), ("governance.review", "digest_section")):
+        for mod, fn in (("evidence.health", "digest_section"), ("governance.review", "digest_section"), ("governance.waves", "digest_section")):
             try:
                 w(getattr(__import__(mod, fromlist=[fn]), fn)())
             except Exception as e:  # a section failing never hides the queue

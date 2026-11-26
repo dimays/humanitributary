@@ -20,6 +20,7 @@ class AgentTask(models.Model):
         REVIEW_BRANCH_PROPOSAL = "review_branch_proposal", "review a branch proposal"
         RECHECK_CITATION = "recheck_citation", "re-read a citation whose page changed or broke"
         MAP_BRANCH_ENTITIES = "map_branch_entities", "find a branch's Wikidata items (routing)"
+        FILL_GAP = "fill_gap", "fill a branch's gap in a content wave's window"
 
     class Status(models.TextChoices):
         QUEUED = "queued"

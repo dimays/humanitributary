@@ -131,6 +131,7 @@ story's items, sources, entities with coordinates, suggested branches, possible 
 | `map_branch_entities` | `seed_branch_entities`, for a branch with no exact Wikidata match |
 | `review_branch_proposal` | `branches_review`, one per proposal |
 | `audit` | `branches_review`, for a branch much thinner than its peers |
+| `fill_gap` | `gap_waves`, for a window of a content wave in which a branch has no event or far fewer than its peers (`gap_pointers` then adds reading pointers) |
 
 `work/models.py` also defines `enrich` and `recheck_citation`; no job queues them on main.
 
@@ -142,7 +143,8 @@ the best task under `SELECT … FOR UPDATE SKIP LOCKED`, so agents working at on
 ## Stage 5: agents
 
 Agents are Claude sessions, and the only stage that calls a language model. Each skill in `.claude/skills/` drains
-one kind of task: `drain-write-events`, `verify-claims` and `verify-stale-claims`, `review-branch-proposals`. A
+one kind of task: `drain-write-events`, `verify-claims` and `verify-stale-claims`, `review-branch-proposals`,
+`fill-gaps`. A
 session claims a task, does the reading, and completes the task with a JSON result. The owner's `manage.py digest`
 gives the overview.
 
@@ -155,7 +157,7 @@ call `work.queue` unchanged. `complete` checks the result against its kind's JSO
 `revising("agent:<name>", task=task)`, completing the task in the same transaction, so each change links back to
 its task and a failure leaves nothing behind. A token is rate-limited (`AGENT_API_RATE_PER_MINUTE`, 120).
 
-What an agent writes lands in review. A new event (`write_event`, `audit`) is created as `review`; `verify_claim`
+What an agent writes lands in review. A new event (`write_event`, `audit`, `fill_gap`) is created as `review`; `verify_claim`
 evidence goes through `record_evidence`, and a corrected text stays in the result (`proposed_text`), never applied;
 an accepted branch proposal stores the agent's operations for the owner's `manage.py branches apply`;
 `map_branch_entities` writes routing rows. Nothing the API writes is published: the owner publishes an entry under
@@ -173,16 +175,17 @@ bulk update, raw SQL) and records every changed row, before and after, as a **Re
 The working tables in `ingest`, `work`, `governance` and `publish` are not audited. See
 [Revisions](revisions.md) and [ADR 0006](../adr/0006-every-canonical-change-leaves-a-revision.md).
 
-Three scheduled checks read the canonical tables and feed work back into the queue. This is the self-healing loop.
+Four scheduled checks read the canonical tables and feed work back into the queue. This is the self-healing loop.
 
 | Job | Interval (`ingest/job_defs.py`) | What it does |
 |---|---|---|
 | `link_health` | `DAY` | Re-checks cited URLs and records a `LinkCheck` for each |
 | `facts_sweep` | `DAY`, right after `link_health` | Splits entries into atomic claims, recomputes each claim's status and confidence, schedules rechecks by claim type and entry age, records date conflicts from candidates, and queues `verify_claim` tasks |
 | `branches_review` | `WEEK` | Measures every branch, runs the named rules (SPLIT-PLACE, SPLIT-TIME, MERGE-OVERLAP, END-STALE, NEW-BRANCH, THIN) and turns findings into proposals and tasks, with hysteresis |
+| `gap_waves` | `DAY` | Measures every branch window by window in the content waves (W1 1925 to this year … W6 3500–1000 BCE) and queues the gaps as `fill_gap` tasks, at most `FILL_GAP_TASKS_PER_DAY` (20) new a day; the active wave moves back in time when it is nearly done |
 
-The details are in [Evidence and fact-checking](evidence-and-fact-checking.md) and
-[Branch governance](branch-governance.md).
+The details are in [Evidence and fact-checking](evidence-and-fact-checking.md),
+[Branch governance](branch-governance.md) and [Content waves](content-waves.md).
 
 ## Stage 7: publish
 
@@ -241,7 +244,7 @@ needs judgment becomes a task.
 
 | File | Role |
 |---|---|
-| `config/settings.py` | `SITE_NAME`; `ENVIRONMENT` (`dev`, or anything else for production safety); `DATABASE_URL` (required); `VAR_DIR` (default `var/`), with `LOG_DIR` and `RELEASES_MIRROR_DIR` under it; the `raw` and `releases` storages (`STORAGE_BACKEND`, the `S3_*` variables); `TASK_LEASE_MINUTES`; `WRITE_EVENT_TASKS_PER_DAY` (20: the `process` job's daily cap on new `write_event` tasks); `WORKER_TICK_SECONDS`; `ALERT_AFTER_FAILURES`, `ALERT_EMAILS` and the mail settings; `AGENT_API_RATE_PER_MINUTE`; `INGEST_CONTACT` and `INGEST_USER_AGENT`; the two lookup keys. Outside `dev`: TLS to the database, HTTPS redirect, secure cookies, HSTS (`SECURE_HSTS_SECONDS`), logs to stdout at `LOG_LEVEL` (with `httpx` and `httpcore` held at `WARNING`: they print every request's URL), and the local storage backend refused unless `STORAGE_BACKEND=local` is set. `INSTALLED_APPS` lists the apps in dependency order ([ADR 0002](../adr/0002-django-and-apps-by-responsibility.md)). |
+| `config/settings.py` | `SITE_NAME`; `ENVIRONMENT` (`dev`, or anything else for production safety); `DATABASE_URL` (required); `VAR_DIR` (default `var/`), with `LOG_DIR` and `RELEASES_MIRROR_DIR` under it; the `raw` and `releases` storages (`STORAGE_BACKEND`, the `S3_*` variables); `TASK_LEASE_MINUTES`; `WRITE_EVENT_TASKS_PER_DAY` (20: the `process` job's daily cap on new `write_event` tasks); `FILL_GAP_TASKS_PER_DAY` (20: the `gap_waves` job's cap on new `fill_gap` tasks; `CONTENT_WAVES` and `GAP_RULES` may override `governance/waves.py`'s defaults); `WORKER_TICK_SECONDS`; `ALERT_AFTER_FAILURES`, `ALERT_EMAILS` and the mail settings; `AGENT_API_RATE_PER_MINUTE`; `INGEST_CONTACT` and `INGEST_USER_AGENT`; the two lookup keys. Outside `dev`: TLS to the database, HTTPS redirect, secure cookies, HSTS (`SECURE_HSTS_SECONDS`), logs to stdout at `LOG_LEVEL` (with `httpx` and `httpcore` held at `WARNING`: they print every request's URL), and the local storage backend refused unless `STORAGE_BACKEND=local` is set. `INSTALLED_APPS` lists the apps in dependency order ([ADR 0002](../adr/0002-django-and-apps-by-responsibility.md)). |
 | `config/urls.py` | The public page at `/` with `/images/*` and `/outlines.js` (`infra/site.py`), the admin (the owner's review screen), the agent API under `/api/agent/` and `/healthz`. The page never touches the database. |
 | `infra/` | `storage.py` (the one door to object storage), `manage.py storage`, `health.py` (`/healthz`), `alerts.py`, and `site.py` (the public page, its images and outlines, and the `www.` redirect). No models. |
 | `ingest/job_defs.py` | Every scheduled job with its interval, in run order: set-up, sources, entities, processing, upkeep. |
@@ -261,7 +264,7 @@ The job order in `ingest/job_defs.py`:
 | Sources | `portal`, `year_pages`, `rss`, `who_don`, `federal_register`, `gazette`, `nobel`, `historian_sync` |
 | Entities | `refresh_entities`, `pageviews` |
 | Processing | `process`, `entity_relations`, `enrich_tasks` |
-| Upkeep | `link_health`, `facts_sweep`, `branches_review`, `second_source` |
+| Upkeep | `link_health`, `facts_sweep`, `branches_review`, `second_source`, `gap_waves`, `gap_pointers` |
 
 ## Environments
 

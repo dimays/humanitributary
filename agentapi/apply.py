@@ -11,6 +11,8 @@ Revision linked to the task, and the database trigger still has the last word. W
 - review_branch_proposal: reject is recorded on the proposal; accept stores the agent's operations on it with status
   `accepted`, for the owner to run with `manage.py branches apply <id>` (structure changes reach the page at once).
 - map_branch_entities: routing rows (BranchEntity, not canonical).
+- fill_gap: 1–3 events on the task's branch inside its window, created as for write_event (in review); or "nothing
+  notable", kept only as the task's result, which keeps the gap_waves job off that window for a while.
 
 Each applier returns a summary that is stored in the task's result under "applied".
 """
@@ -165,8 +167,26 @@ def map_branch_entities(task: AgentTask, result: dict, actor: str) -> dict:
     return {"branch": branch.slug, "mapped": mapped}
 
 
+def fill_gap(task: AgentTask, result: dict, actor: str) -> dict:
+    from governance.waves import in_window, label
+
+    if result["decision"] == "nothing_notable":
+        result["entries"] = []
+        return {"entries": [], "decision": "nothing_notable"}
+    p = task.payload or {}
+    branch, win = (p.get("branch") or {}).get("id"), p.get("window") or {}
+    for i, ev in enumerate(result["events"]):
+        if branch and ev["branch"] != branch:
+            raise ApplyError(f"events[{i}]: this gap is on {branch!r}, not {ev['branch']!r} (link the other branch with `link`)")
+        if "from" in win and not in_window({"y": ev["y"], "end": ev.get("end")}, win["from"], win["to"]):
+            raise ApplyError(f"events[{i}]: y {ev['y']} is outside the window {label(win['from'], win['to'])}")
+    slugs = [_create_event(ev, actor) for ev in result["events"]]
+    result["entries"] = slugs
+    return {"entries": slugs, "status": "review"}
+
+
 APPLIERS = {"write_event": write_event, "audit": audit, "verify_claim": verify_claim,
-            "review_branch_proposal": review_branch_proposal, "map_branch_entities": map_branch_entities}
+            "review_branch_proposal": review_branch_proposal, "map_branch_entities": map_branch_entities, "fill_gap": fill_gap}
 
 
 def apply(task: AgentTask, result: dict, actor: str) -> dict:

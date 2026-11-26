@@ -161,6 +161,8 @@ that Feed's `next_run_at` has come; each run sets `next_run_at` to now plus the 
 | `facts_sweep` | `DAY` | plain |
 | `branches_review` | `WEEK` | plain |
 | `second_source` | `DAY` | plain |
+| `gap_waves` | `DAY` | plain |
+| `gap_pointers` | 60 | plain |
 
 Plain intervals are in `ingest/job_defs.py` (`DAY, WEEK = 1440, 10080`). Feed intervals are the Feed rows'
 `interval_minutes`, seeded from `ingest/seed.py` `FEEDS`. Seeding never changes an existing Feed's interval, so
