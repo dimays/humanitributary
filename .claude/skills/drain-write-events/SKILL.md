@@ -62,6 +62,12 @@ Look things up with `GET entries/<slug>`, `GET branches/<slug>` (its events, met
 
 ## 3. Read and cite
 
+- **Copy excerpts from the page itself, never from a fetch tool's summary.** Tools such as WebFetch hand back a
+  model-written summary of the page, and the "quotes" in it are often paraphrased, shortened or straightened. For
+  every excerpt (and every stance you record), read the page's own text: the in-app browser's `get_page_text`, or
+  `javascript_tool` returning the matching sentence from `document.body.innerText`, or the raw page via `curl` where
+  the site allows scripts. Then copy the sentence character for character. If only a summary is reachable, cite the
+  page without an excerpt and say so in your note. Every review round so far has had to re-copy summarized excerpts.
 - **Fetch and read every page you cite** (SCHEMA citation rule 1). A source whose `fetch_policy` is `browser_only`
   (Britannica, the Guardian, BBC, NPR, AP, Al Jazeera, un.org, nobelprize.org …) is read in a browser, never by
   script; mark that cite `"method": "browser_read"`. Never use openstax.org (the API refuses it).

@@ -349,6 +349,12 @@ production URL.
 | `review-branch-proposals` | `review_branch_proposal` | What to ask of each rule; fill every `needs_agent` field; accept with the operations (for the owner's `branches apply`) or reject with a note. |
 | `fill-gaps` | `fill_gap` | Claim; read the window, the events around it and the pointers; check duplicates with `GET search`; write 1–3 events in SCHEMA style on the branch's id prefix (titles ≤ 60, verbatim excerpts, contested claims attributed, a non-Wikipedia source each), or complete `nothing_notable` with what was read. |
 
+Every skill that records evidence (`drain-write-events`, `fill-gaps`, `verify-claims`, `verify-stale-claims`)
+carries the same excerpt rule: copy the sentence from the page's own text (the in-app browser's page text, or the
+raw page where the site allows scripts), never from a fetch tool's summary, whose "quotes" are often paraphrased.
+If only a summary is reachable, the cite goes in without an excerpt. Each review round so far had to re-copy
+summarized excerpts; reviewers still check every excerpt against the page.
+
 ## From a task to the records
 
 A task's `result` is a receipt. Only one job reads it: `process`, for
