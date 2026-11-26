@@ -1,6 +1,6 @@
 # 0004 — Every fact has evidence: claims, citations and computed confidence
 
-**Status:** accepted (November 2026)
+**Status:** accepted (November 2026); its status rule refined by [0009](0009-fact-base.md)
 
 ## Context
 

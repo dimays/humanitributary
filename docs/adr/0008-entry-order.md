@@ -1,6 +1,6 @@
 # 0008 — Entry order is a sort key assigned once
 
-**Status:** accepted (November 2026). Amends the last consequence of ADR 0007.
+**Status:** accepted (November 2026). Amends the last consequence of [0007](0007-one-snapshot-shape-byte-identical-both-ways.md).
 
 ## Context
 

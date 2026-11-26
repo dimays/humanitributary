@@ -1,6 +1,6 @@
 # 0007 — One snapshot shape, byte-identical both ways
 
-**Status:** accepted (November 2026)
+**Status:** accepted (November 2026); its last consequence amended by [0008](0008-entry-order.md)
 
 ## Context
 
