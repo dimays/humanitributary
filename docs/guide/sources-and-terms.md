@@ -1,0 +1,324 @@
+---
+title: Sources and terms
+summary: Which sites the jobs may read automatically, which they must never touch, the terms clause each decision rests on, and how the code enforces it, keys included.
+order: 40
+covers:
+  - ingest/policy.py
+  - ingest/seed.py
+  - ingest/http.py
+  - ingest/lookup.py
+  - evidence/publishers.py
+  - tests/cassette.py
+  - .env.example
+---
+
+Ingestion reads other people's sites on a schedule, and AI agents read what it collects. Many publishers' terms now
+speak to exactly that, so every source has a written verdict: what jobs may do with it and which clause of its terms
+allows or forbids it. The rule lives in code, checked before any request leaves the machine, so it never depends on
+a job's author remembering it ([ADR 0013](../adr/0013-source-policy.md)).
+
+How the jobs use these sources is in [ingestion](ingestion.md).
+
+## What the Fetcher checks before a request
+
+Every job request goes through `ingest.http.Fetcher` ([ingest/http.py](../../ingest/http.py)). Its `refusal(url)`
+runs these checks in order; the first that fails raises `Refused` with the reason, and no request is made (a test,
+`test_never_fetch_hosts_and_browser_only_publishers_are_refused_before_any_request`, checks that the request count
+stays at zero).
+
+| # | Check | Where it lives | Refused when |
+|---|---|---|---|
+| 1 | Scheme | `Fetcher.refusal` | The URL isn't http or https. |
+| 2 | NEVER_FETCH | `ingest/policy.py` `NEVER_FETCH`, `never_fetch_reason()` | The host is a listed domain or a subdomain of one, whatever its Publisher row says. |
+| 3 | The publisher's `fetch_policy` | `evidence.models.Publisher`, looked up by `_db_publisher_policy()` | The policy is `browser_only` or `forbidden`. |
+| 4 | Bot wall this run | `Fetcher.blocked` | The host answered with a CAPTCHA or challenge earlier in this run. |
+| 5 | robots.txt | `Fetcher._robots_allow()` | robots.txt disallows our User-Agent token (skipped for `ingest/policy.py` `API_HOSTS`). |
+
+> **Note:** The checks run on the URL a job asks for. The client follows redirects (`follow_redirects=True`) without
+> checking the target again; only a bot wall on the final host is recorded.
+
+### NEVER_FETCH
+
+Hosts no job ever requests, because their terms forbid automated reading or AI use. Subdomains are included
+(`kids.britannica.com`, `feeds.bbci.co.uk`).
+
+| Host | Why (the reason string in `NEVER_FETCH`, shortened) |
+|---|---|
+| britannica.com | Terms forbid automated access; agents read it in a browser. |
+| openstax.org | Terms forbid use of its textbooks by AI systems: never read or cite. |
+| theguardian.com, guardianapis.com | Open Platform terms 6(g) ban TDM, aggregation, AI/ML synthesis and any automated program; clause 5: delete within 24 hours. |
+| bbc.co.uk, bbc.com, bbci.co.uk | BBC terms of use §15: no taking metadata from content or RSS feeds; robots.txt bans TDM and AI use. |
+| npr.org | Feed copyright line: for personal use only. |
+| aljazeera.com, aje.news | robots.txt notice forbids automated scraping and text and data mining without written permission. |
+| apnews.com | robots.txt disallows the RSS and feed API paths; no public feed or API; content licensed commercially. |
+| olympedia.org | No published terms for automated reuse: links and names only. |
+
+### How a URL finds its publisher's policy
+
+`evidence.publishers.domain_of(url)` gives the publisher domain: the host, lower case, without "www.", with every
+language edition of Wikipedia folded into wikipedia.org. `_db_publisher_policy()` then looks for a `Publisher` row
+for that domain or its nearest parent (`api.openalex.org` → `openalex.org`), and falls back on
+`evidence.publishers.defaults_for(domain)`, which is `allowed` unless the known defaults say otherwise.
+
+A subdomain with its own row keeps its own policy: `api.nobelprize.org` is seeded `allowed`, while `nobelprize.org`
+(and so `www.nobelprize.org`) stays `browser_only`.
+
+### robots.txt
+
+The Fetcher reads robots.txt once per host per run and matches it against its token, the part of the User-Agent
+before the first "/".
+
+| robots.txt answer | Treated as |
+|---|---|
+| 2xx | Parsed and applied. |
+| 401 or 403 | Disallow everything. |
+| Other 4xx (404 …) | Allow everything. |
+| 5xx or no answer | Disallow everything (RFC 9309). |
+
+Crawl-delay is honored: the wait before a request to a host is the longer of its `HOST_DELAY` and the Crawl-delay,
+capped at 30 seconds. `API_HOSTS` skip robots.txt: en.wikipedia.org, www.wikidata.org, query.wikidata.org,
+wikimedia.org and archive.org. Their robots.txt is written for crawlers of HTML pages (it disallows /w/, where the
+MediaWiki API lives); what we follow there is Wikimedia's API etiquette: serial requests and a descriptive
+User-Agent with contact.
+
+### Politeness delays
+
+`ingest/policy.py` `HOST_DELAY`, in seconds between two requests to the same host (subdomains included);
+`DEFAULT_HOST_DELAY` is 1.0.
+
+| Host | Delay | Why |
+|---|---|---|
+| en.wikipedia.org, www.wikidata.org | 0.3 | Wikimedia asks for serial requests. |
+| query.wikidata.org | 1.0 | |
+| wikimedia.org | 0.1 | Pageviews API. |
+| archive.org | 1.0 | Wayback availability API. |
+| loc.gov | 6.0 | loc.gov/legal: at most 10 requests a minute (robots.txt Crawl-delay is 5). |
+| thegazette.co.uk | 10.0 | robots.txt Crawl-delay. |
+| history.state.gov | 20.0 | robots.txt Crawl-delay. |
+| api.openalex.org | 0.2 | |
+| api.crossref.org | 1.0 | Public pool: 1 request a second, one at a time. |
+| news.un.org, press.un.org | 10.0 | un.org robots.txt Crawl-delay. |
+
+### Bot walls
+
+`looks_like_challenge()` checks the first 30,000 bytes of a 401, 403, 429 or 503 response, or of a 200 page shorter
+than 30,000 bytes, for CAPTCHA and challenge markers (`CHALLENGE_RE`: "captcha", Cloudflare's challenge pages,
+PerimeterX, DataDome, "are you a robot"). A match marks the response `blocked` and refuses the host for the rest of
+the run. Link health then skips that publisher for `ingest/policy.py` `BLOCKED_COOLDOWN_DAYS` (14). A 401 or 403 is
+recorded as `blocked`, never `dead`.
+
+## Publishers and their starting ratings
+
+A `Publisher` row (canonical, in `evidence`) holds a site's tier, license, `fetch_policy` and `access_notes`.
+`evidence/publishers.py` `KNOWN` is what a new row starts with; after that the row in the admin is the truth, and no
+import or job overwrites it. Tiers: 1 primary, official or peer-reviewed; 2 scholarly or institutional reference;
+3 general reference; 4 weak. A subdomain of a known publisher starts with its parent's rating
+(news.un.org starts as "United Nations (news.un.org)", tier 1, `browser_only`).
+
+The policy values (`evidence.models.Publisher.Fetch`):
+
+| `fetch_policy` | Meaning |
+|---|---|
+| `allowed` | Jobs may fetch it, subject to robots.txt and the rest. The default. |
+| `browser_only` | Blocks or forbids automated readers. Jobs never fetch it; an agent reads it in a browser. |
+| `forbidden` | Never fetched and never cited. |
+
+Known publishers that start as something other than `allowed`:
+
+| Domain | Tier | Policy | Access note |
+|---|---|---|---|
+| britannica.com | 2 | `browser_only` | Blocks automated fetching: read in a browser. |
+| openstax.org | unrated | `forbidden` | Never read or cite. |
+| worldhistory.org | 3 | `browser_only` | Blocks automated fetching. |
+| unesco.org, whc.unesco.org | 2 | `browser_only` | Often blocks automated fetching. |
+| un.org | 1 | `browser_only` | Refuses automated readers. |
+| nobelprize.org | 1 | `browser_only` | Refuses automated readers. |
+
+## What seed_sources writes
+
+The `seed_sources` job (weekly) runs `ingest.seed.seed()` ([ingest/seed.py](../../ingest/seed.py)). It is safe to
+re-run:
+
+1. **Publishers.** For every domain in `PUBLISHERS` and every feed's publisher, it creates a missing row from
+   `defaults_for()` overlaid with the `PUBLISHERS` entry, inside `revising("job:seed_sources")`. An existing row is
+   never changed here (review state belongs to review, AGENTS.md rule 7).
+2. **Verdicts.** `apply_verdicts()` writes each `VERDICTS` entry into its publisher's `access_notes`, prefixed
+   "Terms check 2026-11-26" (`CHECKED`), and sets the `fetch_policy` where the verdict names one (never touching a
+   `forbidden` row). It runs **once per database**: the `JobState` row "terms_verdicts_v1" records that it has, and
+   later admin edits are the owner's and stay.
+3. **Feeds.** It creates each missing `FEEDS` row. An existing feed keeps its `enabled` flag and state, and only
+   gains config keys it lacks.
+
+`SKIPPED` lists the sources considered and not wired, with why; `manage.py digest --sources` prints it.
+
+The publishers `PUBLISHERS` adds beyond `KNOWN`:
+
+| Domain | Name | Tier | License |
+|---|---|---|---|
+| wikidata.org | Wikidata | 3 | CC0 1.0 |
+| federalregister.gov | Federal Register (US) | 1 | public domain (US government work) |
+| thegazette.co.uk | The Gazette (UK) | 1 | Open Government Licence v3.0 |
+| api.nobelprize.org | Nobel Prize API | 1 | CC0 1.0 (data); policy `allowed` |
+| raw.githubusercontent.com | GitHub raw files | unrated | per repository |
+| openalex.org | OpenAlex | 2 | CC0 1.0 (metadata) |
+| crossref.org | Crossref | 2 | metadata: facts, no rights reserved |
+| doi.org | DOI resolver | 2 | per publisher |
+| europeana.eu | Europeana | 2 | metadata CC0; media per item (edm:rights) |
+| worldbank.org | World Bank Open Data | 1 | CC BY 4.0 |
+| theguardian.com, bbc.com, npr.org, aljazeera.com, apnews.com | (each by name) | 3 | all rights reserved |
+| olympedia.org | Olympedia | unrated | © OlyMADMen |
+
+wikipedia.org, who.int, history.state.gov, loc.gov and si.edu take their `KNOWN` defaults (tiers 3, 1, 1, 1, 2).
+
+## The verdict for each source
+
+From `ingest/seed.py` `VERDICTS` (each publisher's `access_notes`) and `NEVER_FETCH`; the Wayback row is from
+ADR 0013, since archive.org has no verdict entry. "Fetched by" names the job or adapter that reads it.
+
+| Source | What jobs may do | Relied on |
+|---|---|---|
+| Wikipedia (MediaWiki API) | Read through the API, serially (`portal`, `year_pages`, entities, link health). Keep the CC BY-SA 4.0 attribution on every Document and Candidate. | Wikimedia User-Agent policy: descriptive User-Agent with contact. |
+| Wikidata | Query service and API, serially. | CC0. |
+| Wayback availability API | Look up a snapshot for a dead link. | robots.txt blocks only its control and report paths; no stated rate rule (we send 1 a second). |
+| WHO Disease Outbreak News API | Metadata and a short summary (`who_don`), acknowledging WHO with the URL. | who.int terms: non-commercial research or private study; CC BY-NC-SA 3.0 IGO. |
+| Federal Register API | Fetch (`federal_register`). | US government work; robots.txt blocks only search and auth paths. |
+| The Gazette (UK) | State notices (codes 11xx) only, never personal-data notices (`gazette`). | Open Government Licence v3.0, with its attribution line; Crawl-delay 10. |
+| Nobel Prize API (api.nobelprize.org) | Fetch (`nobel`, the `nobel` adapter); cache locally, don't alter, don't imply endorsement. The website stays `browser_only`. | API data CC0. |
+| Office of the Historian Milestones (GitHub raw files) | Weekly at most (`historian_sync`). Never history.state.gov's search. | CC0 / US public domain; GitHub's acceptable-use policy (no excessive bulk activity); robots.txt disallows the site's search, Crawl-delay 20. |
+| OpenAlex | Keyless search, no `mailto` (no personal email). | CC0 metadata; 10 requests a second, small daily budget. |
+| Crossref | One request a second, one at a time; titles as snippets, not abstracts. | Public pool etiquette. |
+| Library of Congress, Chronicling America | JSON (`fo=json`) from the collections and manuscripts paths only. | loc.gov/legal: at most 10 requests a minute; robots.txt disallows search, Crawl-delay 5. |
+| Smithsonian Open Access | Search with a key; store metadata only. | CC0 metadata; an api.data.gov key. |
+| Europeana | Search with a key in a header; metadata only. | Metadata CC0, media per `edm:rights`; personal key for non-production only. |
+| World Bank Indicators | Reasonable volume; attribute "The World Bank: <dataset>: <source>". | CC BY 4.0. |
+| UN News, UN press releases | Headline, date and link only, if ever enabled. Feeds seeded disabled; publishers `browser_only`. | un.org terms: personal, non-commercial use, no right to compile; Crawl-delay 10. |
+| UNESCO World Heritage list RSS | Headline and link only, if ever enabled. Feed seeded disabled; publisher `browser_only`. | robots.txt `Content-Signal: ai-train=no, use=reference`; tdmrep.json `tdm-reservation: 1`. |
+| The Guardian | Nothing. Citation only. | Open Platform terms 6(g) and 5. |
+| BBC News | Nothing. Links only. | Terms of use §15; robots.txt bans TDM and AI. |
+| NPR | Nothing. Links only. | Feed copyright: for personal use only. |
+| Al Jazeera | Nothing. Links only. | robots.txt notice. |
+| Associated Press | Nothing. Links only. | No public feed or API; robots.txt disallows its feeds. |
+| Olympedia | Nothing. Links and names only. | No published terms for automated reuse; Crawl-delay 10. |
+| Britannica | Nothing; agents read it in a browser. | Terms forbid automated access. |
+| OpenStax | Nothing, ever, and never cited. | Terms forbid use of its textbooks by AI systems. |
+
+The Guardian, BBC, NPR, Al Jazeera and AP are blocked twice: by `NEVER_FETCH`, and by their publishers'
+`fetch_policy`, which the verdicts set to `browser_only`. Olympedia's row stays `allowed`; `NEVER_FETCH` alone keeps
+jobs off it.
+
+## Citation-only sources and browser_only publishers
+
+A **citation-only** source is one we may link to and an agent may read in a browser, but no job ever fetches. News
+corroboration comes mostly from these: the links Wikipedia's editors cite in the Current events portal. The portal
+job stores each item's external links (URL, anchor text, domain) in the candidate's `details.external`. They are
+never requested by ingestion, and the `write_event` payload lists each with its publisher's tier and
+`fetch_policy`, so the agent knows which ones to open in a browser.
+
+What keeps jobs off them:
+
+- **The Fetcher** refuses them before any request (checks 2 and 3 above).
+- **Link health** never selects a citation whose host is in `NEVER_FETCH` or whose publisher (or nearest parent
+  row) isn't `allowed`. Agents re-read those pages themselves.
+- **Links built, not fetched.** The Nobel job and adapter build nobelprize.org prize links for candidates and
+  suggestions without requesting them; the adapter's hits say "nobelprize.org is browser_only: read it in a browser".
+
+Publishers that are `browser_only` after seeding: britannica.com, worldhistory.org, unesco.org, whc.unesco.org,
+un.org (and its subdomains news.un.org and press.un.org, which start with its rating), nobelprize.org, and the news
+publishers the verdicts set: theguardian.com, bbc.co.uk, bbc.com, npr.org, aljazeera.com, apnews.com.
+
+## OpenStax is refused everywhere
+
+OpenStax's terms forbid use of its textbooks by AI systems, so it is never read and never cited (AGENTS.md rule 6).
+Each layer refuses it on its own:
+
+| Layer | What refuses it |
+|---|---|
+| Jobs | `ingest/policy.py` `NEVER_FETCH["openstax.org"]`: the Fetcher raises `Refused`. |
+| Starting rating | `evidence/publishers.py` `KNOWN["openstax.org"]`: `fetch_policy` `forbidden`. |
+| The database: publishers | Check constraint `publisher_openstax_forbidden` on `evidence.Publisher`: a publisher whose domain is openstax.org or a subdomain must be `forbidden`. |
+| The database: citations | Check constraint `citation_never_openstax` on `evidence.Citation`: no citation URL on openstax.org or a subdomain (`evidence.models.OPENSTAX_RE`). |
+| The agents' door | `evidence.conflicts.citation_for()` returns nothing for a `forbidden` publisher, so `record_evidence` raises "not citable". |
+| Seeding | `apply_verdicts()` never changes a `forbidden` row's policy. |
+
+## Lookup adapters
+
+The lookup adapters ([ingest/lookup.py](../../ingest/lookup.py)) search open APIs for pages that may support a claim
+or a story. Each returns suggestions only (`SuggestedSource` rows and task payloads, with at most 25 words of
+snippet); an agent reads the page and records evidence itself with `manage.py facts record`. Nothing in the lookups
+writes Evidence or changes a claim's status.
+
+They run in `ADAPTERS` order, specialists first:
+
+| Adapter | Source | Applies when | Key |
+|---|---|---|---|
+| `nobel` | Nobel Prize API | year ≥ 1901 and the text says "nobel" | none |
+| `worldbank` | World Bank Indicators | year ≥ 1960, the text mentions population, GDP or economy, and an entity has an ISO code (P297) | none |
+| `historian` | Milestones Documents already synced (no request) | 1750–2000 | none |
+| `chronicling_america` | Library of Congress | 1770–1963 | none |
+| `loc` | Library of Congress manuscripts | 1400–2000 | none |
+| `smithsonian` | Smithsonian Open Access | always | `SMITHSONIAN_API_KEY` |
+| `europeana` | Europeana Search API | always | `EUROPEANA_API_KEY` |
+| `openalex` | OpenAlex works | always | none |
+| `crossref` | Crossref works | always | none |
+
+An adapter is **enabled** when its key (if it needs one) is set and its `Feed` row (`config.job` = `lookup`,
+`config.adapter` = its name) is enabled or absent. A disabled adapter is skipped and counted as `<name>_disabled`;
+an adapter that raises is counted as `<name>_errors` and the others still run.
+
+## Keys
+
+API keys come only from the environment, which `config/settings.py` loads from .env (`load_dotenv`). `.env.example`
+lists them empty. Without its key an adapter is disabled cleanly, and it starts working once the key is set.
+
+| Setting | Adapter | How it is sent | Key tier |
+|---|---|---|---|
+| `SMITHSONIAN_API_KEY` | `smithsonian` | The `api_key` query parameter on api.si.edu | An api.data.gov key (`config/settings.py` comment; the si.edu verdict). Neither the ADR nor the code names a tier beyond that. |
+| `EUROPEANA_API_KEY` | `europeana` | The `X-Api-Key` header (Europeana deprecated the `wskey` parameter, and keys in URLs leak into logs) | The europeana.eu verdict: a personal key is for non-production use only; request a Project key (one per service) before production or hosted scheduling. ADR 0013 says the same. The code doesn't check which kind of key it has. |
+
+### Keeping keys out of logs, errors and fixtures
+
+- **Masking.** `ingest/policy.py` `mask_secrets(text)` replaces the value of every setting in `SECRET_SETTINGS`
+  (`SMITHSONIAN_API_KEY`, `EUROPEANA_API_KEY`, when at least 6 characters long) with `***`, then masks any
+  `api_key=`, `apikey=`, `api-key=`, `wskey=`, `key=` or `token=` parameter value. The runner applies it to every
+  `ctx.error()` message, to the `FetchRun.error` it stores, and to the one-line log per run
+  ([ingestion](ingestion.md#the-job-runner)). `test_secrets_are_masked` checks it.
+- **Lookup errors** are only counted, never logged with their message.
+- **Cassettes.** `tests/cassette.py` keys recorded responses by method and URL with `api_key` and `wskey` values
+  masked (`KEY_RE`), and matches requests the same way, so a test with a real key in its URL still finds its
+  recording. `RecordingTransport` stores only the response's status, a few headers and the body, never request
+  headers, so a header key such as Europeana's is never recorded.
+
+### The User-Agent
+
+`config/settings.py` `INGEST_USER_AGENT` is "<SITE_NAME>Bot/0.1 (history timeline research; +<INGEST_CONTACT>)
+python-httpx". `INGEST_CONTACT` must be a generic project address or URL, never a person's details; it defaults to
+the project's GitHub repository (Wikimedia requires a contact). The robots.txt token is the part before "/".
+
+## Adding a source
+
+1. **Read its terms first**: the terms of use, any API terms, robots.txt (including AI or TDM signals such as
+   `Content-Signal` or tdmrep.json) and the license of the data. Decide what jobs may keep: metadata, a headline and
+   link, a lead of at most 60 words from the feed, or nothing.
+2. **If jobs may not read it**, add the host to `NEVER_FETCH` with the reason, and to `SKIPPED` if it was a
+   candidate feed. Its links can still be cited and read in a browser.
+3. **If they may**, add its publisher defaults to `PUBLISHERS` (tier, license; `fetch_policy` `allowed` on a
+   subdomain whose parent isn't), its verdict to `VERDICTS` with the clause relied on, a `HOST_DELAY` if it states
+   a rate or Crawl-delay, and its feed to `FEEDS`. A key goes in `config/settings.py`, `.env.example` (empty),
+   `SECRET_SETTINGS`, and the adapter's `key_setting`; send it in a header when the API allows.
+4. **Record the verdict** in [ADR 0013](../adr/0013-source-policy.md)'s table too, with the same clause.
+5. **Existing databases.** `apply_verdicts()` has already run there (`JobState` "terms_verdicts_v1"), so a new
+   `VERDICTS` entry reaches only new databases. On an existing one, write the access note and policy on the
+   Publisher row in the admin (it runs as `human:<username>`). Renaming the JobState would re-apply every verdict,
+   overwriting the owner's later edits to those rows.
+6. **Test it** against a recorded cassette (`tests/record_fixtures.py`), with no keys in the recording.
+
+## Changing it
+
+| Change | What it needs |
+|---|---|
+| Change a verdict | `ingest/policy.py` (`NEVER_FETCH`), the Publisher row (admin, as `human:`), `ingest/seed.py` `VERDICTS`, and ADR 0013's table, together. |
+| Enable a disabled feed (UN, UNESCO) | The owner's call: set its publisher to `allowed` in the admin and the feed `enabled`. Its config keeps `headline_only`. |
+| A new host delay | `ingest/policy.py` `HOST_DELAY`, with the rule it comes from in a comment. |
+| A new secret setting | Add it to `SECRET_SETTINGS`; if it travels as a query parameter not matched by the masking pattern, extend the pattern and `tests/cassette.py` `KEY_RE`. |
+| A new starting rating | `evidence/publishers.py` `KNOWN`. It applies only to rows created after the change. |
+| Allow OpenStax | Not possible without a migration dropping two check constraints. Don't. |

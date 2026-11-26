@@ -1,9 +1,10 @@
 # AGENTS.md — working on Humanitributary
 
 Read this before changing anything. It's the short version of how the data
-platform is put together and the rules that keep it that way. The why behind
-each rule is in `docs/adr/`; every table, and how they connect, is in
-`docs/data-model.md`. The product's name lives in one place,
+platform is put together and the rules that keep it that way. How each part
+works, from the code, is the technical guide (`docs/guide/`, starting at
+`docs/architecture.md`); the why behind each rule is in `docs/adr/`; every
+table, and how they connect, is in `docs/data-model.md`. The product's name lives in one place,
 `config/settings.py` `SITE_NAME` (plus this repo's README title, the page's
 `<title>` and header in `site/template.html`): never write the name anywhere
 else in code.
@@ -29,11 +30,14 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 | `work/` | The agents' queue: `AgentTask`, `queue.py` (leases under `FOR UPDATE SKIP LOCKED`), `manage.py tasks`. |
 | `governance/` | `BranchMetric`, `BranchProposal`, and `manage.py branches`: `metrics.py` (each branch's shape on the page's time scale), `rules.py` (SPLIT-PLACE, SPLIT-TIME, MERGE-OVERLAP, END-STALE, NEW-BRANCH, THIN), `thresholds.py` (every threshold), `review.py` (proposals, tasks, hysteresis), `operations.py` (apply and revert). See `docs/branch-rules.md`. |
 | `publish/` | `Release`; the snapshot format (`content.py`: key order and a writer byte-compatible with `JSON.stringify`), `export.py` (Postgres → content), `legacy.py` (dump → Postgres), `release.py`, and the `import_legacy`, `publish` and `compare_content` commands. |
-| `tests/` | The suite: import idempotency, the round trip, entry order, revision enforcement, the queue, dates, the fact base, branch governance and ingestion (`test_ingest.py` on recorded cassettes in `fixtures/ingest/`: `cassette.py` replays them, `record_fixtures.py` re-records). |
-| `var/` | Gitignored: `legacy.json` dumps, `releases/<version>/` snapshots (`releases/latest` → newest), `raw/` fetched documents by content hash, `logs/` (the scheduled runs). |
+| `tests/` | The suite: import idempotency, the round trip, entry order, revision enforcement, the queue, dates, the fact base, branch governance, the docs' checks and hooks (`test_guide.py`) and ingestion (`test_ingest.py` on recorded cassettes in `fixtures/ingest/`: `cassette.py` replays them, `record_fixtures.py` re-records). |
+| `var/` | Gitignored: `gate-receipt.json` (the gate's last pass), `legacy.json` dumps, `releases/<version>/` snapshots (`releases/latest` → newest), `raw/` fetched documents by content hash, `logs/` (the scheduled runs). |
 | `ops/` | The local schedule: `run-jobs.sh` (start Docker/Postgres or skip, then `run_jobs`), `launchd/run-jobs.plist` (template), `schedule.sh` (install / uninstall / status). |
-| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions (ingestion: 0012, source policy: 0013); the data model with an ER sketch; how claims are checked; the branch rules. |
-| `scripts/` | `make_env.py`; `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`). |
+| `docs/guide/` | The technical guide: a chapter per part of the platform, each stamped against the code it `covers` (`stamps.json`); `README.md` lists the chapters and says how to write one. `docs/architecture.md` points into it. |
+| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0020, the gate: 0021); the data model with an ER sketch; how claims are checked; the branch rules. |
+| `guide/` | The guide's tools behind `manage.py guide check / stamp / status / covers / index`: `chapters.py`, `coverage.py` (what a chapter covers, its hash), `checks.py`. No models. |
+| `scripts/` | `make_env.py`; `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
+| `.claude/settings.json`, `.claude/hooks/` | Hooks only: before `git commit`, the guide must be fresh; before `gh pr create`, the gate must have passed on the committed code; at the end of a turn, a reminder. |
 | `.claude/skills/` | Agent skills: `drain-write-events`, `review-branch-proposals`, `verify-claims`, `verify-stale-claims`. |
 
 ## Rules
@@ -121,6 +125,21 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
     in its Publisher's `access_notes` and ADR 0013. Keys come from `.env`
     only and never reach logs, errors or fixtures. Lookup hits are
     suggestions (`SuggestedSource`), never Evidence. (ADR 0013)
+14. **Every change that alters behavior updates the guide in the same PR.**
+    `make check-guide` enforces it: it names each chapter whose covered code
+    changed, the files and the `git diff` to read. Read the diff against the
+    chapter, update the chapter, then `make guide-stamp CHAPTER=<name>` and
+    commit `docs/guide/stamps.json` with it. A stamp says you read the
+    chapter against the code; never stamp without reading. A new part of the
+    platform gets a chapter (`docs/guide/README.md`). (ADR 0020)
+15. **Every real decision gets an ADR; amend or supersede, never silently
+    edit an accepted one.** A new behavior, a new source, a changed
+    threshold's rationale, a new dependency or service: write
+    `docs/adr/NNNN-words.md` from the template in `docs/adr/README.md`. To
+    change a decision, a new ADR's Status says it amends, refines or
+    supersedes the old one, with a link, and the old one's Status names it
+    back. `make check-adr` enforces the form; `make adr-index` updates the
+    index. (ADR 0020)
 
 ## Working
 
@@ -176,10 +195,39 @@ The tests run against the same Docker Postgres (Django creates a
 trip on the real content takes about 5 seconds when nothing changed (the
 first import into an empty database, about 20).
 
-Before opening a pull request, run `make check`, `make test` and, if anything
-touching content, import or export changed, `make roundtrip`. Fill in the
-template (`.github/pull_request_template.md`): what changed, any migration,
-and how it was checked.
+### A change, start to finish
+
+1. **Branch.** Work on a branch, in a worktree when other sessions are at
+   work: `git worktree add ../humanitributary-<name> -b <name>`. Give the
+   worktree its own database when anything else is using the main one (an
+   ingestion run, another session's round trip): create
+   `humanitributary_<name>` on the same server and name it in that
+   worktree's `.env` `DATABASE_URL`.
+2. **Change** the code, with tests.
+3. **Guide and ADR.** `make check-guide` names the chapters your change
+   touches: read the diff against each, update it, `make guide-stamp
+   CHAPTER=<name>` (rule 14). A real decision gets an ADR, or amends one
+   (rule 15).
+4. **The gate.** `make check-pr` (`scripts/check_pr.py`): the guide's check
+   first, then the ADR check, Django's checks, missing migrations, the
+   site's data check (and ruff when configured) beside the test suite and
+   the round trip. CI runs the same command. A pass writes a receipt for the
+   exact code it checked.
+5. **Commit and open the PR** with the template
+   (`.github/pull_request_template.md`): what changed and why, decisions,
+   guide chapters updated, how it was checked, data and content impact.
+
+Claude Code holds this line with hooks (`.claude/settings.json`): a
+`git commit` is blocked while the guide is stale, and `gh pr create` is held
+until the gate has passed on the committed code (a `--draft` isn't held).
+
+```bash
+make check-guide                       # what to review, and the diff
+make guide-stamp CHAPTER=ingestion     # after reviewing a chapter against the change
+make guide-status                      # every chapter, fresh or not
+make check-adr                         # the ADRs agree with each other
+make check-pr                          # the gate (about 30 seconds)
+```
 
 ## Deploying
 
