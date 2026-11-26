@@ -13,6 +13,15 @@ has at most one open task.
 api -X POST "$HUMANITRIBUTARY_API/tasks/claim" -d '{"kinds": ["verify_claim"]}'
 ```
 
+## Excerpts
+
+- **Copy excerpts from the page itself, never from a fetch tool's summary.** Tools such as WebFetch hand back a
+  model-written summary of the page, and the "quotes" in it are often paraphrased, shortened or straightened. For
+  every excerpt (and every stance you record), read the page's own text: the in-app browser's `get_page_text`, or
+  `javascript_tool` returning the matching sentence from `document.body.innerText`, or the raw page via `curl` where
+  the site allows scripts. Then copy the sentence character for character. If only a summary is reachable, cite the
+  page without an excerpt and say so in your note. Every review round so far has had to re-copy summarized excerpts.
+
 ## Dead, moved or changed links (`reason`: `dead_link`, `content_changed`)
 
 The daily `link_health` job re-checked the citation and the `facts sweep` turned the result into this task. The

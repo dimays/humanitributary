@@ -2,7 +2,7 @@
   "architecture": {"reviewed": "2026-11-26", "hash": "0921cd186c7d"},
   "branch-governance": {"reviewed": "2026-11-26", "hash": "ec665d6fd0fd"},
   "content-model": {"reviewed": "2026-11-26", "hash": "84d08b044e6e"},
-  "content-waves": {"reviewed": "2026-11-26", "hash": "33c21066de5c"},
+  "content-waves": {"reviewed": "2026-11-26", "hash": "1df8731d880f"},
   "evidence-and-fact-checking": {"reviewed": "2026-11-26", "hash": "839f4e5d7851"},
   "glossary": {"reviewed": "2026-11-26", "hash": "84d0d0062cb0"},
   "ingestion": {"reviewed": "2026-11-26", "hash": "458ecdf5aa90"},
@@ -11,5 +11,5 @@
   "revisions": {"reviewed": "2026-11-26", "hash": "9a093264afb7"},
   "sources-and-terms": {"reviewed": "2026-11-26", "hash": "e4ea29d03574"},
   "this-guide": {"reviewed": "2026-11-26", "hash": "ece8b3802b68"},
-  "work-queue-and-agents": {"reviewed": "2026-11-26", "hash": "740f5d552c8f"}
+  "work-queue-and-agents": {"reviewed": "2026-11-26", "hash": "f721125ebe5d"}
 }
