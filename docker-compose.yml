@@ -1,0 +1,23 @@
+# Local Postgres for development: `docker compose up -d db` (or `make db`).
+# Host port 5433, because Postgres.app already owns 5432 on the owner's laptop: never point anything here at 5432.
+# The password comes from .env (POSTGRES_PASSWORD), generated locally and never committed.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tributaries
+      POSTGRES_DB: tributaries
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see .env.example)}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - tributaries-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tributaries -d tributaries"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  tributaries-pg:

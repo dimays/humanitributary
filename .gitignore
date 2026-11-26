@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+node_modules/
+.DS_Store
+staticfiles/
+# Raw fetched documents, dumps and release snapshots: rebuilt from Postgres, never committed (AGENTS.md rule 1)
+var/
+# The built page (node site/build.mjs) and the site's download caches
+site/timeline.html

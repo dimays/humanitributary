@@ -1,0 +1,2044 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tributaries</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231c1d21'/><path d='M4 16 C9 16 9 7.5 16 7.5 S23 16 28 16' fill='none' stroke='%236f97ee' stroke-width='3.2' stroke-linecap='round'/><path d='M4 16 C9 16 9 24.5 16 24.5 S23 16 28 16' fill='none' stroke='%23ee8a6a' stroke-width='3.2' stroke-linecap='round'/><path d='M9 16 H23' stroke='%2346b8a0' stroke-width='3.2' stroke-linecap='round'/></svg>">
+<style>
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --fg: #1c1c1e; --muted: #6a6a70; --faint: #9a9aa0;
+  --line: #e2e0d8; --grid: rgba(0,0,0,.055); --stripe: rgba(0,0,0,.022); --axis: #fbfaf7;
+  --accent: #2b59c3; --accent-soft: rgba(43,89,195,.12); --chip: #efede6; --cursor: rgba(43,89,195,.55);
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 10px 30px rgba(0,0,0,.07); --lightness: 44%; --sat: 52%;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131417; --surface: #1c1d21; --fg: #ececef; --muted: #a0a0a8; --faint: #6f6f78;
+    --line: #2c2d33; --grid: rgba(255,255,255,.06); --stripe: rgba(255,255,255,.02); --axis: #17181b;
+    --accent: #7ea2ff; --accent-soft: rgba(126,162,255,.14); --chip: #26272c; --cursor: rgba(126,162,255,.55);
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35); --lightness: 66%; --sat: 58%;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131417; --surface: #1c1d21; --fg: #ececef; --muted: #a0a0a8; --faint: #6f6f78;
+  --line: #2c2d33; --grid: rgba(255,255,255,.06); --stripe: rgba(255,255,255,.02); --axis: #17181b;
+  --accent: #7ea2ff; --accent-soft: rgba(126,162,255,.14); --chip: #26272c; --cursor: rgba(126,162,255,.55);
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35); --lightness: 66%; --sat: 58%;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+  font: 14px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+button { font: inherit; color: inherit; }
+a { color: var(--accent); }
+
+header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface); flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0 6px 0 0; letter-spacing: -.01em; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
+header h1 .logo { width: 22px; height: 22px; flex: none; color: var(--fg); }
+header h1 span { color: var(--muted); font-weight: 500; }
+.eras { display: flex; gap: 4px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 3px 8px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.btn:hover { background: var(--chip); }
+.btn kbd { color: var(--faint); font-size: 10.5px; margin-left: 4px; font-family: inherit; }
+.spacer { flex: 1; }
+.search { position: relative; }
+.search input { width: 200px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 7px; padding: 5px 9px; font: inherit; font-size: 13px; }
+.search input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.results { position: absolute; right: 0; top: calc(100% + 4px); width: 340px; max-height: 60vh; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); z-index: 20; display: none; }
+.results.open { display: block; }
+.results button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 11px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.results button:hover, .results button.hl { background: var(--accent-soft); }
+.results .r-when { color: var(--muted); font-size: 11.5px; }
+.results .r-head { position: sticky; top: 0; background: var(--surface); padding: 7px 11px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+.results .r-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+
+main { flex: 1; display: flex; min-height: 0; }
+#stage { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#overview { height: 78px; width: 100%; display: block; border-bottom: 1px solid var(--line); cursor: pointer; background: var(--axis); }
+#canvasWrap { position: relative; flex: 1; min-height: 0; }
+#tl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; outline: none; }
+#tl.dragging { cursor: grabbing; }
+#tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; box-shadow: var(--shadow); font-size: 12.5px; max-width: 300px; display: none; z-index: 5; }
+#tip .t-when { color: var(--muted); font-size: 11.5px; }
+.hint { position: absolute; left: 12px; bottom: 10px; font-size: 11.5px; color: var(--muted); background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; pointer-events: none; }
+.hint kbd { font-family: inherit; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; font-size: 10.5px; background: var(--surface); color: var(--fg); }
+.zoombox { position: absolute; right: 12px; bottom: 10px; display: flex; gap: 4px; }
+
+aside.closed { display: none; }
+.panel-close { position: sticky; top: 0; float: right; z-index: 2; width: 30px; height: 30px; margin: -6px -8px 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.panel-close:hover { color: var(--fg); background: var(--chip); }
+aside { width: 390px; flex: none; border-left: 1px solid var(--line); background: var(--surface); overflow-y: auto; padding: 18px 20px 40px; }
+aside h2 { font-size: 19px; line-height: 1.25; margin: 6px 0 8px; letter-spacing: -.01em; }
+aside h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 0 8px; font-weight: 600; }
+.globe { margin: 0 0 12px; }
+.pic { margin: 10px 0 12px; }
+.pic img { display: block; width: 100%; height: auto; max-height: 300px; object-fit: contain; background: var(--chip); border-radius: 8px; }
+.pic figcaption { font-size: 12px; line-height: 1.4; color: var(--muted); margin-top: 5px; }
+.pic .pic-credit { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; }
+.globe canvas { display: block; width: 100%; height: 200px; cursor: grab; touch-action: pan-y; }
+.globe canvas:active { cursor: grabbing; }
+.globe figcaption { font-size: 11.5px; line-height: 1.4; color: var(--muted); text-align: center; margin-top: 2px; }
+.globe .g-note { display: block; color: var(--faint); margin-top: 2px; }
+.when { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--chip); border-radius: 999px; padding: 2px 10px 2px 7px; font-size: 12.5px; cursor: pointer; margin: 0 4px 4px 0; }
+.chip i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.chip:hover { border-color: var(--accent); }
+.cites { list-style: none; padding: 0; margin: 0; }
+.cites li { margin: 0 0 8px; padding-left: 16px; position: relative; font-size: 13px; }
+.cites li::before { content: "↗"; position: absolute; left: 0; color: var(--faint); font-size: 11px; top: 1px; }
+.cites .dom { color: var(--faint); font-size: 11.5px; }
+.rel { font-size: 12.5px; color: var(--muted); margin: 8px 0 4px; }
+.origin { border-left: 3px solid var(--line); padding: 2px 0 2px 10px; margin: 10px 0; }
+.origin p { margin: 2px 0 8px; }
+.orow { margin: 0 0 8px; }
+.ohow { display: block; font-size: 11.5px; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+.onote { font-size: 12.5px; color: var(--muted); margin-top: -1px; }
+.navrow { display: flex; gap: 6px; margin-top: 14px; }
+.navrow .btn { flex: 1; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.near button { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 7px 2px; cursor: pointer; font-size: 13px; }
+.near button:hover { background: var(--accent-soft); }
+.near .nb { color: var(--muted); font-size: 11.5px; }
+.intro p { color: var(--fg); margin: 0 0 10px; }
+.intro ul { padding-left: 18px; margin: 0 0 10px; }
+.intro li { margin-bottom: 4px; }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 13px; }
+.keys kbd { font-family: inherit; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 11.5px; background: var(--bg); white-space: nowrap; justify-self: start; }
+.note { color: var(--muted); font-size: 12.5px; }
+p.why { border-left: 3px solid var(--accent); padding: 2px 0 2px 11px; margin: 4px 0 6px; }
+.conn button .nb { font-style: italic; }
+.cites .kind { display: inline-block; font-size: 10.5px; padding: 0 6px; border-radius: 9px; background: var(--chip); color: var(--muted); margin-left: 4px; vertical-align: 1px; }
+.cites .k-primary { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); }
+.cites .k-textbook, .cites .k-paper, .cites .k-museum, .cites .k-archive { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--fg); }
+.synthetic-note { font-size: 12px; color: var(--muted); background: var(--chip); border-radius: 8px; padding: 6px 9px; margin: 8px 0; }
+
+@media (max-width: 1500px) { header h1 span { display: none; } .btn kbd { display: none; } }
+.grip { display: none; }
+.g-short { display: none; }
+/* ---- phones & small tablets ---- */
+@media (max-width: 820px), (max-height: 500px) and (orientation: landscape) {
+  header { display: grid; grid-template-columns: auto 1fr auto auto; grid-template-areas: "title search guide theme" "eras eras eras eras"; gap: 7px 8px; padding: 8px 12px 7px; }
+  header h1 { grid-area: title; font-size: 15px; margin: 0; }
+  .search { grid-area: search; min-width: 0; }
+  .search input { width: 100%; min-width: 0; }
+  .results { width: min(340px, calc(100vw - 24px)); }
+  #guideBtn { grid-area: guide; } #themeBtn { grid-area: theme; }
+  .g-long { display: none; } .g-short { display: inline; }
+  .btn { padding: 4px 9px; font-size: 12.5px; }
+  .spacer { display: none; }
+  /* eras: one swipeable row instead of three wrapped ones */
+  .eras { grid-area: eras; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 0 12px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 24px), transparent); }
+  .eras::-webkit-scrollbar { display: none; }
+  .hint { display: none; }
+}
+/* portrait: details slide up from the bottom as a sheet */
+@media (max-width: 820px) and (orientation: portrait), (max-width: 600px) {
+  main { flex-direction: column; }
+  aside { width: auto; height: 46vh; flex: none; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; margin-top: -10px; position: relative; z-index: 3;
+          box-shadow: 0 -8px 24px rgba(0,0,0,.18); padding: 4px 18px 30px; transition: height .22s ease; }
+  aside.tall { height: 82vh; }
+  .grip { display: block; position: sticky; top: 0; z-index: 3; width: calc(100% + 36px); height: 22px; margin: -4px -18px 2px; border: 0; background: var(--surface); cursor: pointer; }
+  .grip::before { content: ""; display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--line); margin: 7px auto 0; filter: brightness(1.35); }
+  .panel-close { top: 22px; }
+  .zoombox { bottom: 18px; }
+  .globe canvas { height: 150px; }
+}
+/* landscape phones: keep the side panel, just narrower */
+@media (max-height: 500px) and (orientation: landscape) and (min-width: 601px) {
+  header { grid-template-columns: auto 1fr minmax(140px, 220px) auto auto; grid-template-areas: "title eras search guide theme"; padding: 6px 12px; }
+  header h1 { display: none; }
+  .eras { margin: 0; padding: 0 0 0 2px; }
+  #overview { height: 59px; }
+  aside { width: 300px; padding: 12px 14px 30px; }
+  aside h2 { font-size: 17px; }
+  .globe canvas { height: 130px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16 C9 16 9 7 16 7 S23 16 29 16" fill="none" stroke="hsl(218 70% 55%)" stroke-width="3" stroke-linecap="round"/><path d="M3 16 C9 16 9 25 16 25 S23 16 29 16" fill="none" stroke="hsl(14 75% 55%)" stroke-width="3" stroke-linecap="round"/><path d="M8 16 H24" fill="none" stroke="hsl(168 55% 42%)" stroke-width="3" stroke-linecap="round"/><circle cx="29" cy="16" r="2.6" fill="currentColor"/></svg>Tributaries <span>· all of history, from the Big Bang to now</span></h1>
+  <div class="eras" id="eras"></div>
+  <div class="spacer"></div>
+  <div class="search">
+    <input id="q" type="search" placeholder="Search events & societies  ( / )" autocomplete="off" aria-label="Search">
+    <div class="results" id="results"></div>
+  </div>
+  <button class="btn" id="guideBtn" title="Show or hide the guide (?)" aria-label="Guide"><span class="g-long">Guide</span><span class="g-short">?</span></button>
+  <button class="btn" id="themeBtn" title="Toggle light/dark">◐</button>
+</header>
+<main>
+  <div id="stage">
+    <canvas id="overview" aria-label="Overview of all time; click to jump"></canvas>
+    <div id="canvasWrap">
+      <canvas id="tl" tabindex="0" aria-label="Timeline. Arrow keys move between events and branches."></canvas>
+      <div id="tip"></div>
+      <div class="hint"><kbd>←</kbd><kbd>→</kbd> along a branch · <kbd>↑</kbd><kbd>↓</kbd> switch branch · pinch to zoom · drag to pan · click empty space to close</div>
+      <div class="zoombox">
+        <button class="btn" id="zin" title="Zoom in (+)">＋</button>
+        <button class="btn" id="zout" title="Zoom out (−)">−</button>
+        <button class="btn" id="zfit" title="Show all of time (0)">All</button>
+      </div>
+    </div>
+  </div>
+  <aside id="panel" aria-live="polite"></aside>
+</main>
+<script>
+const DATA = /*__DATA__*/null;
+const GLOBE = /*__GLOBE__*/null; // present-day land + PaleoDEM textures (build-globe.mjs); null = no globe
+(() => {
+"use strict";
+// ---------- time scale ----------
+// Position = -log10(years-before-now + C). Deep time is compressed; the last centuries get most of the room.
+const NOW = (() => { const d = new Date(), y = d.getFullYear(); return y + (d - new Date(y, 0, 1)) / (365.2425 * 864e5); })();
+const C = 40;
+const sOf = (y) => -Math.log10(Math.max(NOW - y, 0) + C);
+const yOf = (s) => NOW - (Math.pow(10, -s) - C);
+
+const REGIONS = [
+  { id: "cosmos", name: "Cosmos & Earth", hue: 252 },
+  { id: "life", name: "Life", hue: 135 },
+  { id: "humans", name: "Human origins", hue: 32 },
+  { id: "global", name: "Ideas, technology & global institutions", hue: 195 },
+  { id: "faiths", name: "Religions & philosophies", hue: 285 },
+  { id: "culture", name: "Arts, culture & sport", hue: 75 },
+  { id: "mideast", name: "Middle East, North Africa & Iran", hue: 42 },
+  { id: "europe", name: "Europe", hue: 218 },
+  { id: "africa", name: "Sub-Saharan Africa", hue: 14 },
+  { id: "southasia", name: "South Asia", hue: 328 },
+  { id: "eastasia", name: "East, Central & Southeast Asia", hue: 356 },
+  { id: "americas", name: "The Americas", hue: 168 },
+  { id: "oceania", name: "Oceania", hue: 186 },
+];
+const REGION = new Map(REGIONS.map((r) => [r.id, r]));
+
+const ERAS = [
+  { key: "0", label: "All time", a: -13.8e9, b: NOW },
+  { key: "1", label: "Life", a: -4.2e9, b: -2e6 },
+  { key: "2", label: "Human origins", a: -7.5e6, b: -3000 },
+  { key: "3", label: "Ancient", a: -3600, b: 650 },
+  { key: "4", label: "Medieval", a: 450, b: 1550 },
+  { key: "5", label: "Early modern", a: 1450, b: 1830 },
+  { key: "6", label: "1800–1930", a: 1790, b: 1935 },
+  { key: "7", label: "Last 100 years", a: 1920, b: NOW },
+  { key: "8", label: "Since 2000", a: 1995, b: NOW },
+];
+
+// ---------- data ----------
+const branches = DATA.branches.map((b) => ({ ...b, s0: sOf(b.start), s1: sOf(b.end === null ? NOW : b.end), events: [], children: [], succ: [], preds: [] }));
+const B = new Map(branches.map((b) => [b.id, b]));
+for (const b of branches) {
+  for (const p of b.parents) { const pb = B.get(p); if (pb && !pb.children.includes(b)) pb.children.push(b); }
+  for (const i of b.into) { const ib = B.get(i); if (ib) { b.succ.push(ib); ib.preds.push(b); } }
+}
+const all = [];
+for (const e of DATA.events) {
+  const b = B.get(e.branch); if (!b) continue;
+  const ev = { ...e, b, s: sOf(e.y), sEnd: e.end != null ? sOf(e.end) : null, kind: "event" };
+  b.events.push(ev); all.push(ev);
+}
+for (const b of branches) {
+  const st = { id: b.id + "--start", b, y: b.start, s: b.s0, when: b.startWhen, title: `Beginning of ${b.name}`, text: b.text, cites: b.cites, imp: 2, kind: "start" };
+  b.events.unshift(st); all.push(st);
+  if (b.end !== null) {
+    const en = { id: b.id + "--end", b, y: b.end, s: b.s1, when: b.endWhen, title: `End of ${b.name}`, text: b.text, cites: b.cites, imp: 2, kind: "end" };
+    b.events.push(en); all.push(en);
+  }
+  const rank = { start: 0, event: 1, end: 2 };
+  b.events.sort((p, q) => p.y - q.y || rank[p.kind] - rank[q.kind]);
+}
+const EV = new Map(all.map((e) => [e.id, e]));
+// A connection may point at an event or at a whole branch (then we use the branch's start marker).
+const refTarget = (id) => EV.get(id) || (B.get(id) && B.get(id).events[0]) || null;
+const connTargets = (x) => (x && x.connections ? x.connections.map((c) => ({ ...c, ev: refTarget(c.id) })).filter((c) => c.ev) : []);
+const S_MIN = Math.min(...branches.map((b) => b.s0));
+const S_MAX = sOf(NOW);
+const FULL = S_MAX - S_MIN;
+
+// ---------- colors ----------
+let css = {};
+function readTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ["bg", "surface", "fg", "muted", "faint", "line", "grid", "stripe", "axis", "accent", "cursor", "lightness", "sat"]) css[k] = cs.getPropertyValue("--" + k).trim();
+  const counts = {};
+  for (const b of branches) {
+    const r = REGION.get(b.region); const i = (counts[b.region] = (counts[b.region] || 0) + 1);
+    const hue = r.hue + (((i * 47) % 44) - 22);
+    b.color = `hsl(${hue} ${css.sat} ${css.lightness})`;
+    b.colorSoft = `hsl(${hue} ${css.sat} ${css.lightness} / .28)`;
+  }
+  REGIONS.forEach((r) => (r.color = `hsl(${r.hue} ${css.sat} ${css.lightness})`));
+}
+readTheme();
+
+// ---------- lanes ----------
+// Pack each region's branches into as few lanes as possible; a successor reuses its predecessor's lane so a
+// society that changes form (Republic → Empire) reads as one continuous line.
+const LANE_H = 46, THIN_H = 17, REGION_H = 24, AXIS_H = 48;
+const lanes = [];
+const rows = [];
+for (const r of REGIONS) {
+  const rb = branches.filter((b) => b.region === r.id).sort((p, q) => p.s0 - q.s0);
+  if (!rb.length) continue;
+  const header = { type: "region", region: r, h: REGION_H, ht: REGION_H, lanes: [] };
+  rows.push(header);
+  const rl = [];
+  for (const b of rb) {
+    const preds = [...b.parents.map((p) => B.get(p)), ...b.preds].filter((p) => p && p.lane && p.region === b.region);
+    let lane = preds.map((p) => p.lane).find((L) => L.endS <= b.s0 + 0.004);
+    if (!lane) lane = rl.find((L) => L.endS + 0.03 <= b.s0);
+    if (!lane) { lane = { type: "lane", region: r, branches: [], endS: -Infinity, h: LANE_H, ht: LANE_H }; rl.push(lane); }
+    lane.branches.push(b); lane.endS = Math.max(lane.endS, b.s1); b.lane = lane;
+  }
+  rl.forEach((L) => { rows.push(L); lanes.push(L); header.lanes.push(L); });
+}
+lanes.forEach((L, i) => (L.index = i));
+
+// edges between branches (splits, merges, successions)
+const edges = [];
+const seen = new Set();
+const addEdge = (a, b) => { if (!a || !b || a === b) return; const k = a.id + ">" + b.id; if (seen.has(k)) return; seen.add(k); edges.push({ a, b }); };
+for (const b of branches) { b.parents.forEach((p) => addEdge(B.get(p), b)); b.into.forEach((i) => addEdge(b, B.get(i))); }
+// How a branch came out of each origin link (from TL.origin). Roots in peoples or ideas are drawn lighter than political lineage.
+const HOW_RANK = { independence: 0, split: 1, successor: 2, merger: 3, conquest: 4, peoples: 5, context: 5, ideas: 6, reaction: 7 };
+const HOW_LABEL = { independence: "Independence from", split: "Broke away from", successor: "Successor to", merger: "Formed by union of",
+  conquest: "Through conquest", peoples: "Peoples and roots", ideas: "Ideas it built on", reaction: "In reaction to", context: "Grew out of" };
+const HOW_SHORT = { independence: "independence from", split: "split from", successor: "after", merger: "union of", conquest: "from", peoples: "from", ideas: "from", reaction: "against", context: "out of" };
+for (const e of edges) { const l = e.b.origin?.links.find((x) => x.id === e.a.id); e.how = l ? l.how : null; e.soft = l ? HOW_RANK[l.how] >= 5 : false; }
+// The one origin named at a branch's start on the canvas: the most direct political link, else the first parent.
+for (const b of branches) {
+  const ls = (b.origin?.links || []).filter((l) => B.get(l.id)).sort((p, q) => HOW_RANK[p.how] - HOW_RANK[q.how]);
+  const l = ls[0];
+  b.fromLabel = l ? (l.how === "merger" ? "union of " + ls.filter((x) => x.how === "merger").map((x) => B.get(x.id).name).join(" + ") : HOW_SHORT[l.how] + " " + B.get(l.id).name)
+    : b.parents.length && B.get(b.parents[0]) ? "from " + B.get(b.parents[0]).name : "";
+}
+const EPS = 0.002;
+for (const e of edges) {
+  const { a, b } = e;
+  if (b.s0 > a.s0 + EPS && b.s0 < a.s1 - EPS) { e.kind = "split"; e.s = b.s0; }
+  else if (a.s1 > b.s0 + EPS && a.s1 < b.s1 - EPS) { e.kind = "merge"; e.s = a.s1; }
+  else { e.kind = "succ"; }
+}
+
+// ---------- view state ----------
+const cv = document.getElementById("tl"), ctx = cv.getContext("2d");
+const ov = document.getElementById("overview"), octx = ov.getContext("2d");
+const wrap = document.getElementById("canvasWrap");
+let W = 0, H = 0, dpr = 1;
+// "All time" is centered on exactly 1 million years ago (the plain midpoint of the log scale is an arbitrary ~600,000).
+// The view is symmetric about that point, so the center holds at any window width.
+const S_MID_ALL = sOf(NOW - 1e6);
+const ALL_HALF = Math.max(S_MID_ALL - S_MIN, S_MAX - S_MID_ALL) + FULL * 0.015;
+const ALL_VIEW = { s0: S_MID_ALL - ALL_HALF, s1: S_MID_ALL + ALL_HALF };
+const isAll = (v) => Math.abs(v.s0 - ALL_VIEW.s0) < 1e-6 && Math.abs(v.s1 - ALL_VIEW.s1) < 1e-6;
+const view = { s0: ALL_VIEW.s0, s1: ALL_VIEW.s1, y: 0 };
+const target = { s0: view.s0, s1: view.s1, y: 0 };
+let animating = false, dirty = true, selected = null, hover = null;
+const X = (s) => ((s - view.s0) / (view.s1 - view.s0)) * W;
+const Sx = (x) => view.s0 + (x / W) * (view.s1 - view.s0);
+const MIN_SPAN = 0.006;
+
+function clampView(v) {
+  let span = Math.min(Math.max(v.s1 - v.s0, MIN_SPAN), ALL_HALF * 2);
+  let s0 = v.s0, s1 = s0 + span;
+  const lo = Math.min(S_MIN - span * 0.04, ALL_VIEW.s0), hi = S_MAX + span * 0.08;
+  if (s0 < lo) { s0 = lo; s1 = s0 + span; }
+  if (s1 > hi) { s1 = hi; s0 = s1 - span; }
+  v.s0 = s0; v.s1 = s1;
+}
+let keepScale = false; // set while the side panel opens/closes, so the scale holds and only the edge moves
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  const r = wrap.getBoundingClientRect(), oldW = W; W = r.width; H = r.height;
+  if (keepScale && oldW > 0 && W > 0 && Math.abs(W - oldW) > 1 && !isAll(target)) {
+    const k = W / oldW;
+    for (const v of [view, target]) { v.s1 = v.s0 + (v.s1 - v.s0) * k; clampView(v); }
+  }
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const orr = ov.getBoundingClientRect(); ov.width = Math.round(orr.width * dpr); ov.height = Math.round(orr.height * dpr);
+  dirty = true; kick();
+}
+
+// lane visibility: collapse lanes with nothing in view so the visible period's branches sit together
+// Lanes with a branch alive in view but nothing happening there shrink to a thin rail.
+function laneHeightIn(L, s0, s1) {
+  const m = (s1 - s0) * 0.02;
+  const alive = L.branches.filter((b) => b.s1 >= s0 - m && b.s0 <= s1 + m);
+  if (!alive.length) return 0;
+  return alive.some((b) => b.events.some((e) => e.s >= s0 - m && e.s <= s1 + m)) ? LANE_H : THIN_H;
+}
+function setRowTargets(s0, s1) {
+  for (const r of rows) if (r.type === "lane") r.ht = laneHeightIn(r, s0, s1);
+  for (const r of rows) if (r.type === "region") {
+    // a region where nothing happens in view collapses to one summary line
+    const live = r.lanes.filter((L) => L.ht > 0);
+    r.summary = live.length > 0 && live.every((L) => L.ht === THIN_H) ? live.flatMap((L) => L.branches.filter((b) => b.s1 >= s0 && b.s0 <= s1)) : null;
+    if (r.summary) live.forEach((L) => (L.ht = 0));
+    r.ht = live.length ? REGION_H : 0;
+  }
+}
+function rowTop(row, useTarget) { let y = AXIS_H + 6; for (const r of rows) { if (r === row) return y; y += useTarget ? r.ht : r.h; } return y; }
+function totalH(useTarget) { return rows.reduce((t, r) => t + (useTarget ? r.ht : r.h), AXIS_H + 6) + 60; }
+function clampY(y, useTarget) { return Math.max(0, Math.min(y, Math.max(0, totalH(useTarget) - H))); }
+
+// ---------- ticks ----------
+const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+function fmtYa(ya) {
+  if (ya >= 1e9) return `${+(ya / 1e9).toFixed(2)} bn years ago`;
+  if (ya >= 1e6) return `${+(ya / 1e6).toFixed(2)} m years ago`;
+  return `${fmtInt(ya)} years ago`;
+}
+function fmtYear(y) {
+  if (y < -10000) return fmtYa(NOW - y);
+  if (y < 0.5) return `${fmtInt(-y)} BCE`;
+  if (y < 1000) return `${Math.round(y)} CE`;
+  return String(Math.round(y));
+}
+function fmtDuration(yrs) {
+  if (yrs >= 2e6) return `${+(yrs / 1e6).toPrecision(3)} million years`;
+  if (yrs >= 2000) return `${fmtInt(yrs)} years`;
+  if (yrs >= 1.5) return `${Math.round(yrs)} years`;
+  if (yrs >= 0.95) return "1 year";
+  const days = Math.round(yrs * 365.25);
+  return days >= 45 ? `${Math.round(days / 30.44)} months` : days <= 1 ? "1 day" : `${days} days`;
+}
+// compact elapsed-time label for the gaps between axis ticks
+function fmtSpan(yrs) {
+  const r = (v) => fmtInt(+v.toPrecision(2)); // two significant figures: "94,000", not "93,973"
+  if (yrs >= 1e9) return `${+(yrs / 1e9).toPrecision(2)} bn yrs`;
+  if (yrs >= 1e6) return `${r(yrs / 1e6)} m yrs`;
+  if (yrs >= 1.5) return `${yrs >= 100 ? r(yrs) : fmtInt(yrs)} yrs`;
+  if (yrs >= 0.9) return "1 yr";
+  const m = yrs * 12; return m >= 1.5 ? `${Math.round(m)} months` : `${Math.max(1, Math.round(yrs * 52))} wks`;
+}
+const widthCache = new Map();
+function tw(str, font) { const k = font + "|" + str; let w = widthCache.get(k); if (w === undefined) { ctx.font = font; w = ctx.measureText(str).width; widthCache.set(k, w); } return w; }
+const TICK_FONT = "11px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+function computeTicks() {
+  const placed = [];
+  const tryPlace = (s, label) => {
+    const x = X(s); if (x < -40 || x > W + 40) return;
+    const w = tw(label, TICK_FONT);
+    for (const p of placed) if (Math.abs(p.x - x) < (p.w + w) / 2 + 18) return;
+    placed.push({ x, w, label, s });
+  };
+  const span = view.s1 - view.s0;
+  // deep time: 1, 2, 5 × 10^k years ago
+  for (let k = 10; k >= 4; k--) for (const m of [1, 5, 2]) {
+    const ya = m * Math.pow(10, k); if (ya > 1.38e10 || ya < 2e4) continue;
+    if (m === 1 && k === 10) continue;
+    tryPlace(sOf(NOW - ya), fmtYa(ya));
+  }
+  tryPlace(sOf(-13.8e9), "13.8 bn years ago");
+  // calendar years
+  const yA = Math.max(-10000, yOf(view.s0)), yB = Math.min(NOW, yOf(view.s1));
+  if (yB > yA) {
+    const pxPerYearMax = (W / span) / (Math.LN10 * (Math.max(NOW - yB, 0) + C));
+    for (const step of [5000, 1000, 500, 100, 50, 10, 5, 1]) {
+      if (step * pxPerYearMax < 30) continue;
+      for (let y = Math.ceil(yA / step) * step; y <= yB; y += step) { if (y === 0) continue; tryPlace(sOf(y), fmtYear(y)); }
+    }
+  }
+  return placed;
+}
+
+// ---------- drawing ----------
+let hits = [];
+function roundRect(c, x, y, w, h, r) { c.beginPath(); c.roundRect ? c.roundRect(x, y, w, h, r) : c.rect(x, y, w, h); }
+function curve(x0, y0, x1, y1) { const mx = (x0 + x1) / 2; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.bezierCurveTo(mx, y0, mx, y1, x1, y1); ctx.stroke(); }
+function truncate(str, font, max) {
+  if (tw(str, font) <= max) return str;
+  let lo = 0, hi = str.length;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (tw(str.slice(0, mid) + "…", font) <= max) lo = mid; else hi = mid - 1; }
+  return lo > 3 ? str.slice(0, lo) + "…" : "";
+}
+const LABEL_FONT = "11.5px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+const LABEL_BOLD = "600 11.5px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+const GAP_FONT = "9.5px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+const RAIL_FONT = "10.5px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+const REGION_FONT = "600 10.5px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = css.bg; ctx.fillRect(0, 0, W, H);
+  hits = [];
+  const ticks = computeTicks();
+  // row geometry
+  let yy = AXIS_H + 6 - view.y;
+  for (const r of rows) { r.top = yy; yy += r.h; }
+  const laneMid = (L) => L.top + L.h * (22 / LANE_H);
+  const visibleRow = (r) => r.h > 1 && r.top + r.h > AXIS_H && r.top < H;
+  // selection context: the period to highlight, and which branches stay bright (the selected one and its kin)
+  const selB = selected ? selected.b : null;
+  const selRange = !selected ? null
+    : selected.sEnd != null ? { a: selected.s, b: selected.sEnd, ev: true }
+    : selected.kind !== "event" ? { a: selB.s0, b: selB.s1, ev: false } : null;
+  const related = new Set();
+  if (selB) {
+    for (const x of [selB, ...selB.parents.map((p) => B.get(p)), ...selB.children, ...selB.succ, ...selB.preds, B.get(selected.link)]) if (x) related.add(x);
+    for (const c of connTargets(selected)) related.add(c.ev.b);
+  }
+  const dim = (b) => (selB && !related.has(b) ? 0.4 : 1);
+  const now = performance.now(), ripple = Math.min(1, (now - selT) / RIPPLE_MS);
+
+  const drawRipple = (x, y, color) => {
+    if (ripple >= 1) return;
+    const ga = ctx.globalAlpha, e = 1 - Math.pow(1 - ripple, 3);
+    ctx.globalAlpha = (1 - ripple) * 0.8; ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y, 9 + 20 * e, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = ga;
+  };
+  ctx.save(); ctx.beginPath(); ctx.rect(0, AXIS_H, W, H - AXIS_H); ctx.clip();
+  // stripes + region headers
+  let alt = false;
+  for (const r of rows) {
+    if (!visibleRow(r)) { if (r.type === "lane" && r.h > 1) alt = !alt; continue; }
+    if (r.type === "region") {
+      alt = false;
+      ctx.globalAlpha = r.h / REGION_H;
+      ctx.fillStyle = css.line; ctx.fillRect(0, r.top + 2, W, 1);
+      ctx.fillStyle = r.region.color; ctx.font = REGION_FONT;
+      ctx.fillText(r.region.name.toUpperCase(), 12, r.top + 17);
+      if (r.summary) {
+        const x0 = 12 + tw(r.region.name.toUpperCase(), REGION_FONT) + 10;
+        const txt = truncate(`${r.summary.length} continuing, nothing recorded in view: ${r.summary.map((b) => b.name).join(", ")}`, RAIL_FONT, W - x0 - 20);
+        ctx.font = RAIL_FONT; ctx.fillStyle = css.faint; ctx.fillText(txt, x0, r.top + 17);
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      if (alt) { ctx.fillStyle = css.stripe; ctx.fillRect(0, r.top, W, r.h); }
+      alt = !alt;
+    }
+  }
+  // grid
+  ctx.fillStyle = css.grid;
+  for (const t of ticks) ctx.fillRect(Math.round(t.x), AXIS_H, 1, H);
+  // now line
+  const xn = X(S_MAX); ctx.fillStyle = css.faint; ctx.fillRect(Math.round(xn), AXIS_H, 1, H);
+  // the selected period, as a column through every lane so you can see what else falls inside it
+  if (selRange) {
+    const xa = X(selRange.a), xb = X(selRange.b);
+    if (xb > -2 && xa < W + 2) {
+      ctx.fillStyle = selRange.ev ? css.accent : selB.color;
+      ctx.globalAlpha = selRange.ev ? 0.09 : 0.06; ctx.fillRect(xa, AXIS_H, Math.max(xb - xa, 1), H - AXIS_H);
+      ctx.globalAlpha = 0.6; ctx.fillRect(Math.round(xa), AXIS_H, 1, H); ctx.fillRect(Math.round(xb) - 1, AXIS_H, 1, H);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // edges
+  const D = 26;
+  ctx.lineWidth = 2;
+  for (const e of edges) {
+    const La = e.a.lane, Lb = e.b.lane;
+    if (La.h < 4 || Lb.h < 4) continue;
+    const ya = laneMid(La), yb = laneMid(Lb);
+    let x0, x1;
+    if (e.kind === "split") { x1 = X(e.s); x0 = Math.max(X(e.a.s0), x1 - D); }
+    else if (e.kind === "merge") { x0 = X(e.s); x1 = Math.min(X(e.b.s1), x0 + D); }
+    else {
+      if (La === Lb) continue;
+      const xa = X(e.a.s1), xb = X(e.b.s0);
+      x0 = xb - xa < D ? Math.min(xa, xb) - D / 2 : xa; x1 = Math.max(xb, x0 + D);
+    }
+    if (Math.max(x0, x1) < -50 || Math.min(x0, x1) > W + 50) continue;
+    if (Math.max(ya, yb) < AXIS_H || Math.min(ya, yb) > H) continue;
+    const own = selB && (e.a === selB || e.b === selB);
+    const rel = own || related.has(e.a) || related.has(e.b);
+    // Links between regions span many lanes, so unless one end is selected they are drawn fainter (but whole).
+    const far = e.a.region !== e.b.region && !own && Math.abs(yb - ya) > 120;
+    ctx.globalAlpha = Math.min(La.h, Lb.h) / LANE_H * 0.85 * (rel ? 1 : dim(e.a)) * (e.soft && !own ? 0.55 : 1) * (far ? 0.45 : 1);
+    ctx.lineWidth = own ? 3 : far ? 1.5 : 2;
+    ctx.strokeStyle = e.kind === "merge" ? e.a.color : e.b.color;
+    curve(x0, ya, x1, yb);
+  }
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 1;
+
+  // links (contact / blending) — dashed
+  ctx.setLineDash([3, 3]); ctx.lineWidth = 1.25;
+  for (const ev of all) {
+    if (!ev.link) continue;
+    const lb = B.get(ev.link); if (!lb) continue;
+    const La = ev.b.lane, Lb = lb.lane; if (La.h < 4 || Lb.h < 4) continue;
+    const x = X(ev.s); if (x < -10 || x > W + 10) continue;
+    const ya = laneMid(La), yb = laneMid(Lb);
+    ctx.globalAlpha = (ev === selected || ev === hover) ? 0.95 : 0.45 * (ev.b === selB ? 1.6 : dim(ev.b) * dim(lb) < 1 ? 0.5 : 1);
+    ctx.strokeStyle = ev.b.color;
+    ctx.beginPath(); ctx.moveTo(x, ya); ctx.lineTo(x, yb); ctx.stroke();
+    const xb = Math.min(Math.max(x, X(lb.s0)), X(lb.s1));
+    ctx.setLineDash([]); ctx.beginPath(); ctx.arc(xb, yb, 3, 0, Math.PI * 2); ctx.strokeStyle = lb.color; ctx.stroke(); ctx.setLineDash([3, 3]);
+  }
+  ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+  // connections of the selected entry: arcs to the moments it is linked with
+  if (selected) {
+    const L0 = selected.b.lane;
+    if (L0.h > 4) {
+      const x0 = X(selected.s), y0 = laneMid(L0);
+      ctx.strokeStyle = css.accent; ctx.lineWidth = 1.6; ctx.setLineDash([5, 4]);
+      for (const c of connTargets(selected)) {
+        const L = c.ev.b.lane; if (L.h < 4) continue;
+        const x1 = X(c.ev.s), y1 = laneMid(L);
+        if (Math.max(x0, x1) < -50 || Math.min(x0, x1) > W + 50) continue;
+        const lift = Math.min(80, Math.abs(x1 - x0) * 0.25 + 20);
+        ctx.globalAlpha = 0.75; ctx.beginPath(); ctx.moveTo(x0, y0);
+        ctx.bezierCurveTo(x0 + (x1 - x0) * 0.3, Math.min(y0, y1) - lift, x0 + (x1 - x0) * 0.7, Math.min(y0, y1) - lift, x1, y1); ctx.stroke();
+        ctx.setLineDash([]); ctx.beginPath(); ctx.arc(x1, y1, 4, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([5, 4]);
+      }
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+  }
+
+  // cursor line at selected moment
+  if (selected && !selRange) {
+    const xs = X(selected.s);
+    if (xs > -2 && xs < W + 2) { ctx.fillStyle = css.cursor; ctx.globalAlpha = 0.5; ctx.fillRect(Math.round(xs) - 0.5, AXIS_H, 1.5, H); ctx.globalAlpha = 1; }
+  }
+
+  // bars, dots, labels per lane
+  for (const L of lanes) {
+    if (!visibleRow(L)) continue;
+    const mid = laneMid(L);
+    if (L.h <= THIN_H + 0.5) {
+      // rail: thin bar with a small name, no events in view
+      ctx.globalAlpha = Math.min(1, L.h / THIN_H) * 0.9;
+      for (const b of L.branches) {
+        const bx0 = X(b.s0), bx1 = X(b.s1);
+        if (bx1 < -20 || bx0 > W + 20) continue;
+        const cx0 = Math.max(bx0, -10), cx1 = Math.min(bx1, W + 10);
+        ctx.globalAlpha = Math.min(1, L.h / THIN_H) * 0.9 * dim(b);
+        ctx.fillStyle = b.color; ctx.fillRect(cx0, mid - (b === selB ? 2 : 1), Math.max(cx1 - cx0, 2), b === selB ? 4 : 2);
+        const nx0 = Math.max(bx0, 8) + 2, room = Math.min(bx1, W) - nx0 - 4;
+        const name = room > 30 ? truncate(b.name, RAIL_FONT, Math.min(room, 260)) : "";
+        if (name) { const w = tw(name, RAIL_FONT); ctx.fillStyle = css.bg; ctx.fillRect(nx0 - 4, mid - 7, w + 8, 14); ctx.fillStyle = b.color; ctx.font = RAIL_FONT; ctx.fillText(name, nx0, mid + 3.5); }
+      }
+      ctx.globalAlpha = 1; continue;
+    }
+    const a = Math.min(1, (L.h - THIN_H) / (LANE_H - THIN_H)); ctx.globalAlpha = a;
+    const occ = [[], []]; // label rows: above, below
+    const free = (row, x0, x1) => occ[row].every(([p, q]) => x1 + 8 < p || x0 > q + 8);
+    const take = (row, x0, x1) => occ[row].push([x0, x1]);
+    const labelQueue = [];
+    for (let bi = 0; bi < L.branches.length; bi++) {
+      const b = L.branches[bi], nextB = L.branches[bi + 1];
+      const bx0 = X(b.s0), bx1 = X(b.s1);
+      if (bx1 < -20 || bx0 > W + 20) continue;
+      const cx0 = Math.max(bx0, -10), cx1 = Math.min(bx1, W + 10);
+      const da = a * dim(b); ctx.globalAlpha = da;
+      ctx.fillStyle = b.color;
+      if (b === selB) { ctx.save(); ctx.shadowColor = b.color; ctx.shadowBlur = 14; roundRect(ctx, cx0, mid - 4, Math.max(cx1 - cx0, 2), 8, 4); ctx.fill(); ctx.restore(); }
+      else { roundRect(ctx, cx0, mid - 3, Math.max(cx1 - cx0, 2), 6, 3); ctx.fill(); }
+      // where it came from, written just before its start when the lane is empty there
+      if (b.fromLabel && bx0 > 40 && bx0 < W) {
+        const prevEnd = bi > 0 ? X(L.branches[bi - 1].s1) : -Infinity;
+        const t = truncate(b.fromLabel, RAIL_FONT, Math.min(bx0 - Math.max(prevEnd, 0) - 16, 220));
+        if (t) { const w = tw(t, RAIL_FONT); ctx.font = RAIL_FONT; ctx.fillStyle = css.muted; ctx.fillText(t, bx0 - 8 - w, mid + 3.5); }
+      }
+      // sticky branch name
+      const nx0 = Math.max(bx0, 8) + 2, room = Math.min(Math.max(bx1, nextB ? X(nextB.s0) - 12 : W), W) - nx0 - 4;
+      if (room > 30) {
+        const name = truncate(b.name, LABEL_BOLD, Math.min(room, 260));
+        if (name) { const w = tw(name, LABEL_BOLD); ctx.fillStyle = b.color; ctx.font = LABEL_BOLD; ctx.fillText(name, nx0, mid - 8); take(0, nx0, nx0 + w); }
+      }
+      for (const ev of b.events) {
+        const x = X(ev.s); if (x < -10 || x > W + 10) continue;
+        if (ev.sEnd != null) {
+          const xe = X(ev.sEnd), pw = Math.max(xe - x, 2);
+          if (ev === selected) {
+            ctx.fillStyle = b.color; ctx.globalAlpha = da * 0.5; roundRect(ctx, x, mid - 8, pw, 16, 8); ctx.fill();
+            ctx.globalAlpha = da; ctx.strokeStyle = css.fg; ctx.lineWidth = 1.5; ctx.stroke();
+          } else {
+            ctx.fillStyle = b.colorSoft; roundRect(ctx, x, mid - 6, pw, 12, 6); ctx.fill();
+            if (ev === hover) { ctx.strokeStyle = b.color; ctx.lineWidth = 1.25; ctx.stroke(); }
+          }
+        }
+        if (ev.kind === "event") labelQueue.push({ ev, x });
+        hits.push({ x, y: mid, ev });
+      }
+    }
+    // dots (after duration pills)
+    for (const b of L.branches) {
+      if (X(b.s1) < -20 || X(b.s0) > W + 20) continue;
+      ctx.globalAlpha = a * dim(b);
+      for (const ev of b.events) {
+        const x = X(ev.s); if (x < -10 || x > W + 10) continue;
+        if (ev.kind !== "event") {
+          ctx.fillStyle = css.surface; ctx.strokeStyle = b.color; ctx.lineWidth = 1.5;
+          roundRect(ctx, x - 2, mid - 6, 4, 12, 2); ctx.fill(); ctx.stroke();
+        } else {
+          const r = ev.imp === 1 ? 5.5 : ev.imp === 2 ? 4.2 : 3.2;
+          ctx.beginPath(); ctx.arc(x, mid, r, 0, Math.PI * 2);
+          ctx.fillStyle = ev.imp === 3 ? css.surface : b.color; ctx.fill();
+          ctx.lineWidth = ev.imp === 3 ? 1.5 : 1.25; ctx.strokeStyle = ev.imp === 3 ? b.color : css.surface; ctx.stroke();
+        }
+        if (ev === selected || ev === hover) {
+          ctx.beginPath(); ctx.arc(x, mid, ev === selected ? 9 : 7.5, 0, Math.PI * 2);
+          ctx.strokeStyle = css.fg; ctx.lineWidth = ev === selected ? 2 : 1; ctx.stroke();
+          if (ev === selected) drawRipple(x, mid, b.color);
+        }
+      }
+    }
+    if (selected && selected.kind === "pos" && selected.b.lane === L) {
+      const x = X(selected.s); ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(x, mid, 7, 0, Math.PI * 2); ctx.strokeStyle = css.fg; ctx.lineWidth = 2; ctx.stroke();
+      drawRipple(x, mid, selected.b.color);
+    }
+    // event labels: most important first, two rows, skip when crowded
+    if (a > 0.6) {
+      labelQueue.sort((p, q) => (p.ev === selected ? -1 : q.ev === selected ? 1 : 0) || p.ev.imp - q.ev.imp || p.x - q.x);
+      ctx.font = LABEL_FONT;
+      for (const { ev, x } of labelQueue) {
+        const font = ev === selected ? LABEL_BOLD : LABEL_FONT;
+        const text = truncate(ev.title, font, 190); if (!text) continue;
+        const w = tw(text, font), lx = x - 3;
+        const row = free(0, lx, lx + w) ? 0 : free(1, lx, lx + w) ? 1 : -1;
+        if (row < 0) continue;
+        take(row, lx, lx + w);
+        ctx.globalAlpha = a * (ev === selected ? 1 : dim(ev.b));
+        ctx.font = font; ctx.fillStyle = ev === selected ? css.fg : css.muted;
+        ctx.fillText(text, lx, row === 0 ? mid - 8 : mid + 17);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  // axis
+  ctx.fillStyle = css.axis; ctx.fillRect(0, 0, W, AXIS_H);
+  ctx.fillStyle = css.line; ctx.fillRect(0, AXIS_H - 1, W, 1);
+  ctx.font = TICK_FONT; ctx.fillStyle = css.muted; ctx.textAlign = "center";
+  for (const t of ticks) { ctx.fillText(t.label, t.x, 21); ctx.fillRect(Math.round(t.x), 27, 1, AXIS_H - 28); }
+  // elapsed time between neighbouring ticks: equal gaps on screen, very unequal stretches of time.
+  // Longer stretches are drawn heavier so the compression reads at a glance.
+  ctx.font = GAP_FONT;
+  const tk = [...ticks].sort((p, q) => p.x - q.x);
+  for (let i = 0; i + 1 < tk.length; i++) {
+    const a = tk[i], b = tk[i + 1], gap = b.x - a.x;
+    if (b.x < 0 || a.x > W || gap < 34) continue;
+    const yrs = Math.abs(yOf(b.s) - yOf(a.s)), lab = fmtSpan(yrs), lw = tw(lab, GAP_FONT);
+    const weight = Math.min(1, Math.max(0, (Math.log10(Math.max(yrs, 0.1)) + 1) / 11));
+    ctx.globalAlpha = 0.35 + 0.6 * weight; ctx.fillStyle = css.muted;
+    const cx = (a.x + b.x) / 2, y = 38.5, x0 = a.x + 4, x1 = b.x - 4;
+    const thick = 1 + Math.round(weight * 2);
+    if (gap >= lw + 22) {
+      ctx.fillText(lab, cx, y + 3.5);
+      ctx.fillRect(x0, y - thick / 2, cx - lw / 2 - 5 - x0, thick); ctx.fillRect(cx + lw / 2 + 5, y - thick / 2, x1 - (cx + lw / 2 + 5), thick);
+    } else ctx.fillRect(x0, y - thick / 2, x1 - x0, thick);
+  }
+  ctx.globalAlpha = 1; ctx.font = TICK_FONT;
+  if (xn < W + 2) { ctx.fillStyle = css.fg; ctx.fillText("now", Math.min(xn, W - 14), 10); }
+  ctx.fillStyle = css.faint; ctx.beginPath(); ctx.moveTo(W / 2 - 4, 0); ctx.lineTo(W / 2 + 4, 0); ctx.lineTo(W / 2, 4); ctx.closePath(); ctx.fill();
+  if (selected) {
+    const clip = (x) => Math.min(Math.max(x, 0), W);
+    const ba = clip(X(selB.s0)), bb = clip(X(selB.s1));
+    if (bb > ba) { ctx.fillStyle = selB.color; ctx.globalAlpha = 0.75; ctx.fillRect(ba, AXIS_H - 3, bb - ba, 3); ctx.globalAlpha = 1; }
+    let xs = X(selected.s);
+    if (selRange) {
+      const ra = clip(X(selRange.a)), rb = clip(X(selRange.b));
+      if (rb > ra && selRange.ev) { ctx.fillStyle = css.accent; roundRect(ctx, ra, AXIS_H - 5, Math.max(rb - ra, 3), 5, 2.5); ctx.fill(); }
+      if (selected.kind !== "pos") xs = (ra + rb) / 2;
+    }
+    if (xs > -2 && xs < W + 2) {
+      const when = selRange && !selRange.ev && selected.kind !== "pos" ? `${selB.startWhen} – ${selB.end === null ? "present" : selB.endWhen}` : selected.when || fmtYear(selected.y);
+      const full = selRange ? `${when} · ${fmtDuration(selRange.ev ? selected.end - selected.y : (selB.end ?? NOW) - selB.start)}` : when;
+      const lab = (tw(full, LABEL_BOLD) <= 300 ? full : truncate(when, LABEL_BOLD, 260)) || fmtYear(selected.y); ctx.font = LABEL_BOLD;
+      const w = tw(lab, LABEL_BOLD) + 14, bx = Math.min(Math.max(xs - w / 2, 2), W - w - 2);
+      ctx.fillStyle = css.accent; roundRect(ctx, bx, 7, w, 20, 10); ctx.fill();
+      ctx.fillStyle = css.surface; ctx.fillText(lab, bx + w / 2, 21);
+    }
+  }
+  ctx.textAlign = "left";
+  // vertical scroll indicator
+  const th = totalH(false);
+  if (th > H) {
+    const vh = H - AXIS_H, bh = Math.max(30, (vh * H) / th), by = AXIS_H + (view.y / (th - H)) * (vh - bh);
+    ctx.fillStyle = css.faint; ctx.globalAlpha = 0.5; roundRect(ctx, W - 5, by, 3, bh, 2); ctx.fill(); ctx.globalAlpha = 1;
+  }
+  drawOverview();
+}
+
+// overview: whole span, event density, current viewport
+const OV_LOG_H = 32;
+let density = null;
+function drawOverview() {
+  const w = ov.width / dpr, h = OV_LOG_H;
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  octx.fillStyle = css.axis; octx.fillRect(0, 0, w, ov.height / dpr);
+  const s0 = S_MIN - FULL * 0.01, s1 = S_MAX + FULL * 0.01;
+  const OX = (s) => ((s - s0) / (s1 - s0)) * w;
+  if (!density || density.length !== Math.ceil(w)) {
+    density = new Array(Math.ceil(w)).fill(0);
+    for (const e of all) { const i = Math.floor(OX(e.s)); if (i >= 0 && i < density.length) density[i]++; }
+  }
+  const max = Math.max(...density, 1);
+  octx.fillStyle = css.accent; octx.globalAlpha = 0.35;
+  for (let i = 0; i < density.length; i++) if (density[i]) { const bh = 4 + (h - 14) * Math.sqrt(density[i] / max); octx.fillRect(i, h - bh, 1, bh); }
+  octx.globalAlpha = 1;
+  octx.font = TICK_FONT; octx.fillStyle = css.muted;
+  const marks = [[-13.8e9, "Big Bang"], [-4.54e9, "Earth"], [-541e6, "Animals"], [-66e6, "Dinosaurs end"], [-300000, "H. sapiens"], [-3200, "Writing"], [1500, "1500"], [1900, "1900"]];
+  let lastX = -100;
+  for (const [y, lab] of marks) { const x = OX(sOf(y)); if (x - lastX < 60) continue; octx.fillRect(x, 0, 1, 6); octx.fillText(lab, x + 3, 12); lastX = x + octx.measureText(lab).width; }
+  const vx0 = OX(view.s0), vx1 = OX(view.s1);
+  octx.strokeStyle = css.fg; octx.lineWidth = 1.5; octx.fillStyle = css.cursor; octx.globalAlpha = 0.18;
+  octx.fillRect(vx0, 1, Math.max(vx1 - vx0, 3), h - 2); octx.globalAlpha = 1;
+  octx.strokeRect(vx0, 1, Math.max(vx1 - vx0, 3), h - 2);
+  if (selected) {
+    const a = OX(selected.s), b = selected.sEnd != null ? OX(selected.sEnd) : a;
+    octx.fillStyle = css.accent; octx.fillRect(Math.round(a) - 1, 1, Math.max(b - a, 0) + 2, h - 2);
+  }
+  ov._map = { s0, s1, w };
+  const roomy = ov.height / dpr >= 70; // short landscape phones drop the true-scale row
+  if (roomy) drawTrueScale(w, h);
+  drawReadout(w, roomy ? h + 20 : h);
+}
+// Where you are: the date at the left edge, center and right edge of the window, in large type.
+const READ_FONT = "600 13.5px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function fmtAt(y, spanYrs) {
+  if (y <= -13.79e9) return "Big Bang";
+  if (y < -10000) {
+    const ya = +(NOW - y).toPrecision(3);
+    if (ya >= 1e9) return `${+(ya / 1e9).toFixed(2)} billion years ago`;
+    if (ya >= 1e6) return `${+(ya / 1e6).toFixed(2)} million years ago`;
+    return `${fmtInt(ya)} years ago`;
+  }
+  if (y < 1) return fmtYear(spanYrs > 300 ? +y.toPrecision(Math.max(1, String(Math.round(-y)).length - 1)) : y); // "2,000 BCE", not "2,003 BCE", when zoomed out
+  const yr = Math.floor(y), m = Math.min(11, Math.floor((y - yr) * 12));
+  if (spanYrs > 12) return String(yr < 1000 ? yr + " CE" : yr);
+  if (spanYrs > 0.75) return `${MONTHS[m]} ${yr}`;
+  const dim = new Date(yr, m + 1, 0).getDate(), d = Math.min(dim, 1 + Math.floor(((y - yr) * 12 - m) * dim));
+  return `${MONTHS[m]} ${d}, ${yr}`;
+}
+function drawReadout(w, top) {
+  const y = top + 17, ex = 12;
+  octx.fillStyle = css.line; octx.fillRect(0, top, w, 1);
+  const sl = Math.max(view.s0, S_MIN), sr = Math.min(view.s1, S_MAX), sc = (view.s0 + view.s1) / 2;
+  const span = yOf(sr) - yOf(sl);
+  const nowish = view.s1 >= S_MAX - (view.s1 - view.s0) * 0.002;
+  const L = fmtAt(yOf(sl), span), Cn = fmtAt(yOf(Math.min(sc, S_MAX)), span), R = nowish ? `now · ${fmtAt(NOW, Math.min(span, 1))}` : fmtAt(yOf(sr), span);
+  octx.font = READ_FONT;
+  const lw = octx.measureText(L).width, cw = octx.measureText(Cn).width, rw = octx.measureText(R).width;
+  const xl = Math.max(ex, X(sl) * (w / W)), xr = Math.min(w - ex, X(sr) * (w / W)), xc = w / 2;
+  // a thin ruler joins the three readings
+  octx.fillStyle = css.line;
+  const seg = (a, b) => { if (b - a > 16) octx.fillRect(a + 8, y - 5, b - a - 16, 1); };
+  seg(xl + lw, xc - cw / 2); seg(xc + cw / 2, xr - rw);
+  octx.fillStyle = css.fg;
+  octx.fillText(L, xl, y);
+  if (xc - cw / 2 > xl + lw + 12 && xc + cw / 2 < xr - rw - 12) {
+    octx.fillText(Cn, xc - cw / 2, y);
+    octx.beginPath(); octx.moveTo(xc - 4, top + 21); octx.lineTo(xc + 4, top + 21); octx.lineTo(xc, top + 25); octx.closePath(); octx.fill();
+  }
+  octx.fillText(R, xr - rw, y);
+}
+// The same span at true (linear) scale: everything since the dinosaurs is a sliver at the right edge.
+function drawTrueScale(w, top) {
+  const y = top + 10, T0 = -13.8e9;
+  octx.fillStyle = css.line; octx.fillRect(0, top, w, 1);
+  octx.font = GAP_FONT; octx.fillStyle = css.muted;
+  const tag = "TRUE SCALE"; octx.fillText(tag, 8, y + 3.5);
+  const note = (() => {
+    const a = Math.max(T0, yOf(view.s0)), b = Math.min(NOW, yOf(view.s1)), yrs = Math.max(b - a, 0), frac = yrs / (NOW - T0);
+    const big = (n) => n >= 1e9 ? `${+(n / 1e9).toPrecision(2)} billion` : n >= 1e6 ? `${+(n / 1e6).toPrecision(2)} million` : fmtInt(n);
+    const share = frac >= 0.0001 ? `${+(frac * 100).toPrecision(2)}% of all time` : `1/${big(1 / frac)} of all time`;
+    return `in view: ${fmtSpan(yrs).replace("yrs", "years").replace(/\byr\b/, "year")}, ${share}`;
+  })();
+  const nw = octx.measureText(note).width;
+  const L0 = 8 + octx.measureText(tag).width + 12, L1 = w - nw - 20;
+  if (L1 - L0 < 120) return;
+  const LX = (yr) => L0 + ((yr - T0) / (NOW - T0)) * (L1 - L0);
+  octx.fillStyle = css.faint; octx.fillRect(L0, y - 1, L1 - L0, 2);
+  for (const [yr, lab] of [[-4.54e9, "Earth"], [-541e6, "animals"]]) {
+    const x = LX(yr); octx.fillRect(Math.round(x), y - 4, 1, 8);
+    octx.fillStyle = css.faint; octx.fillText(lab, x + 3, y - 2.5);
+  }
+  const a = LX(Math.max(T0, yOf(view.s0))), b = LX(Math.min(NOW, yOf(view.s1)));
+  octx.fillStyle = css.accent; octx.fillRect(Math.min(a, L1 - 2), y - 3, Math.max(b - a, 2), 6);
+  octx.fillStyle = css.fg; octx.fillText(note, L1 + 14, y + 3.5);
+}
+
+// ---------- animation loop ----------
+let lastFrame = 0;
+function kick() { if (!animating) { animating = true; lastFrame = performance.now(); requestAnimationFrame(frame); } }
+// Easing is time-based, so glides take the same time at 30, 60 or 120 fps (and on slow phones).
+function frame(t) {
+  const dt = Math.min(Math.max((t || performance.now()) - lastFrame, 1), 250); lastFrame = t || performance.now();
+  const k = 1 - Math.pow(0.8, dt / 16.7), kr = 1 - Math.pow(0.78, dt / 16.7);
+  let moving = false;
+  for (const key of ["s0", "s1", "y"]) {
+    const d = target[key] - view[key];
+    const tol = key === "y" ? 0.5 : (view.s1 - view.s0) * 0.0005;
+    if (Math.abs(d) > tol) { view[key] += d * k; moving = true; } else view[key] = target[key];
+  }
+  setRowTargets(view.s0, view.s1);
+  for (const r of rows) { const d = r.ht - r.h; if (Math.abs(d) > 0.5) { r.h += d * kr; moving = true; } else r.h = r.ht; }
+  applyAnchor();
+  if (performance.now() - selT < RIPPLE_MS) moving = true;
+  if (!moving) { const cy = clampY(view.y); if (cy !== view.y) { view.y = target.y = cy; moving = true; } }
+  if (moving || dirty) { draw(); dirty = false; }
+  if (moving) requestAnimationFrame(frame); else animating = false;
+}
+function setView(s0, s1, immediate) {
+  const v = { s0, s1 }; clampView(v);
+  target.s0 = v.s0; target.s1 = v.s1;
+  if (immediate) { view.s0 = v.s0; view.s1 = v.s1; applyAnchor(); }
+  dirty = true; kick();
+}
+function zoomAt(factor, x, immediate) {
+  const base = immediate ? view : target;
+  const s = base.s0 + (x / W) * (base.s1 - base.s0);
+  setView(s - (s - base.s0) * factor, s + (base.s1 - s) * factor, immediate);
+}
+// While zooming or panning, lanes appear and collapse; the anchor keeps one row (the selected lane, or the
+// row under the pointer) at the same place on screen so the content doesn't slide up and down.
+let anchor = null;
+function rowAtY(py) { for (const r of rows) if (r.h > 4 && r.top != null && py >= r.top && py < r.top + r.h) return r; return null; }
+function setAnchor(px, py, preferSelected = true) {
+  if (Math.abs(target.y - view.y) > 1) { anchor = null; return; } // a glide to a selection is under way: let it finish
+  let row = null, f = 22 / LANE_H;
+  if (preferSelected && selected) { const L = selected.b.lane; if (L.h > 4 && L.top + L.h > AXIS_H && L.top < H) row = L; }
+  if (!row) { row = rowAtY(py ?? H / 2); if (row) f = Math.min(1, Math.max(0, (py - row.top) / row.h)); }
+  if (!row) { anchor = null; return; }
+  anchor = { row, f, y: row.top + row.h * f, t: performance.now() };
+}
+function applyAnchor() {
+  if (!anchor) return;
+  const r = anchor.row;
+  view.y = target.y = clampY(rowTop(r, false) + r.h * anchor.f - anchor.y);
+}
+function showYears(a, b) {
+  anchor = null;
+  if (a <= -13.79e9 && b >= NOW - 1) { setView(ALL_VIEW.s0, ALL_VIEW.s1); target.y = 0; return; }
+  const s0 = sOf(a), s1 = sOf(b), pad = (s1 - s0) * 0.03;
+  setView(s0 - pad, s1 + pad);
+  target.y = 0;
+}
+
+// ---------- selection & navigation ----------
+const panel = document.getElementById("panel");
+let selT = -1e9; const RIPPLE_MS = 750;
+function select(ev, opts = {}) {
+  if (ev !== selected) selT = performance.now();
+  selected = ev; dirty = true;
+  setPanel(!!ev);
+  if (ev) {
+    ensureVisible(ev, opts.center);
+    if (ev.id) try { history.replaceState(null, "", "#" + encodeURIComponent(ev.id)); } catch (_) {}
+  } else try { history.replaceState(null, "", location.pathname + location.search); } catch (_) {}
+  renderPanel(); kick();
+}
+// The side panel is open while something is selected (or the guide is showing) and closed otherwise.
+function setPanel(open) {
+  if (panel.classList.contains("closed") === !open) return;
+  if (!open) { target.y = view.y; setAnchor(W / 2, H / 2, false); } // the widened view opens and closes lanes; keep the middle row in place
+  panel.classList.toggle("closed", !open);
+  if (!open) { panel.classList.remove("tall"); Globe.stop(); }
+  keepScale = true; resize(); keepScale = false;
+}
+function toggleGuide() {
+  if (!selected && !panel.classList.contains("closed")) { setPanel(false); return; }
+  if (selected) select(null);
+  setPanel(true); renderPanel();
+}
+function ensureVisible(ev, center) {
+  anchor = null;
+  const span = target.s1 - target.s0;
+  let s0 = target.s0;
+  const pos = (ev.s - s0) / span;
+  if (center || pos < 0.12 || pos > 0.82) s0 = ev.s - span * 0.5;
+  setView(s0, s0 + span);
+  // vertical: compute against the layout the target view will produce
+  setRowTargets(target.s0, target.s1);
+  const top = rowTop(ev.b.lane, true) - target.y;
+  if (top < AXIS_H + 10 || top + LANE_H > H - 30) target.y = clampY(rowTop(ev.b.lane, true) - H * 0.4, true);
+}
+// A "position" is a moment on a branch between events (where ↑/↓ lands when no event is nearby).
+function posOn(b, s) {
+  s = Math.min(Math.max(s, b.s0), b.s1); const y = yOf(s);
+  return { id: "", b, s, y, when: "around " + fmtYear(y), title: b.name, text: b.text, cites: b.cites, kind: "pos", imp: 2 };
+}
+function step(dir) {
+  if (!selected) { selectNearestToCenter(); return; }
+  const b = selected.b;
+  let nxt;
+  if (selected.kind === "pos") nxt = dir > 0 ? b.events.find((e) => e.s > selected.s) : [...b.events].reverse().find((e) => e.s < selected.s);
+  else nxt = b.events[b.events.indexOf(selected) + dir];
+  if (nxt) return select(nxt);
+  // past the end: follow the branch into its successor; before the start: back into its parent
+  const pool = dir > 0 ? b.succ : [...b.parents.map((p) => B.get(p)).filter(Boolean), ...b.preds];
+  if (pool.length) {
+    const nb = pool[0];
+    const cand = dir > 0 ? nb.events.find((e) => e.y >= selected.y) || nb.events[nb.events.length - 1]
+                         : [...nb.events].reverse().find((e) => e.y <= selected.y) || nb.events[0];
+    return select(cand);
+  }
+  flash();
+}
+function nearestOn(b, s) { let best = null, bd = Infinity; for (const e of b.events) { const d = Math.abs(e.s - s); if (d < bd) { bd = d; best = e; } } return best; }
+function switchBranch(dir) {
+  if (!selected) { selectNearestToCenter(); return; }
+  const s = selected.s, idx = selected.b.lane.index;
+  const order = [];
+  for (let i = idx + dir; i >= 0 && i < lanes.length; i += dir) order.push(lanes[i]);
+  // same lane, other branch alive at this moment (rare) is skipped; look for the nearest lane with a branch alive now
+  const land = (b) => { const e = nearestOn(b, s); return select(Math.abs(e.s - s) > (target.s1 - target.s0) * 0.15 ? posOn(b, s) : e); };
+  for (const pass of [true, false]) for (const L of order) {
+    if (pass && L.ht < LANE_H) continue;
+    const alive = L.branches.filter((b) => b.s0 <= s + 1e-9 && b.s1 >= s - 1e-9);
+    if (alive.length) return land(alive[0]);
+  }
+  // nothing alive at this moment in that direction: nearest branch in time in the next non-empty lane
+  for (const L of order) {
+    let best = null, bd = Infinity;
+    for (const b of L.branches) { const d = s < b.s0 ? b.s0 - s : s > b.s1 ? s - b.s1 : 0; if (d < bd) { bd = d; best = b; } }
+    if (best) return land(best);
+  }
+  flash();
+}
+function selectNearestToCenter() {
+  const sc = (view.s0 + view.s1) / 2, yc = H * 0.45;
+  let best = null, bd = Infinity;
+  for (const h of hits) { if (!h.ev) continue; const d = Math.hypot(h.x - W / 2, (h.y - yc) * 0.5); if (d < bd && h.ev.kind === "event") { bd = d; best = h.ev; } }
+  if (!best) { for (const e of all) { const d = Math.abs(e.s - sc); if (d < bd) { bd = d; best = e; } } }
+  if (best) select(best);
+}
+let flashT = 0;
+function flash() { const t = Date.now(); if (t - flashT < 300) return; flashT = t; cv.animate([{ filter: "brightness(1)" }, { filter: "brightness(.93)" }, { filter: "brightness(1)" }], { duration: 220 }); }
+
+// ---------- globe (details pane) ----------
+// Orthographic globe for entries that have a TL.geo record, chosen by the entry's date:
+//   vec    <= 12,000 years ago      present-day Natural Earth land (vectors)
+//   tex    12,000 years – 540 Ma    nearest PALEOMAP PaleoDEM slice (4 elevation classes, theme colors), with
+//                                   approximate ice for ice ages (ICE_AGES) and markers moved to where the place lay
+//                                   then (GLOBE.pts, from build-paleo-points.mjs) when a reconstruction exists
+//   proc   540 Ma – 4.54 Ga         procedural artist's impression of that stage (STAGES); no marker
+//   scale  before Earth / cosmic    nested scale diagram
+// Every surface is an equirectangular RGB buffer painted once and cached (texRGB), then projected per frame by
+// drawTexture. Vector land, caps and labels are drawn on top with ringTo.
+const Globe = (() => {
+  const RAD = Math.PI / 180, TAU = Math.PI * 2, EARTH_KM = 6371, W = 360, H = 180;
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const LEVELS = [["universe", "Observable universe"], ["galaxy", "Milky Way"], ["solar-system", "Solar System"], ["earth", "Earth"]];
+  let st = null, planned = null, landRings = null;
+  const texCls = {}, texWait = {}, rgbCache = new Map();
+
+  const rgbOf = (c) => { c = (c || "").trim(); let m = /^#([0-9a-f]{6})$/i.exec(c); if (m) return [0, 2, 4].map((i) => parseInt(m[1].substr(i, 2), 16)); m = /^#([0-9a-f]{3})$/i.exec(c); return m ? [0, 1, 2].map((i) => parseInt(m[1][i] + m[1][i], 16)) : [128, 128, 128]; };
+  const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  const str = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const age = (y) => -y; // years before present (negative for CE)
+
+  // ----- deep time: procedural surfaces before the PALEOMAP maps (artist's impressions, not maps) -----
+  // No maps exist for Earth before 540 Ma, so each stage is painted once from 3D value noise sampled on the sphere
+  // (no seam at the date line or the poles) into an equirectangular RGB buffer, then drawn like the PaleoDEM slices.
+  // Land layouts are schematic: "seeds" are [lat, lon, radius (rad), weight] bumps that set roughly where land clusters.
+  const PERM = (() => {
+    const a = Array.from({ length: 256 }, (_, i) => i); let s = 20180901;
+    for (let i = 255; i > 0; i--) { s = (Math.imul(s, 1103515245) + 12345) >>> 0; const j = (s >>> 8) % (i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+    const p = new Uint8Array(512); for (let i = 0; i < 512; i++) p[i] = a[i & 255]; return p;
+  })();
+  function vnoise(x, y, z) { // smooth value noise in [0, 1]
+    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = x - xi, yf = y - yi, zf = z - zi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+    const X = xi & 255, Y = yi & 255, Z = zi & 255, P = PERM;
+    const A = P[X] + Y, AA = P[A] + Z, AB = P[A + 1] + Z, B = P[X + 1] + Y, BA = P[B] + Z, BB = P[B + 1] + Z;
+    const l = (a, b, t) => a + (b - a) * t;
+    return l(l(l(P[AA], P[BA], u), l(P[AB], P[BB], u), v), l(l(P[AA + 1], P[BA + 1], u), l(P[AB + 1], P[BB + 1], u), v), w) / 255;
+  }
+  function fbm(x, y, z, f, oct, seed) { // fractal noise in ~[0, 1] at base frequency f
+    let sum = 0, amp = 0.5, norm = 0;
+    for (let o = 0; o < oct; o++) { sum += amp * vnoise(x * f + seed * 7.13 + o * 31.7, y * f - seed * 3.71 + o * 17.3, z * f + seed * 5.37 - o * 11.1); norm += amp; amp *= 0.5; f *= 2.03; }
+    return sum / norm;
+  }
+  const ramp = (stops, t) => { // stops: [[t, [r,g,b]], ...] ascending
+    if (t <= stops[0][0]) return stops[0][1];
+    for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) { const [t0, a] = stops[i - 1], [t1, b] = stops[i], k = (t - t0) / (t1 - t0); return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]; }
+    return stops[stops.length - 1][1];
+  };
+  const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const seedVecs = (seeds) => seeds.map(([la, lo, r, wt]) => [Math.cos(la * RAD) * Math.cos(lo * RAD), Math.cos(la * RAD) * Math.sin(lo * RAD), Math.sin(la * RAD), r * r, wt]);
+  // Land layouts. `bias` lowers the sea; noise adds coastline and relief. Return: elevation-like value, > 0 is land.
+  const LAYOUTS = {
+    none: { seeds: [], bias: -1, n: 0 },                                     // all ocean (islands are added separately)
+    cratons: { seeds: [[24, -40, 0.22, 0.5], [16, -28, 0.14, 0.4], [-18, 12, 0.26, 0.52], [-28, 26, 0.14, 0.4], [8, 95, 0.2, 0.48], [-40, 150, 0.18, 0.46], [52, 60, 0.17, 0.44], [-8, -120, 0.16, 0.44], [38, 175, 0.14, 0.42]], bias: -0.3, n: 0.6 },
+    columbia: { seeds: [[18, 0, 0.42, 0.62], [36, 38, 0.32, 0.5], [-6, 34, 0.3, 0.5], [6, -36, 0.3, 0.5], [44, -12, 0.26, 0.45], [-28, -4, 0.26, 0.42], [-30, 140, 0.16, 0.5], [30, -150, 0.12, 0.45]], bias: -0.36, n: 0.55 },
+    rodinia: { seeds: [[-12, 20, 0.45, 0.62], [12, 50, 0.32, 0.5], [-38, 40, 0.3, 0.48], [14, -8, 0.3, 0.5], [-30, -14, 0.28, 0.48], [-52, 10, 0.24, 0.42], [20, 160, 0.12, 0.42]], bias: -0.36, n: 0.55 },
+    fragments: { seeds: [[-60, 20, 0.34, 0.5], [-42, -20, 0.22, 0.42], [-35, 55, 0.24, 0.46], [-22, 10, 0.2, 0.4], [8, -80, 0.26, 0.48], [20, 75, 0.2, 0.44], [-12, 140, 0.2, 0.44], [40, -10, 0.16, 0.4], [32, 170, 0.13, 0.38], [-5, -150, 0.12, 0.34]], bias: -0.3, n: 0.7 },
+  };
+  // Stages (Ma, inclusive of `from`): what the globe paints for an entry dated `ma`, oldest first.
+  // Grounding for each is listed in README ("Globe and images").
+  const STAGES = [
+    { id: "molten", from: 4540, to: 4460, name: "Molten Hadean Earth", range: "c. 4.54–4.46 billion years ago",
+      note: "A global magma ocean, left by Earth’s formation and the Moon-forming impact, under a rock-vapor atmosphere.", rim: [255, 120, 40, 0.5], shade: 0.18 },
+    { id: "water", from: 4460, to: 3600, name: "Hadean water world", range: "c. 4.46–3.6 billion years ago",
+      note: "Oceans by about 4.4 billion years ago (zircon evidence), with scattered volcanic islands and little or no continent.", layout: "none", islands: 0.7, rim: [230, 200, 160, 0.32], clouds: 0.3, shade: 0.34 },
+    { id: "cratons", from: 3600, to: 2400, name: "Archean Earth", range: "c. 3.6–2.4 billion years ago",
+      note: "The first small continents (cratons) amid volcanic islands; an oxygen-free, possibly orange-hazed sky.", layout: "cratons", islands: 0.73, rim: [235, 150, 70, 0.45], haze: [226, 132, 52, 0.14], clouds: 0.22, shade: 0.34 },
+    { id: "huronian", from: 2400, to: 2100, name: "Huronian glaciation", range: "c. 2.4–2.1 billion years ago",
+      note: "Ice spread as the Great Oxidation Event stripped the methane greenhouse; how far it reached is debated.", layout: "cratons", islands: 0.8, ice: "huronian", rim: [200, 225, 245, 0.35], shade: 0.32 },
+    { id: "columbia", from: 2100, to: 1300, name: "Supercontinent Columbia (Nuna)", range: "c. 2.1–1.3 billion years ago",
+      note: "Most continents joined in one landmass, assembled about 2.0–1.7 billion years ago; bare rock, no land life.", layout: "columbia", islands: 0.82, rim: [160, 200, 240, 0.3], clouds: 0.26, shade: 0.34 },
+    { id: "rodinia", from: 1300, to: 720, name: "Supercontinent Rodinia", range: "c. 1.3 billion – 720 million years ago",
+      note: "Columbia’s pieces regathered as Rodinia about 1.1–0.9 billion years ago, a long, ice-free “boring billion”.", layout: "rodinia", islands: 0.82, rim: [160, 200, 240, 0.3], clouds: 0.26, shade: 0.34 },
+    { id: "sturtian", from: 720, to: 660, name: "Sturtian Snowball Earth", range: "c. 717–660 million years ago",
+      note: "Ice reached sea level near the equator; whether any open water survived is debated.", layout: "fragments", islands: 0.84, ice: "snowball", rim: [215, 235, 250, 0.4], shade: 0.3 },
+    { id: "interglacial", from: 660, to: 650, name: "Cryogenian interglacial", range: "c. 660–650 million years ago",
+      note: "A warm interval between the two Snowball Earth glaciations, as Rodinia broke apart.", layout: "fragments", islands: 0.82, rim: [160, 200, 240, 0.3], clouds: 0.26, shade: 0.34 },
+    { id: "marinoan", from: 650, to: 635, name: "Marinoan Snowball Earth", range: "c. 650–635 million years ago",
+      note: "The second global glaciation of the Cryogenian; ice again reached low latitudes.", layout: "fragments", islands: 0.84, ice: "snowball", rim: [215, 235, 250, 0.4], shade: 0.3 },
+    { id: "ediacaran", from: 635, to: 540, name: "Ediacaran Earth", range: "c. 635–539 million years ago",
+      note: "Scattered continents, much of the land far south; the first large animals lived in the seas.", layout: "fragments", islands: 0.82, rim: [160, 200, 240, 0.3], clouds: 0.26, shade: 0.34 },
+  ];
+
+  const OCEAN = [[0, [16, 42, 78]], [0.55, [24, 66, 106]], [0.85, [38, 100, 130]], [1, [66, 134, 146]]];  // deep -> shallow
+  const ROCK = [[0, [96, 82, 70]], [0.3, [132, 104, 78]], [0.6, [150, 118, 86]], [0.85, [122, 104, 88]], [1, [150, 138, 124]]]; // bare land, low -> high
+  const BASALT = [[0, [58, 54, 52]], [1, [104, 94, 84]]];
+  const ICEC = [[0, [178, 196, 212]], [0.5, [222, 232, 240]], [1, [246, 249, 252]]];
+  const GLOW = [[0, [60, 22, 14]], [0.35, [150, 34, 10]], [0.65, [236, 104, 24]], [0.9, [255, 196, 90]], [1, [255, 236, 170]]];
+
+  // Paints stage `st` into a TW x TH equirectangular RGB buffer (row 0 = 90°N, column 0 = 180°W).
+  function paintStage(st, TW, TH) {
+    const rgb = new Uint8ClampedArray(TW * TH * 3), L = LAYOUTS[st.layout || "none"], seeds = seedVecs(L.seeds);
+    for (let j = 0; j < TH; j++) {
+      const lat = (0.5 - (j + 0.5) / TH) * Math.PI, cz = Math.sin(lat), cr = Math.cos(lat);
+      for (let i = 0; i < TW; i++) {
+        const lon = ((i + 0.5) / TW - 0.5) * TAU, x = cr * Math.cos(lon), y = cr * Math.sin(lon), z = cz;
+        let c;
+        if (st.id === "molten") {
+          // dark chilled crust broken into rafts by glowing cracks, with open lava lakes
+          const n1 = fbm(x, y, z, 2.2, 4, 1), n2 = fbm(x, y, z, 6, 4, 2), ridge = 1 - Math.abs(2 * fbm(x, y, z, 3.4, 5, 3) - 1);
+          const crack = sstep(0.86, 0.985, ridge), lake = sstep(0.66, 0.76, n1), heat = Math.max(crack * (0.55 + 0.45 * n2), lake * (0.7 + 0.3 * n2));
+          const crust = ramp([[0, [34, 26, 24]], [1, [78, 52, 40]]], n2);
+          const g = ramp(GLOW, heat);
+          c = [crust[0] + (g[0] - crust[0]) * Math.min(1, heat * 1.3), crust[1] + (g[1] - crust[1]) * Math.min(1, heat * 1.3), crust[2] + (g[2] - crust[2]) * Math.min(1, heat * 1.3)];
+        } else {
+          let e = L.bias;
+          // seeds are measured from a warped position, so land masses get ragged, non-circular outlines
+          const wx = x + 0.5 * (fbm(x, y, z, 1.7, 3, 21) - 0.5), wy = y + 0.5 * (fbm(x, y, z, 1.7, 3, 22) - 0.5), wz = z + 0.5 * (fbm(x, y, z, 1.7, 3, 23) - 0.5);
+          if (seeds.length) for (const s of seeds) { const dx = wx - s[0], dy = wy - s[1], dz = wz - s[2]; e += s[4] * Math.exp(-(dx * dx + dy * dy + dz * dz) / s[3]); }
+          const nA = fbm(x, y, z, 2.6, 5, 11), nB = fbm(x, y, z, 9, 3, 12);
+          e += L.n * 2 * (nA - 0.5) + 0.16 * (nB - 0.5);
+          // volcanic islands: sparse high-frequency peaks, strung along arcs
+          const arc = sstep(0.75, 1, 1 - Math.abs(2 * fbm(x, y, z, 1.6, 3, 13) - 1)), isl = fbm(x, y, z, 16, 3, 14) + 0.1 * arc;
+          const island = e <= 0 && isl > (st.islands || 2);
+          if (e > 0) c = ramp(ROCK, Math.max(0, Math.min(1, e * 1.5 + 0.9 * (nB - 0.5) + 0.6 * (nA - 0.5))));
+          else if (island) c = ramp(BASALT, sstep(st.islands, st.islands + 0.08, isl));
+          else c = ramp(OCEAN, 0.62 * sstep(-0.5, 0, e) + 0.3 * sstep(-0.07, 0, e) + 0.1 * nB + (isl > st.islands - 0.04 ? 0.1 : 0));
+          if (st.ice) {
+            // snowball: ice everywhere, thinner and dirtier near the equator, with pressure ridges; land shows as brighter snow.
+            // huronian: ice sheets from the poles toward the tropics, an open (or slushy) equatorial belt.
+            const ridgeI = 1 - Math.abs(2 * fbm(x, y, z, 4.5, 4, 15) - 1), nI = fbm(x, y, z, 5, 4, 16);
+            let cover = 1;
+            if (st.ice === "huronian") cover = sstep(18, 34, Math.abs(lat / RAD) + 22 * (nI - 0.5) + (e > 0 ? 8 : 0));
+            if (cover > 0) {
+              // the ice is whitest at the poles and on land (snow), greyer and bluer over the tropical sea
+              let ic = ramp(ICEC, 0.62 + 0.38 * nI - 0.35 * sstep(0.86, 0.98, ridgeI) - (st.ice === "snowball" ? 0.4 * (1 - Math.abs(z)) * (1 - nI) : 0) + (e > 0 ? 0.25 : 0));
+              if (e <= 0) ic = [ic[0] * 0.93, ic[1] * 0.97, ic[2]];
+              if (e > 0.3) ic = [ic[0] * 0.95, ic[1] * 0.94, ic[2] * 0.92]; // mountains: thinner, dustier ice
+              c = [c[0] + (ic[0] - c[0]) * cover, c[1] + (ic[1] - c[1]) * cover, c[2] + (ic[2] - c[2]) * cover];
+            }
+          }
+          if (st.clouds) { const cl = sstep(0.56, 0.78, fbm(x * 1.2, y * 1.2, z * 3.2, 2.2, 5, 17)) * st.clouds; c = [c[0] + (250 - c[0]) * cl, c[1] + (250 - c[1]) * cl, c[2] + (250 - c[2]) * cl]; }
+          if (st.haze) { const [hr, hg, hb, ha] = st.haze; c = [c[0] + (hr - c[0]) * ha, c[1] + (hg - c[1]) * ha, c[2] + (hb - c[2]) * ha]; }
+        }
+        const k = (j * TW + i) * 3; rgb[k] = c[0]; rgb[k + 1] = c[1]; rgb[k + 2] = c[2];
+      }
+    }
+    return rgb;
+  }
+
+  // ----- ice ages within the PALEOMAP range (Ma; `from` older, `to` younger). Approximate; the caption says so. -----
+  // south: land poleward of this paleo-latitude on the slice is iced (edge roughened by noise, highlands reach further).
+  // sheets: "glacial" = Greenland solid + the LGM ice sheets faint; "lgm" = LGM ice sheets solid. coast: texture key.
+  const ICE_AGES = [
+    { id: "andean-saharan", from: 460, to: 420, south: -58, name: "Andean-Saharan ice age", range: "c. 460–420 million years ago",
+      note: "Ice sheets covered the part of Gondwana over the South Pole: North Africa, then South America." },
+    { id: "karoo", from: 360, to: 260, south: -54, name: "Late Paleozoic ice age", range: "c. 360–260 million years ago",
+      note: "Ice sheets spread over southern Gondwana (South America, Africa, India, Antarctica, Australia) as it crossed the South Pole." },
+    { id: "antarctic", from: 33.9, to: 2.58, south: -60, name: "Antarctic ice sheet", range: "since c. 34 million years ago",
+      note: "Antarctica has been ice-covered since about 34 million years ago." },
+    { id: "quaternary", from: 2.58, to: 0.026, south: -60, sheets: "glacial", name: "Quaternary ice age", range: "since 2.58 million years ago",
+      note: "Northern ice sheets grew and melted in 41,000-, later 100,000-year cycles; faint: their extent at the Last Glacial Maximum." },
+    { id: "lgm", from: 0.026, to: 0.019, south: -60, sheets: "lgm", coast: "lgm", name: "Last Glacial Maximum", range: "c. 26,000–19,000 years ago",
+      note: "Ice sheets at their largest; the sea about 120 m lower joined Asia to America (Beringia) and Australia to New Guinea." },
+    { id: "deglaciation", from: 0.019, to: 0.0117, south: -60, sheets: "glacial", name: "Last deglaciation", range: "c. 19,000–11,700 years ago",
+      note: "The ice sheets were shrinking back from their peak (faint) as the last glacial period ended." },
+  ];
+  // Ice-sheet outlines at the Last Glacial Maximum, [lon, lat] pairs, drawn by hand from the limits described in the
+  // sources in README (Laurentide to the Ohio and Missouri rivers and Long Island; Cordilleran to Puget Sound;
+  // Eurasian through Germany and Poland, over the Barents and Kara seas; British-Irish; Iceland; Greenland; Alps;
+  // Patagonia north to about 41°S). Coarse on purpose: this globe is a few hundred pixels across.
+  const LGM_SHEETS = [
+    [[-70, 83.2], [-75, 79], [-78, 76], [-80, 73.5], [-70, 71], [-63, 67], [-61, 63], [-58, 58], [-55, 53], [-51, 48], [-58, 45], [-65, 42.5], [-70, 41],
+      [-72.5, 40.6], [-74.2, 40.5], [-77, 41.3], [-80.5, 41], [-82.5, 39.6], [-84.5, 39.1], [-86.5, 39.2], [-88.8, 39.4], [-90.5, 40.5], [-93.6, 41.5],
+      [-96, 43], [-98.5, 43.5], [-100.5, 46.5], [-104, 48.5], [-110, 48.9], [-113.5, 49.3], [-117, 48.5], [-120, 47.8], [-122.5, 47], [-124.8, 48.3],
+      [-128.5, 50.5], [-133.5, 54], [-137, 57.5], [-142, 59.5], [-148, 59.5], [-153, 58], [-158, 56], [-157, 57.5], [-154, 59.5], [-152, 61.5],
+      [-148, 62.5], [-141, 62], [-136, 63.5], [-132, 65], [-135, 67.5], [-133.5, 69.2], [-128, 70.5], [-125.5, 72], [-124, 74.5], [-119, 76.5],
+      [-111, 78.5], [-97, 80.5], [-80, 82.5]],
+    [[-66, 81.5], [-60, 82.5], [-40, 83.8], [-22, 83], [-12, 81.5], [-14, 78], [-17, 75], [-19, 71], [-23, 68.5], [-30, 66.5], [-37, 64.5], [-41, 61.5],
+      [-44, 59.3], [-48, 60.5], [-52, 63.5], [-55, 67], [-57, 70.5], [-60, 74], [-66, 76], [-72, 77.8], [-70, 80]],
+    [[-25.5, 65.5], [-23, 67.2], [-17, 67.5], [-12.5, 66], [-13, 64.3], [-18, 63], [-22.5, 63.3]],
+    [[-4, 51.6], [-2.5, 52.5], [-1.2, 53.5], [-0.2, 54], [3, 55], [6.5, 55.5], [8.3, 55.5], [10.5, 54.5], [11.5, 54], [13, 53.2], [15.5, 52.6], [18, 52.5],
+      [20.5, 53.3], [23, 54.2], [26, 54.6], [28.5, 55.3], [31.5, 56.5], [34, 57.8], [37, 59.5], [39, 61], [40.5, 62.5], [42, 64], [44, 65.5], [44.5, 67.2],
+      [50, 68.5], [56, 69.5], [60, 70.5], [66, 73], [76, 75.5], [86, 76], [98, 77.5], [104, 79.5], [98, 81.5], [70, 82], [50, 82.3], [30, 81.8], [15, 81],
+      [9, 79.5], [12, 77], [15, 74.5], [17, 71.5], [13.5, 70], [9.5, 68], [5.5, 65], [3, 62.5], [0, 61], [-3.5, 60.5], [-7, 59.5], [-9.5, 57], [-10.5, 55],
+      [-11, 53], [-10, 51.5], [-6, 51.3]],
+    [[6, 45.2], [7.5, 44.8], [9.5, 45.7], [12, 45.8], [13.8, 46.3], [13, 47.3], [11, 47.9], [8.5, 47.7], [6.3, 46.8]],
+    [[-73.5, -41], [-71, -41], [-71.5, -45], [-71, -48], [-71.5, -51], [-69.5, -52.5], [-68, -54.3], [-66, -55], [-68, -56], [-72, -55], [-75, -52],
+      [-76, -48], [-75, -44], [-74, -41]],
+  ];
+  const GREENLAND = 1; // index in LGM_SHEETS; Greenland keeps its ice through every Quaternary interglacial
+
+  // Picks the interval (with .from/.to in Ma) for an entry: the one covering at least 40% of a ranged entry, else the
+  // one containing its date. So the Great Oxidation Event (2460–2060 Ma) shows the Huronian glaciation it overlaps.
+  function pick(list, ma, maEnd) {
+    if (maEnd != null && maEnd < ma) {
+      let best = null, bo = 0;
+      for (const it of list) { const o = Math.min(ma, it.from) - Math.max(maEnd, it.to); if (o > bo) { bo = o; best = it; } }
+      if (best && bo >= 0.4 * (ma - maEnd)) return best;
+    }
+    return list.find((it) => ma <= it.from && ma > it.to) || null;
+  }
+
+  function plan(ev) {
+    if (!GLOBE || !ev) return null;
+    const geo = ev.geo || (ev.kind !== "event" && ev.b ? ev.b.geo : null);
+    const pre = ev.y < -4.54e9;
+    if (!geo && !pre) return null;
+    if (pre || geo.scope === "cosmic") {
+      const lv = (geo && geo.scale) || "universe", name = LEVELS.find((l) => l[0] === lv)[1];
+      return { mode: "scale", level: lv, caption: `${esc(geo && geo.label ? geo.label : name)} · schematic, not to scale` };
+    }
+    const global = geo.scope === "global", yrs = age(ev.y), ma = yrs / 1e6;
+    const maEnd = ev.kind === "event" && ev.end != null ? age(ev.end) / 1e6 : null;
+    let p = { geo, global, mode: "vec", caption: esc(GLOBE.attr.land), note: "", title: GLOBE.attr.land };
+    if (yrs <= 12000) return withOutline(p, ev);
+    if (ma > 540) {
+      // before the first PALEOMAP map: a painted impression of that stage; places cannot be located on it
+      const stage = pick(STAGES, ma, maEnd) || STAGES[0];
+      return { ...p, mode: "proc", stage, geo: global ? geo : null, title: "Procedural painting, not data",
+        caption: `${esc(stage.name)}, ${esc(stage.range)} · artist’s impression (AI-assisted render), not a map`,
+        note: stage.note + (global ? "" : " Land shapes are invented; where this place lay then is unknown.") };
+    }
+    const slice = GLOBE.slices.reduce((a, b) => (Math.abs(b - ma) < Math.abs(a - ma) ? b : a));
+    const ice = pick(ICE_AGES, ma, maEnd);
+    let when = slice === 0 ? "Present-day continents, little changed over this span" : Math.abs(ma - slice) <= 5 ? `Earth c. ${slice} million years ago` : `Earth c. ${Math.round(ma)} million years ago (nearest map: ${slice} Ma)`;
+    if (ice && slice === 0) when = `${ice.name}, ${ice.range}`;
+    else if (ice) when += ` · ${ice.name}`;
+    // where the place lay then, if build-paleo-points.mjs reconstructed it for this slice (null = not placeable)
+    let g = geo, pin = "";
+    if (!global) {
+      const then = slice && GLOBE.pts && GLOBE.pts[slice] ? GLOBE.pts[slice][`${geo.lat},${geo.lon}`] : undefined;
+      if (then) { g = { ...geo, lat: then[0], lon: then[1] }; pin = "The marker shows where this place lay then (PALEOMAP reconstruction)."; }
+      else pin = slice ? "The marker shows the present-day location, not where this land lay then." : "The marker shows the present-day location.";
+    }
+    const tex = ice && ice.coast ? ice.coast : slice;
+    return { ...p, geo: g, mode: "tex", slice, tex, ice, title: GLOBE.attr.paleoFull,
+      caption: `${esc(when)}${ice ? ", ice extent approximate" : ""} · ${esc(GLOBE.attr.paleo)}`, note: [ice ? ice.note : "", pin].filter(Boolean).join(" ") };
+  }
+  function html(ev) {
+    lastEv = ev; loadOutlines();
+    planned = plan(ev);
+    if (!planned) return "";
+    const p = planned;
+    return `<figure class="globe"><canvas id="globeCv" role="img" aria-label="${esc(p.mode === "scale" ? "Scale diagram" : "Rotating globe")}: ${esc(p.caption.replace(/&[a-z#0-9]+;/g, " "))}"></canvas>` +
+      `<figcaption${p.title ? ` title="${esc(p.title)}"` : ""}>${p.caption}${p.note ? `<span class="g-note">${esc(p.note)}</span>` : ""}</figcaption></figure>`;
+  }
+
+  // ----- data helpers -----
+  // Land rings as unit-sphere terms, oriented clockwise (land on the right of travel). Natural Earth holes (the Caspian
+  // Sea, the only one at this scale) run counter-clockwise: they are reversed and flagged so they can be painted back as water.
+  function getLand() {
+    if (landRings) return landRings;
+    landRings = GLOBE.land.map((d) => {
+      const n = d.length / 2, lo = new Float64Array(n), la = new Float64Array(n); let x = 0, y = 0;
+      for (let i = 0; i < n; i++) { x += d[i * 2]; y += d[i * 2 + 1]; lo[i] = x / 10; la[i] = y / 10; }
+      // signed planar area; rings that touch the antimeridian (Antarctica, Fiji, Wrangel Island) are never holes
+      let area = 0, edge = false;
+      for (let i = 0; i < n; i++) { const j = (i + 1) % n; area += lo[i] * la[j] - lo[j] * la[i]; if (Math.abs(lo[i]) >= 179.9) edge = true; }
+      const hole = !edge && area > 0, a = new Float32Array(n * 4);
+      for (let k = 0; k < n; k++) {
+        const i = hole ? n - 1 - k : k, l = lo[i] * RAD, t = la[i] * RAD;
+        a[k * 4] = Math.sin(t); a[k * 4 + 1] = Math.cos(t); a[k * 4 + 2] = Math.sin(l); a[k * 4 + 3] = Math.cos(l);
+      }
+      a.hole = hole;
+      return a;
+    });
+    return landRings;
+  }
+  function loadTex(slice, done) {
+    if (texCls[slice]) return done();
+    if (texWait[slice]) { texWait[slice].push(done); return; }
+    texWait[slice] = [done];
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const c = document.createElement("canvas"); c.width = W; c.height = H;
+        const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(im, 0, 0);
+        const d = x.getImageData(0, 0, W, H).data, cls = new Uint8Array(W * H);
+        for (let i = 0; i < W * H; i++) cls[i] = Math.min(3, Math.round(d[i * 4] / 85));
+        texCls[slice] = cls;
+      } catch (_) { texCls[slice] = new Uint8Array(W * H); }
+      (texWait[slice] || []).forEach((f) => f()); delete texWait[slice];
+    };
+    im.src = GLOBE.textures[slice];
+  }
+  // Ice cover (0..1 per pixel) for an ice age on a W x H class grid: polar caps on land past `south`, plus the
+  // hand-drawn LGM outlines rasterized in equirectangular space (solid, or faint for "glacial" with Greenland solid).
+  function iceMask(cls, ice) {
+    const m = new Float32Array(W * H);
+    for (let j = 0; j < H; j++) {
+      const lat = 90 - (j + 0.5);
+      if (lat > ice.south + 8) continue;
+      for (let i = 0; i < W; i++) {
+        const k = j * W + i, c = cls[k], land = c >= 2 || (ice.sheets === "lgm" && c === 1);
+        if (land && lat <= ice.south + 8 * (vnoise(i * 0.09, j * 0.09, 7.7) - 0.5) + (c === 3 ? 5 : 0)) m[k] = 1;
+      }
+    }
+    if (ice.sheets) {
+      const c = document.createElement("canvas"); c.width = W; c.height = H;
+      const x = c.getContext("2d", { willReadFrequently: true });
+      LGM_SHEETS.forEach((poly, n) => {
+        const solid = ice.sheets === "lgm" || n === GREENLAND;
+        x.fillStyle = solid ? "#fff" : "#808080"; x.beginPath();
+        poly.forEach(([lo, la], q) => (q ? x.lineTo(lo + 180, 90 - la) : x.moveTo(lo + 180, 90 - la)));
+        x.closePath(); x.fill();
+      });
+      const d = x.getImageData(0, 0, W, H).data;
+      for (let k = 0; k < W * H; k++) {
+        const a = d[k * 4 + 3] > 127 ? d[k * 4] / 255 : 0, solid = a > 0.75;
+        // sheets cover land, and shelf seas where they are solid ice (Hudson Bay, the Barents Sea); never the deep ocean
+        if (a && (cls[k] >= 2 || (solid && cls[k] === 1))) m[k] = Math.max(m[k], solid ? 1 : 0.5);
+      }
+    }
+    return m;
+  }
+  // The RGB surface for a plan, or null while its class texture is still decoding. Cached per surface and theme.
+  function texRGB(p, col) {
+    if (p.mode === "proc") {
+      const key = "stage:" + p.stage.id;
+      if (!rgbCache.has(key)) rgbCache.set(key, { w: 512, h: 256, rgb: paintStage(p.stage, 512, 256), shade: p.stage.shade });
+      return rgbCache.get(key);
+    }
+    const cls = texCls[p.tex]; if (!cls) return null;
+    const dark = col.surface[0] + col.surface[1] + col.surface[2] < 384, key = `${p.tex}|${p.ice ? p.ice.id : ""}|${col.pal.join()}`;
+    if (rgbCache.has(key)) return rgbCache.get(key);
+    const rgb = new Uint8ClampedArray(W * H * 3), m = p.ice ? iceMask(cls, p.ice) : null;
+    const iceC = dark ? [214, 228, 240] : [246, 250, 253], edgeC = dark ? [128, 152, 178] : [150, 176, 204];
+    for (let k = 0; k < W * H; k++) {
+      let c = col.pal[cls[k]];
+      const a = m ? m[k] : 0;
+      if (a) {
+        const i = k % W, edge = (i > 0 && m[k - 1] < a) || (i < W - 1 && m[k + 1] < a) || (k >= W && m[k - W] < a) || (k < W * (H - 1) && m[k + W] < a);
+        c = mix(c, edge ? edgeC : iceC, a === 1 ? 1 : 0.55);
+      }
+      rgb[k * 3] = c[0]; rgb[k * 3 + 1] = c[1]; rgb[k * 3 + 2] = c[2];
+    }
+    const out = { w: W, h: H, rgb, shade: 0.34 };
+    rgbCache.set(key, out);
+    return out;
+  }
+  // Gets the plan's surface ready, then calls done(). Procedural stages are painted after a short delay so the
+  // panel can show first (painting takes ~50–150 ms, once per stage).
+  function prepare(p, done) {
+    if (p.mode === "tex") loadTex(p.tex, done);
+    else if (p.mode === "proc") { if (rgbCache.has("stage:" + p.stage.id)) done(); else setTimeout(done, 40); }
+  }
+
+  // ----- polity outlines (outlines.js next to the page, written by build-outlines.mjs; optional) -----
+  // Loaded with a <script> tag (fetch() of local JSON is blocked on file://), on first use or when the page is idle.
+  // OUT: undefined = not requested, null = loading, false = unavailable, else the data:
+  //   shapes[i] = { n: display name, s: "c" Cliopatria | "n" Natural Earth, c: [lat, lon] centroid, a: km², r: [encoded rings] }
+  //   b[branchId] = [[fromYear, toYear, rowFrom, rowTo, shape], ...]; e[eventId] = [shape, 1 full | 2 context, year]
+  let OUT, lastEv = null;
+  const olCache = new Map();
+  function loadOutlines() {
+    if (OUT !== undefined) return;
+    OUT = null;
+    const sc = document.createElement("script");
+    sc.src = "outlines.js"; sc.async = true;
+    sc.onload = () => { OUT = (window.TL_OUTLINES && window.TL_OUTLINES.v === 1 && window.TL_OUTLINES) || false; refresh(); };
+    sc.onerror = () => { OUT = false; };
+    document.head.appendChild(sc);
+  }
+  addEventListener("load", () => (window.requestIdleCallback ? requestIdleCallback(loadOutlines, { timeout: 4000 }) : setTimeout(loadOutlines, 2500)));
+  // If the panel is already showing an entry that has an outline when the file arrives, redraw its globe.
+  function refresh() {
+    const fig = document.querySelector("figure.globe");
+    if (!lastEv || !fig || !st || st.p.ol) return;
+    const p = plan(lastEv);
+    if (!p || !p.ol) return;
+    const tmp = document.createElement("div"); tmp.innerHTML = html(lastEv);
+    fig.replaceWith(tmp.firstChild); mount();
+  }
+  // Decodes a shape into rings of unit-sphere terms (like the land rings; clockwise, interior on the right), densified
+  // so long straight borders follow the sphere, plus per-segment flags for edges along the antimeridian cut (not stroked).
+  function olShape(i) {
+    if (olCache.has(i)) return olCache.get(i);
+    const sh = OUT.shapes[i], q = OUT.q, rings = [];
+    for (const s of sh.r) {
+      const ll = []; let x = 0, y = 0, k = 0, n = 0;
+      for (let p = 0, v = 0, sft = 0; p < s.length; p++) {
+        const b = s.charCodeAt(p) - 63; v |= (b & 0x1f) << sft; sft += 5;
+        if (b < 0x20) { const d = v & 1 ? ~(v >> 1) : v >> 1; if (k++ % 2 === 0) x += d; else { y += d; ll.push([x / q, y / q]); n++; } v = 0; sft = 0; }
+      }
+      const pts = [], cut = [];
+      for (let j = 0; j < n; j++) {
+        const [lo, la] = ll[j], [lo2, la2] = ll[(j + 1) % n], seam = Math.abs(lo) >= 179.85 && Math.abs(lo2) >= 179.85;
+        const steps = seam ? 1 : Math.max(1, Math.ceil(Math.max(Math.abs(lo2 - lo), Math.abs(la2 - la)) / 2));
+        for (let t = 0; t < steps; t++) { pts.push(lo + ((lo2 - lo) * t) / steps, la + ((la2 - la) * t) / steps); cut.push(seam); }
+      }
+      const m = pts.length / 2, a = new Float32Array(m * 4);
+      for (let j = 0; j < m; j++) { const l = pts[j * 2] * RAD, t = pts[j * 2 + 1] * RAD; a[j * 4] = Math.sin(t); a[j * 4 + 1] = Math.cos(t); a[j * 4 + 2] = Math.sin(l); a[j * 4 + 3] = Math.cos(l); }
+      a.cut = cut; rings.push(a);
+    }
+    olCache.set(i, rings);
+    return rings;
+  }
+  // The outline for an entry, if build-outlines.mjs matched one: events by id; branch markers (start, end, a position
+  // between events) by the branch's outline at that year.
+  function outlineFor(ev) {
+    if (!OUT) return null;
+    let o = null;
+    if (ev.kind === "event") { const e = OUT.e[ev.id]; if (e) o = { s: e[0], full: e[1] === 1, yr: e[2] }; }
+    else if (ev.b) {
+      const y = Math.floor(ev.y), seg = (OUT.b[ev.b.id] || []).find((s) => s[0] <= y && s[1] >= y);
+      if (seg) o = { s: seg[4], full: true, yr: Math.max(seg[2], Math.min(seg[3], y)) };
+    }
+    const sh = o && OUT.shapes[o.s];
+    return sh ? { ...o, sh } : null;
+  }
+  // Adds the outline to a present-day-coastline plan. Full: the outline is the subject (caption names it; the globe
+  // centers on it). Context: a faint outline behind the entry's own pin or circle (named in the note).
+  function withOutline(p, ev) {
+    if (p.global || !p.geo) return p;
+    const o = outlineFor(ev);
+    if (!o) return p;
+    const ne = o.sh.s === "n", name = o.sh.n;
+    const desc = ne ? `present-day borders of ${name}` : `approximate extent of ${name} in ${fmtYear(o.yr)}`, src = ne ? OUT.attr.n : OUT.attr.c;
+    const title = `${ne ? OUT.attr.nFull : OUT.attr.cFull} ${GLOBE.attr.land}.`;
+    if (!o.full) return { ...p, ol: o, title, note: `Faint outline: ${desc} · ${src}.` };
+    return { ...p, ol: o, title, caption: `${esc(desc[0].toUpperCase() + desc.slice(1))} · ${esc(src)}`,
+      note: ne ? "Shown as a stand-in: no historical outline is available for this date." : "Borders are approximate and simplified; coastlines are present-day." };
+  }
+
+  // ----- projection (set per frame) -----
+  let sp0, cp0, sl0, cl0, X, Y, CC;
+  const proj = (sp, cp, sl, cl) => { const cd = cl * cl0 + sl * sl0, sd = sl * cl0 - cl * sl0; X = cp * sd; Y = cp0 * sp - sp0 * cp * cd; CC = sp0 * sp + cp0 * cp * cd; };
+  const llPts = (lat, lon) => [Math.sin(lat * RAD), Math.cos(lat * RAD), Math.sin(lon * RAD), Math.cos(lon * RAD)];
+  // Appends a ring (clockwise: interior on the right) to the current path, clipped to the visible hemisphere.
+  // Each visible run starts and ends on the horizon; runs are rejoined by following the limb clockwise from where a
+  // run leaves to the next place one enters, which keeps the interior on the right. (Simply pushing hidden points out
+  // to the limb can trace the limb the wrong way round when a large ring wraps behind the globe, inverting the fill.)
+  function ringTo(ctx, P, cx, cy, R) {
+    const n = P.length / 4; if (n < 3) return false;
+    const vx = new Float64Array(n), vy = new Float64Array(n), vc = new Float64Array(n); let start = -1, nVis = 0;
+    for (let i = 0; i < n; i++) { proj(P[i * 4], P[i * 4 + 1], P[i * 4 + 2], P[i * 4 + 3]); vx[i] = X; vy[i] = Y; vc[i] = CC; if (CC > 0) nVis++; else if (start < 0) start = i; }
+    const pt = (x, y) => [cx + x * R, cy - y * R];
+    if (!nVis) return false;
+    if (nVis === n) { ctx.moveTo(...pt(vx[0], vy[0])); for (let i = 1; i < n; i++) ctx.lineTo(...pt(vx[i], vy[i])); ctx.closePath(); return true; }
+    // runs of visible points, each bracketed by its horizon crossings; walk from a hidden point so none wraps
+    const runs = []; let cur = null;
+    const cross = (i, j) => { const t = vc[i] / (vc[i] - vc[j]), x = vx[i] + t * (vx[j] - vx[i]), y = vy[i] + t * (vy[j] - vy[i]), h = Math.hypot(x, y) || 1; return [x / h, y / h]; };
+    for (let k = 1; k <= n; k++) {
+      const i = (start + k - 1) % n, j = (start + k) % n;
+      if (vc[j] > 0) {
+        if (!(vc[i] > 0)) { const e = cross(i, j); cur = { pts: [e], a0: Math.atan2(e[1], e[0]) }; runs.push(cur); }
+        cur.pts.push([vx[j], vy[j]]);
+      } else if (vc[i] > 0) { const e = cross(i, j); cur.pts.push(e); cur.a1 = Math.atan2(e[1], e[0]); cur = null; }
+    }
+    const used = new Array(runs.length).fill(false), TWO = 2 * Math.PI, STEP = 4 * RAD;
+    for (let r0 = 0; r0 < runs.length; r0++) {
+      if (used[r0]) continue;
+      let r = r0; ctx.moveTo(...pt(...runs[r].pts[0]));
+      for (let guard = 0; guard <= runs.length; guard++) {
+        used[r] = true;
+        for (let k = 1; k < runs[r].pts.length; k++) ctx.lineTo(...pt(...runs[r].pts[k]));
+        // nearest entry clockwise (decreasing angle) from this run's exit
+        const e = runs[r].a1; let best = -1, bd = Infinity;
+        for (let q = 0; q < runs.length; q++) { if (used[q] && q !== r0) continue; const d = (((e - runs[q].a0) % TWO) + TWO) % TWO; if (d < bd) { bd = d; best = q; } }
+        for (let a = STEP; a < bd; a += STEP) ctx.lineTo(...pt(Math.cos(e - a), Math.sin(e - a)));
+        if (best < 0 || best === r0) break;
+        r = best; ctx.lineTo(...pt(...runs[r].pts[0]));
+      }
+      ctx.closePath();
+    }
+    return true;
+  }
+  // Strokes a ring's true edges on the visible hemisphere: unlike ringTo it does not close along the limb, and it
+  // skips segments flagged in P.cut (where a shape was cut at the antimeridian), so only real borders are drawn.
+  function strokeRing(ctx, P, cx, cy, R) {
+    const n = P.length / 4; if (n < 2) return;
+    const pt = (x, y) => [cx + x * R, cy - y * R];
+    let lx = 0, ly = 0, lc = -1, on = false;
+    for (let k = 0; k <= n; k++) {
+      const i = k % n; proj(P[i * 4], P[i * 4 + 1], P[i * 4 + 2], P[i * 4 + 3]);
+      const x = X, y = Y, c = CC;
+      if (k > 0 && !(P.cut && P.cut[k - 1]) && (lc > 0 || c > 0)) {
+        if (lc > 0 && c > 0) { if (!on) ctx.moveTo(...pt(lx, ly)); ctx.lineTo(...pt(x, y)); on = true; }
+        else { // crosses the horizon: end (or start) the run on the limb
+          const t = lc / (lc - c), ex = lx + t * (x - lx), ey = ly + t * (y - ly), h = Math.hypot(ex, ey) || 1;
+          if (lc > 0) { if (!on) ctx.moveTo(...pt(lx, ly)); ctx.lineTo(...pt(ex / h, ey / h)); on = false; }
+          else { ctx.moveTo(...pt(ex / h, ey / h)); ctx.lineTo(...pt(x, y)); on = true; }
+        }
+      } else on = false;
+      lx = x; ly = y; lc = c;
+    }
+  }
+  function drawOutline(ctx, rings, cx, cy, R, acc, full, dpr) {
+    ctx.beginPath(); for (const P of rings) ringTo(ctx, P, cx, cy, R);
+    ctx.fillStyle = str(acc, full ? 0.3 : 0.1); ctx.fill();
+    ctx.beginPath(); for (const P of rings) strokeRing(ctx, P, cx, cy, R);
+    ctx.strokeStyle = str(acc, full ? 0.95 : 0.6); ctx.lineWidth = (full ? 1.5 : 1.1) * dpr; ctx.stroke();
+  }
+  function capPts(lat, lon, km) {
+    const d = Math.min(km / EARTH_KM, 1.4), la = lat * RAD, lo = lon * RAD, out = [];
+    for (let b = 0; b < 360; b += 8) {
+      const t = b * RAD, la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(t));
+      const lo2 = lo + Math.atan2(Math.sin(t) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
+      out.push(Math.sin(la2), Math.cos(la2), Math.sin(lo2), Math.cos(lo2));
+    }
+    return new Float32Array(out);
+  }
+  // ----- drawing -----
+  function size(s) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), w = s.cv.clientWidth, h = s.cv.clientHeight;
+    if (!w || !h) return false;
+    if (s.cv.width !== Math.round(w * dpr) || s.cv.height !== Math.round(h * dpr)) { s.cv.width = Math.round(w * dpr); s.cv.height = Math.round(h * dpr); s.dpr = dpr; s.dirty = true; }
+    return true;
+  }
+  function colors() {
+    const cs = getComputedStyle(document.documentElement), g = (k) => rgbOf(cs.getPropertyValue("--" + k));
+    const surface = g("surface"), fg = g("fg"), accent = g("accent"), line = g("line"), chip = g("chip");
+    return { surface, fg, accent, line, chip, muted: g("muted"),
+      pal: [mix(surface, accent, 0.36), mix(surface, accent, 0.18), mix(surface, fg, 0.27), mix(surface, fg, 0.48)],
+      ocean: mix(surface, accent, 0.3), land: mix(surface, fg, 0.46) };
+  }
+
+  function drawTexture(s, R, tex) {
+    const D = Math.max(60, Math.min(Math.round(2 * R), tex.w > W ? 300 : 240));
+    if (!s.grid || s.grid.D !== D) {
+      const nx = new Float32Array(D * D), ny = new Float32Array(D * D), nz = new Float32Array(D * D);
+      for (let j = 0; j < D; j++) for (let i = 0; i < D; i++) {
+        const x = ((i + 0.5) / D) * 2 - 1, y = 1 - ((j + 0.5) / D) * 2, r2 = x * x + y * y, k = j * D + i;
+        if (r2 <= 1) { nx[k] = x; ny[k] = y; nz[k] = Math.sqrt(1 - r2); } else nz[k] = -1;
+      }
+      const c = document.createElement("canvas"); c.width = c.height = D;
+      s.grid = { D, nx, ny, nz, c, x: c.getContext("2d"), img: null };
+      s.grid.img = s.grid.x.createImageData(D, D);
+    }
+    const g = s.grid, d = g.img.data, rgb = tex.rgb, TW = tex.w, TH = tex.h, sh = tex.shade;
+    for (let k = 0; k < D * D; k++) {
+      const z = g.nz[k];
+      if (z < 0) { d[k * 4 + 3] = 0; continue; }
+      const sinp = z * sp0 + g.ny[k] * cp0, lat = Math.asin(sinp > 1 ? 1 : sinp < -1 ? -1 : sinp);
+      let u = (s.l0 * RAD + Math.atan2(g.nx[k], z * cp0 - g.ny[k] * sp0)) / TAU + 0.5; u -= Math.floor(u);
+      const q = (Math.min(TH - 1, ((0.5 - lat / Math.PI) * TH) | 0) * TW + Math.min(TW - 1, (u * TW) | 0)) * 3, f = 1 - sh + sh * z;
+      d[k * 4] = rgb[q] * f; d[k * 4 + 1] = rgb[q + 1] * f; d[k * 4 + 2] = rgb[q + 2] * f; d[k * 4 + 3] = 255;
+    }
+    g.x.putImageData(g.img, 0, 0);
+    return g.c;
+  }
+
+  // A name tag above (or, near the top edge, below) a point that is rpx pixels tall.
+  function drawLabel(ctx, text, hx, hy, rpx, w, col, dpr) {
+    ctx.font = `600 ${11 * dpr}px system-ui, -apple-system, "Segoe UI", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const tw = ctx.measureText(text).width, pad = 5 * dpr, bh = 17 * dpr;
+    let ly = hy - rpx - 11 * dpr; if (ly - bh / 2 < 2 * dpr) ly = hy + rpx + 11 * dpr;
+    const lx = Math.min(w - tw / 2 - pad - 2 * dpr, Math.max(tw / 2 + pad + 2 * dpr, hx));
+    ctx.fillStyle = str(col.surface, 0.92); ctx.strokeStyle = str(col.accent, 0.8); ctx.lineWidth = dpr;
+    ctx.beginPath(); ctx.roundRect(lx - tw / 2 - pad, ly - bh / 2, tw + pad * 2, bh, 5 * dpr); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = str(col.fg); ctx.fillText(text, lx, ly + 0.5 * dpr);
+  }
+  function drawGlobe(s, t) {
+    const ctx = s.ctx, cv = s.cv, col = s.col, dpr = s.dpr, w = cv.width, h = cv.height;
+    const R = Math.min(w, h) / 2 - 5 * dpr, cx = w / 2, cy = h / 2, p = s.p;
+    sp0 = Math.sin(s.p0 * RAD); cp0 = Math.cos(s.p0 * RAD); sl0 = Math.sin(s.l0 * RAD); cl0 = Math.cos(s.l0 * RAD);
+    ctx.clearRect(0, 0, w, h);
+    ctx.lineJoin = "round";
+    if (p.mode === "tex" || p.mode === "proc") {
+      const tex = s.ready ? texRGB(p, col) : null;
+      if (tex) ctx.drawImage(drawTexture(s, R, tex), cx - R, cy - R, 2 * R, 2 * R);
+      else { ctx.fillStyle = str(p.mode === "proc" ? col.chip : col.ocean); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill(); }
+      // procedural stages: a thin tinted atmosphere along the limb (orange haze, steam, icy blue...)
+      if (tex && p.mode === "proc" && p.stage.rim) {
+        const [r, g, b, a] = p.stage.rim, rg = ctx.createRadialGradient(cx, cy, R * 0.8, cx, cy, R);
+        rg.addColorStop(0, `rgba(${r},${g},${b},0)`); rg.addColorStop(1, `rgba(${r},${g},${b},${a})`);
+        ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
+      }
+    } else {
+      ctx.fillStyle = str(col.ocean); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
+      const rings = getLand();
+      ctx.beginPath(); for (const P of rings) if (!P.hole) ringTo(ctx, P, cx, cy, R);
+      ctx.fillStyle = str(col.land); ctx.fill();
+      ctx.strokeStyle = str(mix(col.land, col.fg, 0.25), 0.7); ctx.lineWidth = 0.6 * dpr; ctx.stroke();
+      ctx.beginPath(); for (const P of rings) if (P.hole) ringTo(ctx, P, cx, cy, R);
+      ctx.fillStyle = str(col.ocean); ctx.fill(); ctx.stroke();
+    }
+    // soft limb shading so the sphere reads as a sphere on flat colors
+    const gr = ctx.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.5, cx, cy, R);
+    gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(1, str(col.fg, p.mode === "vec" ? 0.12 : 0.05));
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
+
+    const geo = p.geo, acc = col.accent;
+    if (geo && p.global) {
+      const pulse = 0.55 + 0.35 * Math.sin(t / 700);
+      ctx.fillStyle = str(acc, 0.07); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
+      ctx.strokeStyle = str(acc, pulse); ctx.lineWidth = 3 * dpr; ctx.beginPath(); ctx.arc(cx, cy, R - 1.5 * dpr, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = str(acc, pulse * 0.35); ctx.lineWidth = 7 * dpr; ctx.beginPath(); ctx.arc(cx, cy, R - 1.5 * dpr, 0, TAU); ctx.stroke();
+    } else if (geo && (geo.scope === "place" || geo.scope === "region")) {
+      // polity outline: in full it replaces the radius circle (a place keeps its pin, e.g. a capital); as context it
+      // sits faintly behind the entry's own marker
+      const ol = p.ol && OUT ? p.ol : null, rings = ol ? olShape(ol.s) : null;
+      if (rings) drawOutline(ctx, rings, cx, cy, R, acc, ol.full, dpr);
+      if (rings && ol.full) {
+        const at = geo.scope === "place" ? [geo.lat, geo.lon] : ol.sh.c;
+        proj(...llPts(at[0], at[1]));
+        if (CC > 0) {
+          const hx = cx + X * R, hy = cy - Y * R;
+          if (geo.scope === "place") {
+            ctx.fillStyle = str(acc, 0.95); ctx.beginPath(); ctx.arc(hx, hy, 3.2 * dpr, 0, TAU); ctx.fill();
+            ctx.strokeStyle = str(col.surface, 0.9); ctx.lineWidth = 1.2 * dpr; ctx.stroke();
+          }
+          // a region's tag goes just above the outline's visible top, so it does not cover the shape
+          let rpx = 6 * dpr;
+          if (geo.scope !== "place") { let top = hy; for (const P of rings) for (let i = 0; i < P.length; i += 4) { proj(P[i], P[i + 1], P[i + 2], P[i + 3]); if (CC > 0) top = Math.min(top, cy - Y * R); } rpx = hy - top; }
+          if (geo.label) drawLabel(ctx, geo.label, hx, hy, rpx, w, col, dpr);
+        }
+      } else {
+        const q = llPts(geo.lat, geo.lon); proj(...q);
+        const cc = CC, hx = cx + X * R, hy = cy - Y * R, dd = Math.min(geo.r / EARTH_KM, 1.4), small = R * Math.sin(dd) < 5 * dpr;
+        if (cc > -Math.sin(dd)) {
+          let rpx = 5 * dpr;
+          if (small) {
+            if (cc > 0) {
+              ctx.fillStyle = str(acc, 0.9); ctx.beginPath(); ctx.arc(hx, hy, 4 * dpr, 0, TAU); ctx.fill();
+              ctx.strokeStyle = str(acc, 0.85); ctx.lineWidth = 1.6 * dpr; ctx.beginPath(); ctx.arc(hx, hy, 8.5 * dpr, 0, TAU); ctx.stroke(); rpx = 8.5 * dpr;
+            }
+          } else {
+            ctx.beginPath(); ringTo(ctx, capPts(geo.lat, geo.lon, geo.r), cx, cy, R);
+            ctx.fillStyle = str(acc, 0.3); ctx.fill(); ctx.strokeStyle = str(acc, 0.95); ctx.lineWidth = 1.8 * dpr; ctx.stroke();
+            rpx = R * Math.sin(dd) * Math.max(0.3, cc);
+            if (cc > 0) { ctx.fillStyle = str(acc); ctx.beginPath(); ctx.arc(hx, hy, 2.2 * dpr, 0, TAU); ctx.fill(); }
+          }
+          if (cc > 0 && geo.label) drawLabel(ctx, geo.label, hx, hy, rpx, w, col, dpr);
+        }
+      }
+    }
+    ctx.strokeStyle = str(col.line); ctx.lineWidth = 1.2 * dpr; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+  }
+
+  function drawScale(s) {
+    const ctx = s.ctx, w = s.cv.width, h = s.cv.height, dpr = s.dpr, col = s.col, cx = w / 2, cy = h / 2, Rm = Math.min(w, h) / 2 - 3 * dpr;
+    const radii = { universe: Rm, galaxy: Rm * 0.72, "solar-system": Rm * 0.46, earth: Rm * 0.2 };
+    ctx.clearRect(0, 0, w, h); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    LEVELS.forEach(([k, name], i) => {
+      const r = radii[k], on = k === s.p.level;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU);
+      ctx.fillStyle = on ? str(col.accent, 0.2) : str(i % 2 ? col.chip : col.surface, i % 2 ? 0.8 : 0.5); ctx.fill();
+      ctx.strokeStyle = on ? str(col.accent) : str(col.line); ctx.lineWidth = (on ? 2.2 : 1.2) * dpr; ctx.stroke();
+      ctx.font = `${on ? 700 : 500} ${(on ? 11.5 : 10.5) * dpr}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+      ctx.fillStyle = on ? str(col.accent) : str(col.muted);
+      if (k === "earth") ctx.fillText(name, cx, cy);
+      else ctx.fillText(name, cx, cy - r + (r - radii[LEVELS[i + 1][0]]) / 2);
+    });
+  }
+
+  // ----- loop & lifecycle -----
+  function alive() { return st && st.cv.isConnected && !panel.classList.contains("closed") && !document.hidden && st.visible; }
+  function frame(t) {
+    const s = st; if (!s) return; s.raf = 0;
+    if (!alive()) return;
+    s.raf = requestAnimationFrame(frame);
+    if (t - s.last < 32) return;
+    const dt = Math.min(0.1, (t - s.last) / 1000); s.last = t;
+    if (!size(s)) return;
+    let moving = s.p.global && !REDUCED;
+    // turning to the location always finishes (the pointer may simply be resting where the globe appeared);
+    // hovering pauses only the idle spin, and dragging takes over
+    if (!s.drag && s.p.mode !== "scale") {
+      if (s.target && !s.user) {
+        const dl = ((s.target.lon - s.l0 + 540) % 360) - 180, dp = s.target.lat - s.p0, k = REDUCED ? 1 : Math.min(1, dt * 3.2);
+        if (Math.abs(dl) > 0.05 || Math.abs(dp) > 0.05) { s.l0 += dl * k; s.p0 += dp * k; moving = true; }
+      } else if (!s.target && !REDUCED && !s.hover) { s.l0 += 9 * dt; moving = true; }
+    }
+    if (s.l0 > 180) s.l0 -= 360; if (s.l0 < -180) s.l0 += 360;
+    if (!(moving || s.dirty || s.drag)) return;
+    s.dirty = false;
+    if (s.p.mode === "scale") drawScale(s); else drawGlobe(s, t);
+  }
+  function ensure() { if (st && !st.raf && alive()) st.raf = requestAnimationFrame(frame); }
+  function stop() {
+    if (!st) return;
+    cancelAnimationFrame(st.raf); st.io && st.io.disconnect(); st.ro && st.ro.disconnect(); st = null;
+  }
+  function mount() {
+    stop();
+    const cv = document.getElementById("globeCv"), p = planned;
+    if (!cv || !p) return;
+    const geo = p.geo, local = geo && (geo.scope === "place" || geo.scope === "region");
+    // aim at the outline's centroid when the outline is the subject, else at the entry's own point
+    const aim = local ? (p.ol && p.ol.full ? p.ol.sh.c : [geo.lat, geo.lon]) : null;
+    // unlocated views of an ice age tilt toward the pole that carries the ice
+    const tilt = p.ice ? (p.ice.sheets ? 35 : -35) : 18;
+    const s = st = { cv, p, ctx: cv.getContext("2d"), dpr: 1, col: colors(), raf: 0, last: 0, hover: false, drag: false, user: false, dirty: true, visible: true,
+      ready: false, target: local ? { lat: Math.max(-70, Math.min(70, aim[0])), lon: aim[1] } : null,
+      l0: local ? aim[1] - 80 : 0, p0: local ? 10 : tilt };
+    if (REDUCED && local) { s.l0 = s.target.lon; s.p0 = s.target.lat; }
+    prepare(p, () => { s.ready = true; if (st === s) { s.dirty = true; ensure(); } });
+    if (p.mode === "scale") { cv.style.cursor = "default"; }
+    else {
+      cv.addEventListener("pointerenter", () => { s.hover = true; });
+      cv.addEventListener("pointerleave", () => { s.hover = false; ensure(); });
+      cv.addEventListener("pointerdown", (e) => { s.drag = true; s.user = true; s.hover = true; s.lx = e.clientX; s.ly = e.clientY; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
+      cv.addEventListener("pointermove", (e) => {
+        if (!s.drag) return;
+        const k = 57.3 / Math.max(40, (Math.min(cv.clientWidth, cv.clientHeight) / 2 - 5));
+        s.l0 -= (e.clientX - s.lx) * k; s.p0 = Math.max(-85, Math.min(85, s.p0 + (e.clientY - s.ly) * k));
+        s.lx = e.clientX; s.ly = e.clientY; s.dirty = true; ensure();
+      });
+      const up = (e) => { s.drag = false; if (e.pointerType !== "mouse") s.hover = false; ensure(); };
+      cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+    }
+    if ("IntersectionObserver" in window) { s.io = new IntersectionObserver((en) => { s.visible = en[en.length - 1].isIntersecting; if (s.visible) { s.dirty = true; ensure(); } }); s.io.observe(cv); }
+    if ("ResizeObserver" in window) { s.ro = new ResizeObserver(() => { if (st === s) { s.dirty = true; ensure(); } }); s.ro.observe(cv); }
+    ensure();
+  }
+  document.addEventListener("visibilitychange", ensure);
+  return { html, mount, stop };
+})();
+
+// ---------- panel ----------
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Where a branch came from: a plain-words note, then each earlier branch it grew out of and how.
+const originBlock = (b) => {
+  const o = b.origin; if (!o) return "";
+  const rows = o.links.filter((l) => B.get(l.id)).sort((p, q) => HOW_RANK[p.how] - HOW_RANK[q.how])
+    .map((l, i, a) => `<div class="orow">${i && a[i - 1].how === l.how ? "" : `<span class="ohow">${HOW_LABEL[l.how]}</span>`}${chip(B.get(l.id))}<div class="onote">${esc(l.note)}</div></div>`).join("");
+  return `<div class="origin"><div class="rel">Origins</div><p>${esc(o.note)}</p>${rows}</div>`;
+};
+const chip = (b) => `<span class="chip" data-branch="${esc(b.id)}"><i style="background:${b.color}"></i>${esc(b.name)}</span>`;
+const domain = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (_) { return ""; } };
+const KIND = { primary: "Primary source", textbook: "Open textbook", paper: "Research paper", museum: "Museum", archive: "Archive", reference: "Reference", encyclopedia: "Encyclopedia", news: "News", data: "Data" };
+const kindOf = (c) => c.k || (/wikipedia\.org|britannica\.com/.test(c.u) ? "encyclopedia" : "");
+const dedupe = (list) => { const seen = new Set(); return list.filter((c) => c && !seen.has(c.u) && seen.add(c.u)); };
+const citeList = (cites) => `<ul class="cites">${dedupe(cites || []).map((c) => { const k = kindOf(c); return `<li><a href="${esc(c.u)}" target="_blank" rel="noopener noreferrer">${esc(c.t)}</a><br><span class="dom">${esc(domain(c.u))}</span>${k ? ` <span class="kind k-${k}">${KIND[k]}</span>` : ""}</li>`; }).join("")}</ul>`;
+// Public-domain picture (downloaded next to the page in images/), with its title, author/date, license and source page.
+const imageBlock = (x) => {
+  const im = x.images && x.images[0];
+  if (!im) return "";
+  return `<figure class="pic"><a href="${esc(im.page)}" target="_blank" rel="noopener noreferrer"><img src="${esc(im.src)}" alt="${esc(im.title)}" decoding="async" ${im.w ? `width="${im.w}" height="${im.h}"` : ""} onerror="this.closest('figure').remove()"></a>` +
+    `<figcaption>${esc(im.title)}<span class="pic-credit">${esc(im.credit)} · ${esc(im.license)} · <a href="${esc(im.page)}" target="_blank" rel="noopener noreferrer">source</a></span></figcaption></figure>`;
+};
+const whyBlock = (x) => {
+  if (!x.why) return "";
+  let h = `<h3>Why it matters</h3><p class="why">${esc(x.why)}</p>`;
+  const cs = connTargets(x);
+  if (cs.length) h += `<h3>Connections</h3><div class="near conn">${cs.map((c) => `<button data-ev="${esc(c.ev.id)}"><span class="nb">${esc(c.note)}</span><br>${esc(c.ev.kind === "start" ? c.ev.b.name : c.ev.title)} <span class="nb">· ${esc(c.ev.when)}</span></button>`).join("")}</div>`;
+  return h;
+};
+const span = (b) => `${esc(b.startWhen)} – ${b.end === null ? "present" : esc(b.endWhen)}`;
+function renderPanel() {
+  const ev = selected;
+  Globe.stop();
+  const close = `<button class="grip" id="pGrip" aria-label="Expand or shrink details"></button><button class="panel-close" id="pClose" aria-label="Close panel" title="Close (Esc)">×</button>`;
+  if (!ev) { panel.innerHTML = close + INTRO; return; }
+  const b = ev.b, i = ev.kind === "pos" ? 0.5 : b.events.indexOf(ev);
+  const parents = b.parents.map((p) => B.get(p)).filter(Boolean);
+  const nearby = all.filter((e) => e.b !== b && e.kind === "event")
+    .map((e) => [Math.abs(e.s - ev.s), e]).sort((p, q) => p[0] - q[0]).slice(0, 6).map((x) => x[1]).sort((p, q) => p.y - q.y);
+  let html = Globe.html(ev) + `<div>${chip(b)}</div>`;
+  html += `<div class="when">${esc(ev.when)}</div><h2>${esc(ev.title)}</h2>`;
+  if (ev.kind === "event") {
+    html += imageBlock(ev);
+    html += `<p>${esc(ev.text)}</p>`;
+    if (ev.link && B.get(ev.link)) html += `<div class="rel">Connects with</div>${chip(B.get(ev.link))}`;
+    html += whyBlock(ev);
+    html += `<h3>Sources</h3>${citeList([...ev.cites, ...(ev.whyCites || [])])}`;
+  } else if (ev.kind === "pos") {
+    html += `<div class="synthetic-note">You're on this branch at a moment between its recorded events. Use ← → to step to its nearest events.</div>`;
+  } else {
+    html += `<div class="synthetic-note">This marker is drawn from the branch's own start/end dates; the sources below are the branch's.</div>`;
+  }
+  html += `<div class="navrow"><button class="btn" id="pPrev" ${i > 0 || parents.length || b.preds.length ? "" : "disabled"}>← Earlier</button><button class="btn" id="pNext" ${i < b.events.length - 1 || b.succ.length ? "" : "disabled"}>Later →</button></div>`;
+  html += `<h3>The branch · ${esc(b.name)}</h3><div class="when">${span(b)} · ${esc(REGION.get(b.region).name)}</div><p>${esc(b.text)}</p>`;
+  html += originBlock(b);
+  const linked = new Set((b.origin?.links || []).map((l) => l.id));
+  const preds = [...new Set([...parents, ...b.preds])].filter((p) => !linked.has(p.id));
+  if (preds.length) html += `<div class="rel">${b.origin ? "Also grew out of" : "Grew out of"}</div>${preds.map(chip).join("")}`;
+  const kids = b.children.filter((c) => !b.succ.includes(c));
+  if (b.succ.length) html += `<div class="rel">Became / merged into</div>${b.succ.map(chip).join("")}`;
+  if (kids.length) html += `<div class="rel">Branches that split off</div>${kids.map(chip).join("")}`;
+  if (ev.kind !== "event") html += imageBlock(b);
+  html += whyBlock(b);
+  html += `<h3>Branch sources</h3>${citeList([...b.cites, ...(b.origin?.cites || []), ...(b.whyCites || [])])}`;
+  if (nearby.length) html += `<h3>Elsewhere around this time</h3><div class="near">${nearby.map((e) => `<button data-ev="${esc(e.id)}"><span class="nb">${esc(e.when)} · ${esc(e.b.name)}</span><br>${esc(e.title)}</button>`).join("")}</div>`;
+  panel.innerHTML = close + html;
+  panel.scrollTop = 0;
+  Globe.mount();
+  const pp = document.getElementById("pPrev"), pn = document.getElementById("pNext");
+  pp && (pp.onclick = () => step(-1)); pn && (pn.onclick = () => step(1));
+}
+// Bottom sheet (phones): tap the grip to expand/shrink, swipe it up to expand, down to shrink or close.
+let gripY = null;
+panel.addEventListener("pointerdown", (e) => { if (e.target.closest("#pGrip")) { gripY = e.clientY; try { e.target.setPointerCapture(e.pointerId); } catch (_) {} } });
+panel.addEventListener("pointerup", (e) => {
+  if (gripY === null) return;
+  const dy = e.clientY - gripY; gripY = null;
+  const tall = panel.classList.contains("tall");
+  if (Math.abs(dy) < 8) panel.classList.toggle("tall");
+  else if (dy < 0) panel.classList.add("tall");
+  else if (tall) panel.classList.remove("tall");
+  else { if (selected) select(null); else setPanel(false); }
+});
+panel.addEventListener("click", (e) => {
+  if (e.target.closest("#pClose")) { if (selected) select(null); else setPanel(false); cv.focus({ preventScroll: true }); return; }
+  const c = e.target.closest("[data-branch]");
+  if (c) { const b = B.get(c.dataset.branch); const s = selected ? selected.s : (b.s0 + b.s1) / 2; select(nearestOn(b, Math.min(Math.max(s, b.s0), b.s1)), { center: true }); return; }
+  const n = e.target.closest("[data-ev]");
+  if (!n) return;
+  const e2 = EV.get(n.dataset.ev);
+  if (n.closest(".conn")) goTo(e2.sEnd != null ? { type: "period", ev: e2 } : { type: "event", ev: e2 }); // a connection may be far away in time
+  else select(e2, { center: true });
+});
+const nEvents = all.filter((e) => e.kind === "event").length;
+const nCites = new Set([...DATA.events, ...DATA.branches].flatMap((x) => x.cites.map((c) => c.u))).size;
+const INTRO = `<div class="intro">
+<h2>Every stream of history, in one view</h2>
+<p>${branches.length} societies, lineages and long-running movements and ${nEvents} events, from the Big Bang to ${new Date().getFullYear()}. Each colored line is a branch; curves show where branches split off, merge or turn into one another, and dashed lines mark moments of contact or blending between two branches.</p>
+<p>Time is drawn on a logarithmic scale, so deep time is compressed and the recent past gets the most room; zoom anywhere to spread it out. Under the dates, each gap is labeled with how much time it covers (the same width can be 5 billion years or 5 years), and the <b>true scale</b> strip at the top shows how much of all time you are looking at.</p>
+<h3>Getting around</h3>
+<div class="keys">
+<kbd>← →</kbd><span>Previous / next event on the current branch (continues into a successor or parent branch)</span>
+<kbd>↑ ↓</kbd><span>Jump to the nearest branch above / below at the same moment</span>
+<kbd>+ −</kbd><span>Zoom in / out around the selection</span>
+<kbd>Enter</kbd><span>Zoom in on the selected event</span>
+<kbd>0 – 8</kbd><span>Jump to an era (see buttons above)</span>
+<kbd>/</kbd><span>Search</span>
+<kbd>Esc</kbd><span>Clear the selection and close this panel (or click any empty space)</span>
+<kbd>?</kbd><span>Show or hide this guide</span>
+</div>
+<p class="note" style="margin-top:10px">Trackpad: scroll to move around (up/down through the branches, sideways through time), pinch to zoom. Mouse: wheel moves between branches, Shift+wheel moves through time, Ctrl/⌘+wheel or double-click zooms. Drag to pan; click a dot to read it. Press <b>→</b> to start.</p>
+<h3>About the sources</h3>
+<p class="note">Every branch and event links to the sources it was written from (${nCites} distinct pages). Each was fetched and read when the entry was written, and the dates and wording follow what the source states; where scholars disagree, the entry says so. Data compiled ${esc(DATA.built)}.</p>
+<p class="note">Reading the shapes: a branch's line spans the dates its sources give; markers at either end (□) are its beginning and end. Filled dots are landmark and notable events, hollow dots are finer detail.</p>
+</div>`;
+
+// ---------- input ----------
+let drag = null;
+const pointers = new Map();
+cv.addEventListener("pointerdown", (e) => {
+  cv.setPointerCapture(e.pointerId); cv.focus({ preventScroll: true });
+  pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+  if (pointers.size === 2) { const [p, q] = [...pointers.values()]; drag = { pinch: Math.abs(p.x - q.x) || 1, s0: view.s0, s1: view.s1, cx: (p.x + q.x) / 2 }; setAnchor(drag.cx, (p.y + q.y) / 2); return; }
+  drag = { x: e.offsetX, y: e.offsetY, s0: view.s0, s1: view.s1, vy: view.y, moved: false };
+});
+cv.addEventListener("pointermove", (e) => {
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+  if (drag && drag.pinch && pointers.size === 2) {
+    const [p, q] = [...pointers.values()]; const d = Math.abs(p.x - q.x) || 1;
+    const f = drag.pinch / d, s = drag.s0 + (drag.cx / W) * (drag.s1 - drag.s0);
+    setView(s - (s - drag.s0) * f, s + (drag.s1 - s) * f, true); return;
+  }
+  if (drag && !drag.pinch) {
+    const dx = e.offsetX - drag.x, dy = e.offsetY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; cv.classList.add("dragging"); }
+    if (drag.moved) {
+      // the row grabbed stays under the pointer, even as other lanes open and close
+      if (!drag.anchor) { setAnchor(drag.x, drag.y, false); drag.anchor = anchor; }
+      if (drag.anchor) { anchor = drag.anchor; anchor.y = anchor.y0 ?? (anchor.y0 = anchor.y); anchor.y = anchor.y0 + dy; }
+      const ds = (dx / W) * (drag.s1 - drag.s0);
+      setView(drag.s0 - ds, drag.s1 - ds, true);
+      if (!drag.anchor) view.y = target.y = clampY(drag.vy - dy);
+      hideTip(); return;
+    }
+  }
+  updateHover(e.offsetX, e.offsetY);
+});
+const endPointer = (e) => {
+  pointers.delete(e.pointerId);
+  if (drag && !drag.pinch && !drag.moved && e.type === "pointerup") {
+    const h = hitAt(e.offsetX, e.offsetY);
+    if (h) select(h.ev);
+    else { const b = branchAt(e.offsetX, e.offsetY); select(b ? nearestOn(b, Sx(e.offsetX)) : null); }
+  }
+  if (pointers.size === 0) { drag = null; cv.classList.remove("dragging"); }
+};
+cv.addEventListener("pointerup", endPointer); cv.addEventListener("pointercancel", endPointer);
+cv.addEventListener("pointerleave", () => { hover = null; hideTip(); dirty = true; kick(); });
+cv.addEventListener("dblclick", (e) => { setAnchor(e.offsetX, e.offsetY); zoomAt(0.45, e.offsetX); });
+// Trackpad: two-finger scroll moves around (up/down = lanes, sideways = time), pinch zooms.
+// Mouse: wheel = lanes, Shift+wheel = time, Ctrl/⌘/Alt+wheel = zoom.
+cv.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+  let dx = e.deltaX * unit, dy = e.deltaY * unit;
+  if (e.ctrlKey || e.metaKey || e.altKey) { // pinch arrives as ctrl+wheel
+    const now = performance.now();
+    if (!anchor || !anchor.zoom || now - anchor.t > 250) { setAnchor(e.offsetX, e.offsetY); if (anchor) anchor.zoom = true; }
+    if (anchor) anchor.t = now;
+    zoomAt(Math.exp(Math.max(-60, Math.min(60, dy || dx)) * 0.01), e.offsetX, true);
+    return;
+  }
+  if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+  if (Math.abs(dx) > 2 * Math.abs(dy)) dy = 0; else if (Math.abs(dy) > 2 * Math.abs(dx)) dx = 0; // axis lock
+  if (dy) { anchor = null; view.y = target.y = clampY(view.y + dy); dirty = true; kick(); }
+  if (dx) {
+    const now = performance.now();
+    if (!anchor || anchor.zoom || now - anchor.t > 250) setAnchor(e.offsetX, e.offsetY);
+    if (anchor) anchor.t = now;
+    const ds = (dx / W) * (view.s1 - view.s0); setView(view.s0 + ds, view.s1 + ds, true);
+  }
+}, { passive: false });
+
+function hitAt(x, y) { if (y < AXIS_H) return null; let best = null, bd = 10; for (const h of hits) { if (!h.ev) continue; const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } } return best; }
+function branchAt(x, y) {
+  if (y < AXIS_H) return null; // rows scrolled up under the date axis are hidden, so not clickable
+  for (const L of lanes) { if (L.h < 4 || y < L.top || y > L.top + L.h) continue; const s = Sx(x); return L.branches.find((b) => b.s0 <= s && b.s1 >= s) || null; }
+  return null;
+}
+const tip = document.getElementById("tip");
+function updateHover(x, y) {
+  const h = hitAt(x, y); const ev = h ? h.ev : null;
+  if (ev !== hover) { hover = ev; dirty = true; kick(); }
+  if (!ev) return hideTip();
+  tip.innerHTML = `<div class="t-when">${esc(ev.when)} · ${esc(ev.b.name)}</div>${esc(ev.title)}`;
+  tip.style.display = "block";
+  const tx = Math.min(x + 14, W - tip.offsetWidth - 8), ty = y + 16 + tip.offsetHeight > H ? y - tip.offsetHeight - 12 : y + 16;
+  tip.style.left = tx + "px"; tip.style.top = ty + "px";
+  cv.style.cursor = "pointer";
+}
+function hideTip() { tip.style.display = "none"; cv.style.cursor = ""; }
+
+// overview click/drag
+let ovGrab = null;
+const ovS = (e) => { const m = ov._map; return m.s0 + (e.offsetX / m.w) * (m.s1 - m.s0); };
+ov.addEventListener("pointerdown", (e) => {
+  if (!ov._map || e.offsetY > OV_LOG_H) return;
+  try { ov.setPointerCapture(e.pointerId); } catch (_) {}
+  const s = ovS(e), sp = target.s1 - target.s0;
+  if (s >= target.s0 && s <= target.s1) ovGrab = s - target.s0; // grabbed the box: drag it from where it was held
+  else { ovGrab = sp / 2; setAnchor(W / 2, H / 2); setView(s - sp / 2, s + sp / 2); } // clicked elsewhere: glide there
+});
+ov.addEventListener("pointermove", (e) => {
+  if (ovGrab === null || !e.buttons) return;
+  if (!anchor) setAnchor(W / 2, H / 2);
+  const s = ovS(e), sp = target.s1 - target.s0; setView(s - ovGrab, s - ovGrab + sp, true);
+});
+const ovEnd = () => (ovGrab = null);
+ov.addEventListener("pointerup", ovEnd); ov.addEventListener("pointercancel", ovEnd);
+
+window.addEventListener("keydown", (e) => {
+  if (e.target === q) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key;
+  if (k === "ArrowRight") { e.preventDefault(); step(1); }
+  else if (k === "ArrowLeft") { e.preventDefault(); step(-1); }
+  else if (k === "ArrowUp") { e.preventDefault(); switchBranch(-1); }
+  else if (k === "ArrowDown") { e.preventDefault(); switchBranch(1); }
+  else if (k === "+" || k === "=") { setAnchor(W / 2, H / 2); zoomAt(0.6, selected ? X(selected.s) : W / 2); }
+  else if (k === "-" || k === "_") { setAnchor(W / 2, H / 2); zoomAt(1 / 0.6, selected ? X(selected.s) : W / 2); }
+  else if (k === "Enter" && selected) { const sp = Math.max((target.s1 - target.s0) * 0.35, MIN_SPAN); setView(selected.s - sp / 2, selected.s + sp / 2); }
+  else if (k === "Escape") { if (selected) select(null); else setPanel(false); }
+  else if (k === "?") { toggleGuide(); }
+  else if (k === "/") { e.preventDefault(); q.focus(); q.select(); }
+  else { const era = ERAS.find((x) => x.key === k); if (era) showYears(era.a, era.b); }
+});
+
+// era buttons, zoom buttons, theme
+const erasEl = document.getElementById("eras");
+for (const era of ERAS) { const b = document.createElement("button"); b.className = "btn"; b.innerHTML = `${esc(era.label)}<kbd>${era.key}</kbd>`; b.onclick = () => { showYears(era.a, era.b); cv.focus({ preventScroll: true }); }; erasEl.appendChild(b); }
+document.getElementById("zin").onclick = () => { setAnchor(W / 2, H / 2); zoomAt(0.6, selected ? X(selected.s) : W / 2); };
+document.getElementById("zout").onclick = () => { setAnchor(W / 2, H / 2); zoomAt(1 / 0.6, selected ? X(selected.s) : W / 2); };
+document.getElementById("guideBtn").onclick = () => { toggleGuide(); cv.focus({ preventScroll: true }); };
+document.getElementById("zfit").onclick = () => showYears(-13.8e9, NOW);
+document.getElementById("themeBtn").onclick = () => {
+  const root = document.documentElement, dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const cur = root.dataset.theme || (dark ? "dark" : "light");
+  root.dataset.theme = cur === "dark" ? "light" : "dark";
+  readTheme(); renderPanel(); density = null; dirty = true; kick();
+};
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readTheme(); renderPanel(); dirty = true; kick(); });
+
+// search: grouped into branches, periods and events
+const q = document.getElementById("q"), res = document.getElementById("results");
+let hl = 0, found = [];
+const norm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function doSearch() {
+  const t = norm(q.value.trim());
+  if (!t) { res.classList.remove("open"); found = []; return; }
+  const words = t.split(/\s+/);
+  // light stemming so "rome" finds "Roman", "egypt" finds "Egyptian", "wars" finds "war"
+  const stem = (w) => (w.length > 3 ? w.replace(/(ians|ian|ans|an|es|s|e)$/, "") : w);
+  const stems = words.map(stem);
+  const has = (hay) => words.every((w) => hay.includes(w));
+  const hasStem = (hay) => { const ws = hay.split(/[^a-z0-9]+/); return stems.every((st) => ws.some((w) => w.startsWith(st))); };
+  const rank = (name, extra) => { const n = norm(name); return n.startsWith(t) ? 0 : n.includes(t) ? 1 : has(n) ? 2 : hasStem(n) ? 2.5 : has(norm(extra)) ? 4 : hasStem(norm(extra)) ? 5 : 9; };
+  const top = (arr, n) => arr.filter((x) => x.r < 9).sort((p, q2) => p.r - q2.r || (p.imp || 2) - (q2.imp || 2) || p.y - q2.y).slice(0, n);
+  const groups = [
+    ["Branches", top(branches.map((b) => ({ type: "branch", b, y: b.start, r: rank(b.name, b.text) })), 5)],
+    ["Periods", top(all.filter((e) => e.kind === "event" && e.sEnd != null).map((e) => ({ type: "period", ev: e, y: e.y, imp: e.imp, r: rank(e.title, e.text + " " + e.b.name) })), 6)],
+    ["Events", top(all.filter((e) => e.kind === "event" && e.sEnd == null).map((e) => ({ type: "event", ev: e, y: e.y, imp: e.imp, r: rank(e.title, e.text + " " + e.b.name) })), 8)],
+  ];
+  found = groups.flatMap(([, g]) => g);
+  hl = 0; let i = 0;
+  const row = (x) => {
+    const k = i++, cls = k === 0 ? "hl" : "";
+    if (x.type === "branch") return `<button data-i="${k}" class="${cls}"><span class="r-dot" style="background:${x.b.color}"></span><span class="r-when">${esc(x.b.startWhen)} – ${x.b.end === null ? "present" : esc(x.b.endWhen)} · ${esc(REGION.get(x.b.region).name)}</span><br>${esc(x.b.name)}</button>`;
+    return `<button data-i="${k}" class="${cls}"><span class="r-dot" style="background:${x.ev.b.color}"></span><span class="r-when">${esc(x.ev.when)} · ${esc(x.ev.b.name)}</span><br>${esc(x.ev.title)}</button>`;
+  };
+  res.innerHTML = found.length ? groups.filter(([, g]) => g.length).map(([h, g]) => `<div class="r-head">${h}</div>${g.map(row).join("")}`).join("") : `<div style="padding:10px;color:var(--muted)">No matches</div>`;
+  res.classList.add("open");
+}
+q.addEventListener("input", doSearch);
+q.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault(); if (!found.length) return;
+    hl = (hl + (e.key === "ArrowDown" ? 1 : found.length - 1)) % found.length;
+    res.querySelectorAll("button[data-i]").forEach((c) => c.classList.toggle("hl", +c.dataset.i === hl));
+    res.querySelector(`button[data-i="${hl}"]`)?.scrollIntoView({ block: "nearest" });
+  }
+  else if (e.key === "Enter" && found[hl]) { pick(found[hl]); }
+  else if (e.key === "Escape") { q.value = ""; doSearch(); cv.focus({ preventScroll: true }); }
+});
+res.addEventListener("click", (e) => { const b = e.target.closest("button[data-i]"); if (b) pick(found[+b.dataset.i]); });
+document.addEventListener("click", (e) => { if (!e.target.closest(".search")) res.classList.remove("open"); });
+// How much time to show around a single moment. A fixed width on the log scale is proportional to how long ago it
+// was: about 50 years around 1975, 600 around 1000 CE, 750,000 around a million years ago.
+const CONTEXT_SPAN = 0.22;
+function goTo(x) {
+  if (x.type === "branch") {
+    // the branch's beginning, a little in from the left edge, with as much of the branch as fits
+    const sp = Math.min(Math.max(x.b.s1 - x.b.s0, CONTEXT_SPAN), 0.6);
+    setView(x.b.s0 - sp * 0.12, x.b.s0 + sp * 0.88);
+    select(x.b.events[0]);
+  } else if (x.type === "period") {
+    const e = x.ev, pad = Math.max((e.sEnd - e.s) * 0.12, 0.004);
+    setView(e.s - pad, e.sEnd + pad); select(e);
+  } else {
+    setView(x.ev.s - CONTEXT_SPAN / 2, x.ev.s + CONTEXT_SPAN / 2); select(x.ev, { center: true });
+  }
+}
+function pick(x) {
+  res.classList.remove("open"); q.blur(); cv.focus({ preventScroll: true });
+  goTo(x);
+}
+
+// ---------- boot ----------
+new ResizeObserver(resize).observe(wrap);
+window.addEventListener("resize", resize);
+resize();
+setRowTargets(view.s0, view.s1); rows.forEach((r) => (r.h = r.ht));
+// #<event id> opens that event (or period); #<branch id> opens the branch at its start
+function openHash() {
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (id && EV.get(id)) { const ev = EV.get(id); goTo(ev.sEnd != null ? { type: "period", ev } : { type: "event", ev }); return true; }
+  if (id && B.get(id)) { goTo({ type: "branch", b: B.get(id) }); return true; }
+  return false;
+}
+if (!openHash()) renderPanel();
+window.addEventListener("hashchange", openHash);
+cv.focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>
