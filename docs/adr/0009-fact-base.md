@@ -1,6 +1,6 @@
 # 0009 — The fact base: independent witnesses, atomic claims, staleness
 
-**Status:** accepted (November 2026). Refines [0004](0004-every-fact-has-evidence.md)'s status rule.
+**Status:** accepted (November 2026). Refines [0004](0004-every-fact-has-evidence.md)'s status rule; its actor claims refined by [0025](0025-edit-files-add-entries-and-junk-actors.md)
 
 ## Context
 

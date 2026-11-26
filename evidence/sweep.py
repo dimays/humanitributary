@@ -80,6 +80,40 @@ def split_all(today: date, entries=None) -> dict:
     return dict(stats)
 
 
+def junk_actors(sample: int = 20) -> dict:
+    """Report, never write: the actor claims the splitter's rules now reject (`claims.junk_actor`, with the names it
+    now finds in the same entry, so "Zealand" beside "New Zealand" counts), by reason, and how many have no evidence
+    of their own. The sweep keeps them (claims.sync); whether to remove them is the owner's decision (ADR 0025)."""
+    actor_claims = defaultdict(list)
+    for c in Claim.objects.filter(field="actor").annotate(evidence_count=Count("evidence")).order_by("entry_id", "key"):
+        actor_claims[c.entry_id].append(c)
+    locations = {loc.entry_id: loc for loc in Location.objects.filter(entry_id__in=list(actor_claims))}
+    labels = _branch_entity_labels()
+    reasons, found = defaultdict(int), []
+    objs = list(Branch.objects.filter(pk__in=list(actor_claims))) + list(Event.objects.filter(pk__in=list(actor_claims)))
+    for x in sorted(objs, key=lambda x: x.slug):
+        lab = labels.get(x.pk if x.kind == "branch" else x.branch_id, [])
+        desired = splitter.derive(x, locations.get(x.pk), lab)
+        derived = [v["name"] for (field, _), v in desired.items() if field == "actor"]
+        for c in actor_claims[x.pk]:
+            if ("actor", c.key) in desired:
+                continue  # still found: not junk by these rules
+            why = splitter.junk_actor((c.value or {}).get("name", ""), derived)
+            if why:
+                reasons[why] += 1
+                found.append({"entry": x.slug, "status": x.status, "name": c.value.get("name"), "reason": why, "evidence": c.evidence_count})
+    bare = [f for f in found if not f["evidence"]]
+    step = max(1, len(bare) // sample) if sample else 0
+    return {
+        "actor_claims": sum(len(v) for v in actor_claims.values()),
+        "junk": len(found),
+        "junk_without_evidence": len(bare),
+        "junk_with_evidence": len(found) - len(bare),
+        "by_reason": dict(sorted(reasons.items(), key=lambda kv: -kv[1])),
+        "sample": bare[::step][:sample] if sample else [],
+    }
+
+
 # ── 2. link health ──
 
 def link_health(today: date) -> tuple[dict, dict[int, str]]:

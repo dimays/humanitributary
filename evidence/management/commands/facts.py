@@ -1,6 +1,7 @@
 """The fact base's jobs and the agents' door to evidence (docs/fact-checking.md).
 
     manage.py facts sweep [--today YYYY-MM-DD] [--dry-run] [--no-split] [--no-tasks]   # the self-healing loop (job)
+    manage.py facts sweep --junk-actors --dry-run [--sample 20]                        # report junk actor claims; writes nothing
     manage.py facts report [--today …] [--brief]                                        # health, as Markdown
     manage.py facts check <slug>                                                         # may this entry be published?
     manage.py facts record --claim 812 --url https://… --stance supports --excerpt "…" --agent agent:me [--task 42]
@@ -35,6 +36,9 @@ class Command(BaseCommand):
         p.add_argument("--dry-run", action="store_true", help="Compute everything, then roll back.")
         p.add_argument("--no-split", action="store_true", help="Skip deriving atomic claims.")
         p.add_argument("--no-tasks", action="store_true", help="Skip queueing verify_claim tasks.")
+        p.add_argument("--junk-actors", action="store_true",
+                       help="Only report the actor claims the splitter now rejects (count by reason, a sample); needs --dry-run, writes nothing.")
+        p.add_argument("--sample", type=int, default=20, help="With --junk-actors: how many junk claims without evidence to list.")
         p = sub.add_parser("report")
         p.add_argument("--today")
         p.add_argument("--brief", action="store_true", help="Without the era and region tables.")
@@ -57,7 +61,11 @@ class Command(BaseCommand):
         p.add_argument("--override", default="", help="Publish despite the rule, with this reason (recorded in the Revision).")
 
     def handle(self, *args, action, **o):
-        if action == "sweep":
+        if action == "sweep" and o["junk_actors"]:
+            if not o["dry_run"]:
+                raise CommandError("--junk-actors is a report: add --dry-run (it never deletes; removing junk claims is the owner's decision)")
+            self.stdout.write(json.dumps(sweep.junk_actors(o["sample"]), indent=1, ensure_ascii=False))
+        elif action == "sweep":
             out = sweep.sweep(_date(o["today"]), split=not o["no_split"], tasks=not o["no_tasks"], dry_run=o["dry_run"])
             self.stdout.write(json.dumps(out, indent=1, sort_keys=True))
         elif action == "report":

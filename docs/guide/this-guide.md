@@ -187,7 +187,10 @@ every pull request and every push to main, after `uv sync --frozen` and
 `manage.py migrate`. It gets a throwaway Postgres 16 as a service container
 on port 5433, Node for the site's build, a full clone (`fetch-depth: 0`,
 since stamps are checked against git history) and `STORAGE_BACKEND=local`,
-so it uses no secrets and nothing reaches MinIO, S3 or the network.
+so it uses no secrets and nothing reaches MinIO, S3 or the network. A run
+is cut off after 15 minutes (`timeout-minutes`; it usually takes about one),
+and a newer push to the same ref cancels the run it supersedes (the
+`concurrency` group `check-<ref>`).
 
 ## The hooks
 

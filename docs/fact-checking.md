@@ -28,18 +28,25 @@ is ADR 0009 (and ADR 0010 for the publishing rule); every threshold is in
 
   Numbers are counts, magnitudes and percentages; years, days of the month,
   ordinals, decades and the low end of year ranges are left out. Actors are
-  runs of capitalized words (with *de*, *of*, *al-* … inside), less month
-  names, sentence-opening function words, a lone capitalized word opening a
-  sentence unless it is capitalized elsewhere too, and the sources' own names
-  (Wikipedia, Britannica, the Met …); with ingestion's `Entity` rows routed to
-  the branch, an exact label match counts too. At most eight actors an entry.
+  runs of capitalized words (with *de*, *of*, *the*, *al-* … inside), less
+  what isn't a name: sentence-opening function words and articles ("of
+  March", "the Franks" → "Franks"), months, single letters ("U.S." is not "U"
+  and "S"), lone common words ("Literature", "Republic"), hyphenated adjectives
+  ("US-led"), a lone capitalized word opening a sentence unless it is
+  capitalized elsewhere too, and the sources' own names (Wikipedia,
+  Britannica, the Met …). "New", "Great", "Three", "First" … stay at the front
+  of the name they begin ("New Zealand", "Three Kingdoms"). With ingestion's
+  `Entity` rows routed to the branch, an exact label match counts too. At most
+  eight actors an entry.
   It is a heuristic and errs toward a claim an agent can dismiss in a second.
   On today's content it derives 41,739 atomic claims: 5,998 dates, 5,589
   places, 2,584 numbers and 27,568 actors.
 - When an entry's wording changes, its parts follow: new parts are created,
   vanished ones deleted, unless something checked them, in which case they
   are kept (or updated) and marked for recheck (`recheck_reason =
-  "value_changed"`).
+  "value_changed"`). Actor claims the rules now reject as junk (made before
+  them) are left alone: `manage.py facts sweep --junk-actors --dry-run`
+  counts them, and removing them is the owner's decision (ADR 0025).
 
 ## Independence
 

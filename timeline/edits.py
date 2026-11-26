@@ -13,9 +13,15 @@ file only):
 | `reject` | a `draft` or `review` entry → `retracted` |
 | `add_evidence` | a citation's stance (and a verbatim excerpt of at most 25 words) on one of the entry's claims, through `record_evidence` |
 | `resolve_conflict` | the entry's conflicting evidence (or one claim's, or some URLs') marked resolved, and the claims recomputed |
+| `add_branch` | a new branch (`branch`: SCHEMA's Branch keys, with its `cites`), its `origin` (TL.origin) and `geo` (TL.geo); in review, or `status: "published"` through the publishing rule |
+| `add_event` | a new event (`event`: SCHEMA's Event keys, `link` or `links`, `cites`) and its `geo`; in review, or published through the rule |
+| `add_connection` | a connection (TL.enrich) from `entry` to `to` with a `note`; an entry without "why it matters" text needs `why` and `cites` too |
+
+An op may name an entry an earlier op in the same file adds (an event on a new branch, a connection to a new event);
+a later op is too late, since the ops run in order.
 
 Everything is checked before anything is written (`check`: the shape of every op, the SCHEMA limits, https cites and
-never openstax.org, slugs, branches), then applied in order inside one `revising(actor)` block, each op in its own
+never openstax.org, slugs, branches and regions), then applied in order inside one `revising(actor)` block, each op in its own
 nested block whose reason names the file, the op and its `reason`. Every problem, from either pass, is listed and
 then nothing is kept; a dry run rolls back the same way after printing the Revisions it would have written.
 """
@@ -45,9 +51,10 @@ from revisions.context import ACTOR_RE
 from revisions.models import Revision
 
 from . import services
-from .models import SLUG_RE, Branch, Entry, EventLink, Status
+from .models import HOWS, SLUG_RE, Branch, BranchLink, Connection, Entry, EventLink, Location, Region, Status
 
 TITLE_MAX, TEXT_MAX, EXCERPT_WORDS = 60, 240, 25  # site/SCHEMA.md; evidence_excerpt_25_words
+ORIGIN_NOTE_MAX, ORIGIN_LINK_NOTE_MAX, CONNECTION_NOTE_MAX, WHY_MAX, NAME_MAX = 300, 100, 90, 700, 200  # site/SCHEMA.md
 COMMON = {"op", "reason", "note"}
 KEYS = {  # op → (required, optional)
     "edit": ({"entry"}, {"fields", "add_cites", "remove_cites"}),
@@ -56,7 +63,17 @@ KEYS = {  # op → (required, optional)
     "reject": ({"entry"}, set()),
     "add_evidence": ({"entry", "url", "stance"}, {"claim", "title", "excerpt", "method", "found"}),
     "resolve_conflict": ({"entry"}, {"claim", "urls"}),
+    "add_branch": ({"branch"}, {"origin", "geo", "status", "override"}),
+    "add_event": ({"event"}, {"geo", "status", "override"}),
+    "add_connection": ({"entry", "to", "note"}, {"why", "cites"}),
 }
+ADDS = {"add_branch": "branch", "add_event": "event"}  # op → the key holding the new entry (its id is the op's entry)
+BRANCH_KEYS = ({"id", "name", "region", "start", "startWhen", "text", "cites"}, {"end", "endWhen", "parents", "into"})
+EVENT_KEYS = ({"id", "branch", "y", "when", "title", "text", "imp", "cites"}, {"end", "link", "links"})
+GEO_KEYS = {"scope", "lat", "lon", "r", "label", "src", "scale"}
+SCOPES = set(Location.Scope.values)
+SCALES = set(Location.Scale.values)
+NEW_STATUSES = ("review", "published")
 EVENT_FIELDS = {"title", "text", "y", "end", "when", "branch", "links", "imp"}
 BRANCH_FIELDS = {"text"}
 CITE_KEYS = {"t", "u", "k", "stance", "method", "excerpt"}
@@ -109,10 +126,21 @@ def words(s: str) -> int:
     return len((s or "").split())
 
 
+def target(op) -> str | None:
+    """The entry an op is about: its `entry`, or the id of the entry an add_branch / add_event creates."""
+    if not isinstance(op, dict):
+        return None
+    if op.get("op") in ADDS:
+        new = op.get(ADDS[op["op"]])
+        return new.get("id") if isinstance(new, dict) and isinstance(new.get("id"), str) else None
+    return op["entry"] if isinstance(op.get("entry"), str) else None
+
+
 def _label(i: int, op) -> str:
     if not isinstance(op, dict):
         return f"#{i}"
-    return f"#{i} {op.get('op', '?')}" + (f" {op['entry']}" if isinstance(op.get("entry"), str) else "")
+    t = target(op)
+    return f"#{i} {op.get('op', '?')}" + (f" {t}" if t else "")
 
 
 def _url_problems(u, where: str) -> list[str]:
@@ -191,15 +219,11 @@ def _fields_problems(f, where: str) -> list[str]:
     return out
 
 
-def _cites_problems(op, where: str) -> list[str]:
-    out, seen = [], set()
-    adds, removes = op.get("add_cites", []), op.get("remove_cites", [])
-    if not isinstance(adds, list):
-        return [f"{where}: add_cites must be a list"]
-    if not isinstance(removes, list):
-        return [f"{where}: remove_cites must be a list"]
-    for j, c in enumerate(adds):
-        w = f"{where} add_cites[{j}]"
+def _cite_list_problems(cites: list, where: str, seen: set | None = None) -> list[str]:
+    """Each cite's shape: {"t", "u", "k"?} (plus a stance, method and excerpt for the evidence row), no page twice."""
+    out, seen = [], set() if seen is None else seen
+    for j, c in enumerate(cites):
+        w = f"{where}[{j}]"
         if not isinstance(c, dict):
             out.append(f"{w}: a cite is {{\"t\", \"u\", \"k\"?}}")
             continue
@@ -219,6 +243,209 @@ def _cites_problems(op, where: str) -> list[str]:
             if norm_url(c["u"]) in seen:
                 out.append(f"{w}: {c['u']} is cited twice")
             seen.add(norm_url(c["u"]))
+    return out
+
+
+def _required_cites(cites, where: str) -> list[str]:
+    if not isinstance(cites, list) or not cites:
+        return [f"{where}: at least one cite is required (SCHEMA citation rules: every claim supported)"]
+    return _cite_list_problems(cites, where)
+
+
+def _str_problems(d: dict, key: str, where: str, most: int, *, required: bool = True) -> list[str]:
+    v = d.get(key)
+    if v is None and not required:
+        return []
+    if not isinstance(v, str) or not v.strip() or len(v) > most:
+        return [f"{where}: {key} must be 1–{most} characters (is {len(v) if isinstance(v, str) else 'not a string'})"]
+    return []
+
+
+def _num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _slug_list(v, where: str, key: str, me: str | None) -> list[str]:
+    if not isinstance(v, list) or not all(isinstance(s, str) and re.match(SLUG_RE, s) for s in v):
+        return [f"{where}: {key} must be a list of branch slugs"]
+    if len(set(v)) != len(v):
+        return [f"{where}: {key} names a branch twice"]
+    if me in v:
+        return [f"{where}: {key} names the entry itself ({me})"]
+    return []
+
+
+def _geo_problems(g, where: str) -> list[str]:
+    """TL.geo (site/SCHEMA.md, "Location"), as the Location table's constraints and the build check it."""
+    w = f"{where} geo"
+    if not isinstance(g, dict):
+        return [f"{w}: an object {{scope, lat, lon, r, label, src}} or {{scope: global}} / {{scope: cosmic, scale}}"]
+    out = []
+    if extra := set(g) - GEO_KEYS:
+        out.append(f"{w}: unknown keys {sorted(extra)}")
+    scope = g.get("scope")
+    if scope not in SCOPES:
+        return out + [f"{w}: scope must be one of {sorted(SCOPES)}"]
+    if scope in ("place", "region"):
+        if not (_num(g.get("lat")) and -90 <= g["lat"] <= 90 and _num(g.get("lon")) and -180 <= g["lon"] <= 180):
+            out.append(f"{w}: lat must be -90–90 and lon -180–180")
+        if not (_num(g.get("r")) and 0 < g["r"] <= 6000):
+            out.append(f"{w}: r (km) must be more than 0 and at most 6000")
+        if not isinstance(g.get("label"), str) or not g["label"].strip():
+            out.append(f"{w}: a label is required")
+        out += _url_problems(g.get("src"), f"{w} src")
+    elif set(g) & {"lat", "lon", "r", "label", "src"}:
+        out.append(f"{w}: a {scope} location has no lat, lon, r, label or src")
+    if "scale" in g and (scope != "cosmic" or g["scale"] not in SCALES):
+        out.append(f"{w}: scale is only for cosmic scope, one of {sorted(SCALES)}")
+    return out
+
+
+def _status_problems(op, where: str) -> list[str]:
+    out = []
+    if op.get("status", "review") not in NEW_STATUSES:
+        out.append(f"{where}: status must be review or published (a new entry is published through the publishing rule)")
+    if "override" in op:
+        if not isinstance(op["override"], str) or not op["override"].strip():
+            out.append(f"{where}: override must be a non-empty note")
+        elif op.get("status") != "published":
+            out.append(f"{where}: override is only for status published")
+    return out
+
+
+def _keys_problems(d, keys: tuple[set, set], where: str, what: str) -> list[str]:
+    if not isinstance(d, dict):
+        return [f"{where}: {what} must be an object"]
+    required, optional = keys
+    out = []
+    if missing := required - set(d):
+        out.append(f"{where}: {what} is missing {sorted(missing)}")
+    if extra := set(d) - required - optional:
+        out.append(f"{where}: {what} has unknown keys {sorted(extra)}")
+    return out
+
+
+def _new_id_problems(slug, where: str) -> list[str]:
+    if not isinstance(slug, str) or not re.match(SLUG_RE, slug) or len(slug) > 120:
+        return [f"{where}: id must be a kebab-case slug (lowercase letters, digits, hyphens; at most 120)"]
+    return []
+
+
+def _branch_problems(op, where: str) -> list[str]:
+    """add_branch: a Branch as site/SCHEMA.md writes it, its origin (TL.origin) and location (TL.geo)."""
+    b = op.get("branch")
+    out = _keys_problems(b, BRANCH_KEYS, where, "branch")
+    if not isinstance(b, dict):
+        return out
+    me = b.get("id")
+    out += _new_id_problems(me, where)
+    out += _str_problems(b, "name", where, NAME_MAX)
+    out += _str_problems(b, "text", where, TEXT_MAX)
+    out += _str_problems(b, "startWhen", where, 300)
+    if not isinstance(b.get("region"), str) or not b["region"]:
+        out.append(f"{where}: region must be a region's slug")
+    if not _num(b.get("start")):
+        out.append(f"{where}: start must be a number")
+    end = b.get("end")
+    if end is not None and not _num(end):
+        out.append(f"{where}: end must be a number or null (null: continues to today)")
+    if _num(end) and _num(b.get("start")) and end <= b["start"]:
+        out.append(f"{where}: end ({end}) must be after start ({b['start']})")
+    if end is not None:
+        out += _str_problems(b, "endWhen", where, 300)
+    elif b.get("endWhen") not in (None, ""):
+        out.append(f"{where}: endWhen is only for a branch with an end")
+    for key in ("parents", "into"):
+        out += _slug_list(b.get(key, []), where, key, me)
+    out += _required_cites(b.get("cites"), f"{where} cites")
+    if "origin" in op:
+        o = op["origin"]
+        out += _keys_problems(o, ({"note", "links", "cites"}, set()), where, "origin")
+        if isinstance(o, dict):
+            out += _str_problems(o, "note", f"{where} origin", ORIGIN_NOTE_MAX)
+            links = o.get("links", [])
+            if not isinstance(links, list):
+                out.append(f"{where} origin: links must be a list (it may be empty)")
+                links = []
+            ids = []
+            for j, link in enumerate(links):
+                w = f"{where} origin links[{j}]"
+                if not isinstance(link, dict) or set(link) != {"id", "how", "note"}:
+                    out.append(f"{w}: a link is {{\"id\", \"how\", \"note\"}}")
+                    continue
+                ids.append(link["id"])
+                if link["how"] not in HOWS:
+                    out.append(f"{w}: how must be one of {HOWS}")
+                out += _str_problems(link, "note", w, ORIGIN_LINK_NOTE_MAX)
+            out += _slug_list(ids, f"{where} origin", "links", me)
+            out += _required_cites(o.get("cites"), f"{where} origin cites")
+    if "geo" in op:
+        out += _geo_problems(op["geo"], where)
+    return out + _status_problems(op, where)
+
+
+def _event_problems(op, where: str) -> list[str]:
+    """add_event: an Event as site/SCHEMA.md writes it, and its location."""
+    e = op.get("event")
+    out = _keys_problems(e, EVENT_KEYS, where, "event")
+    if not isinstance(e, dict):
+        return out
+    out += _new_id_problems(e.get("id"), where)
+    out += _fields_problems({k: e[k] for k in ("title", "text", "y", "end", "when", "branch", "imp") if k in e}, where)
+    if "link" in e and "links" in e:
+        out.append(f"{where}: give link or links, not both")
+    links = [e["link"]] if "link" in e else e.get("links", [])
+    if "link" in e and not isinstance(e["link"], str):
+        out.append(f"{where}: link must be a branch slug")
+    else:
+        out += _slug_list(links, where, "links", None)
+        if isinstance(e.get("branch"), str) and e["branch"] in links:
+            out.append(f"{where}: an event can't link to its own branch ({e['branch']})")
+    out += _required_cites(e.get("cites"), f"{where} cites")
+    if "geo" in op:
+        out += _geo_problems(op["geo"], where)
+    return out + _status_problems(op, where)
+
+
+def _connection_problems(op, where: str) -> list[str]:
+    """add_connection: a TL.enrich connection, ≤ 90 characters; a `why` (≤ 700) and cites when the entry has none."""
+    out = []
+    to = op.get("to")
+    if not isinstance(to, str) or not re.match(SLUG_RE, to):
+        out.append(f"{where}: to must be an entry's slug")
+    elif to == op.get("entry"):
+        out.append(f"{where}: an entry can't connect to itself")
+    out += _str_problems(op, "note", where, CONNECTION_NOTE_MAX)
+    out += _str_problems(op, "why", where, WHY_MAX, required=False)
+    if "cites" in op:
+        out += _required_cites(op["cites"], f"{where} cites")
+    return out
+
+
+def new_links(op) -> set[str]:
+    """The branch slugs an add_branch / add_event names (its branch, parents, into, origin links, event links)."""
+    if op.get("op") == "add_branch" and isinstance(op.get("branch"), dict):
+        b = op["branch"]
+        out = {s for k in ("parents", "into") if isinstance(b.get(k), list) for s in b[k]}
+        o = op.get("origin")
+        if isinstance(o, dict) and isinstance(o.get("links"), list):
+            out |= {link.get("id") for link in o["links"] if isinstance(link, dict)}
+        return {s for s in out if isinstance(s, str)}
+    if op.get("op") == "add_event" and isinstance(op.get("event"), dict):
+        e = op["event"]
+        out = {e.get("branch"), e.get("link")} | set(e["links"] if isinstance(e.get("links"), list) else [])
+        return {s for s in out if isinstance(s, str)}
+    return set()
+
+
+def _cites_problems(op, where: str) -> list[str]:
+    out, seen = [], set()
+    adds, removes = op.get("add_cites", []), op.get("remove_cites", [])
+    if not isinstance(adds, list):
+        return [f"{where}: add_cites must be a list"]
+    if not isinstance(removes, list):
+        return [f"{where}: remove_cites must be a list"]
+    out += _cite_list_problems(adds, f"{where} add_cites", seen)
     for j, r in enumerate(removes):
         w = f"{where} remove_cites[{j}]"
         if isinstance(r, dict):
@@ -232,9 +459,10 @@ def _cites_problems(op, where: str) -> list[str]:
 
 
 def check(ops: list) -> list[str]:
-    """Every problem with the file's shape and limits, without reading any row but the branches it names."""
+    """Every problem with the file's shape and limits, without reading any row but the branches and regions it names."""
     out = []
     targets, retired = {}, {}  # a rename's new id → (old id, op); a slug → why a later op can't use it
+    added = {}  # an id an add_branch / add_event creates → (its kind, the op's index)
     for i, op in enumerate(ops):
         where = _label(i, op)
         if not isinstance(op, dict):
@@ -251,6 +479,23 @@ def check(ops: list) -> list[str]:
             out.append(f"{where}: unknown keys {sorted(extra)}")
         if not isinstance(op.get("reason"), str) or not op["reason"].strip():
             out.append(f"{where}: a reason is required")
+        if kind in ADDS:
+            out += (_branch_problems if kind == "add_branch" else _event_problems)(op, where)
+            slug = target(op)
+            if slug is None:
+                continue
+            if slug in added:
+                out.append(f"{where}: {slug} is already added by op #{added[slug][1]}")
+            elif slug in targets:
+                out.append(f"{where}: {slug} is already the new id of {targets[slug][0]} (op #{targets[slug][1]})")
+            for ref in sorted(new_links(op)):
+                if added.get(ref, ("branch",))[0] != "branch":
+                    out.append(f"{where}: {ref} is an event, not a branch")
+                if ref in retired:
+                    out.append(f"{where}: {ref} {retired[ref]}")
+            added[slug] = (ADDS[kind], i)
+            retired.pop(slug, None)
+            continue
         slug = op.get("entry")
         if not isinstance(slug, str) or not re.match(SLUG_RE, slug):
             out.append(f"{where}: entry must be an entry's slug")
@@ -271,6 +516,8 @@ def check(ops: list) -> list[str]:
                 out.append(f"{where}: renames {slug} to itself")
             elif to in targets:
                 out.append(f"{where}: {to} is already the new id of {targets[to][0]} (op #{targets[to][1]})")
+            elif to in added:
+                out.append(f"{where}: {to} is added by op #{added[to][1]}")
             else:
                 targets[to] = (slug, i)
                 retired[slug] = f"was renamed to {to} in op #{i}: use the new id"
@@ -297,16 +544,39 @@ def check(ops: list) -> list[str]:
             urls = op.get("urls", [])
             if not isinstance(urls, list) or not all(isinstance(u, str) and u for u in urls):
                 out.append(f"{where}: urls must be a list of URLs")
-    named = set()
-    for op in ops:
-        if isinstance(op, dict) and op.get("op") == "edit" and isinstance(op.get("fields"), dict):
+        elif kind == "add_connection":
+            out += _connection_problems(op, where)
+            to = op.get("to")
+            if isinstance(to, str) and to in retired:
+                out.append(f"{where}: {to} {retired[to]}")
+    # Branches and regions named must exist, or be added by an earlier op (a later one is too late: ops run in order).
+    named, regions = set(), set()
+    for i, op in enumerate(ops):
+        if not isinstance(op, dict):
+            continue
+        refs = set()
+        if op.get("op") == "edit" and isinstance(op.get("fields"), dict):
             f = op["fields"]
             if isinstance(f.get("branch"), str):
-                named.add(f["branch"])
+                refs.add(f["branch"])
             if isinstance(f.get("links"), list):
-                named |= {s for s in f["links"] if isinstance(s, str)}
+                refs |= {s for s in f["links"] if isinstance(s, str)}
+        elif op.get("op") in ADDS:
+            refs = new_links(op)
+            if op["op"] == "add_branch" and isinstance(op.get("branch"), dict) and isinstance(op["branch"].get("region"), str):
+                regions.add(op["branch"]["region"])
+        elif op.get("op") == "add_connection":
+            for s in (op.get("entry"), op.get("to")):
+                if isinstance(s, str) and s in added and added[s][1] > i:
+                    out.append(f"{_label(i, op)}: {s} is added later, by op #{added[s][1]}: move that op first")
+        for s in refs:
+            if s in added and added[s][1] >= i:
+                out.append(f"{_label(i, op)}: {s} is added later, by op #{added[s][1]}: move that op first")
+        named |= {s for s in refs if s not in added}
     have = set(Branch.objects.filter(slug__in=named).values_list("slug", flat=True))
     out += [f"branch {s!r} doesn't exist" for s in sorted(named - have)]
+    have = set(Region.objects.filter(slug__in=regions).values_list("slug", flat=True))
+    out += [f"region {s!r} doesn't exist (one of {', '.join(Region.objects.values_list('slug', flat=True))})" for s in sorted(regions - have)]
     return out
 
 
@@ -403,22 +673,136 @@ def op_edit(op: dict, actor: str, today: date) -> list[str]:
             services.delete(ev)
             notes.append(f"removed cite {ev.citation.url}")
     for c in op.get("add_cites", []):
-        ev = _find_row(claim, c["u"])
-        cit = ev.citation if ev else citation_for(_known_url(c["u"]), c["t"])
-        if cit is None:
-            raise _Problem(f"add_cites: {c['u']} can't be cited (its publisher is forbidden)")
-        if ev is None:
-            last = claim.evidence.aggregate(m=Max("position"))["m"]
-            ev = Evidence(claim=claim, citation=cit, position=0 if last is None else last + 1)
-            notes.append(f"added cite {cit.url}")
-        else:
-            notes.append(f"updated cite {cit.url}")
-        services.apply_changes(ev, {
-            "stance": c.get("stance", "supports"), "cited_title": c["t"][:500], "cited_kind": c.get("k", ""), "checked_by": actor,
-            "method": c.get("method", "agent_read"), "checked_at": timezone.now(), "content_hash": cit.content_hash,
-            "excerpt": c["excerpt"] if "excerpt" in c else ev.excerpt,
-        })
+        notes.append(_add_cite(claim, c, actor, "add_cites"))
     _resplit(entry, today)
+    return notes
+
+
+def _add_cite(claim: Claim, c: dict, actor: str, where: str = "cites") -> str:
+    """A cite as a supporting (or partial) evidence row on a record claim: appended, or the same page's row updated."""
+    ev = _find_row(claim, c["u"])
+    cit = ev.citation if ev else citation_for(_known_url(c["u"]), c["t"])
+    if cit is None:
+        raise _Problem(f"{where}: {c['u']} can't be cited (its publisher is forbidden)")
+    if ev is None:
+        last = claim.evidence.aggregate(m=Max("position"))["m"]
+        ev = Evidence(claim=claim, citation=cit, position=0 if last is None else last + 1)
+        note = f"added cite {cit.url}"
+    else:
+        note = f"updated cite {cit.url}"
+    services.apply_changes(ev, {
+        "stance": c.get("stance", "supports"), "cited_title": c["t"][:500], "cited_kind": c.get("k", ""), "checked_by": actor,
+        "method": c.get("method", "agent_read"), "checked_at": timezone.now(), "content_hash": cit.content_hash,
+        "excerpt": c["excerpt"] if "excerpt" in c else ev.excerpt,
+    })
+    return note
+
+
+def _record(entry: Entry, field: str, value: dict, cites: list, actor: str) -> tuple[Claim, list[str]]:
+    """A new entry's record claim (as_written, origin or why) with its cites."""
+    claim = Claim.objects.filter(entry=entry, field=field, key="", parent__isnull=True).first() or Claim(entry=entry, field=field, key="")
+    services.apply_changes(claim, {"value": value})
+    return claim, [_add_cite(claim, c, actor, f"{field} cites") for c in cites]
+
+
+def _new_entry_free(slug: str) -> None:
+    if (have := Entry.objects.filter(slug=slug).first()) is not None:
+        raise _Problem(f"{slug} is already an entry's id (a {have.kind}, {have.status}): an add creates a new entry; change one with edit")
+
+
+def _place(entry: Entry, geo: dict | None) -> list[str]:
+    if geo is None:
+        return []
+    values = {"scope": geo["scope"], "lat": geo.get("lat"), "lon": geo.get("lon"), "radius_km": geo.get("r"), "label": geo.get("label"),
+              "src": geo.get("src"), "scale": geo.get("scale")}
+    services.apply_changes(Location.objects.filter(entry=entry).first() or Location(entry=entry), values)
+    return [f"location {geo.get('label') or geo['scope']}"]
+
+
+def _publish(entry: Entry, op: dict, today: date) -> list[str]:
+    """A new entry starts in review; status "published" moves it through the publishing rule, as approve does."""
+    if op.get("status", "review") != "published":
+        return ["in review"]
+    try:
+        publishing.publish_entry(entry.slug, override=op.get("override", ""), today=today)
+    except publishing.PublishBlocked as e:
+        raise _Problem(f"the publishing rule refuses it: {'; '.join(e.problems)} (add it in review, or give an override note)") from e
+    return ["published"]
+
+
+def op_add_branch(op: dict, actor: str, today: date) -> list[str]:
+    b, origin = op["branch"], op.get("origin")
+    _new_entry_free(b["id"])
+    parents, into = b.get("parents", []), b.get("into", [])
+    values = {"name": b["name"], "start": b["start"], "end": b.get("end"), "start_when": b["startWhen"], "end_when": b.get("endWhen"),
+              "text": b["text"], "origin_note": origin["note"] if origin else None, "status": Status.REVIEW}
+    x, _ = services.save_branch(b["id"], region=b["region"], **values)
+    notes = [f"branch {x.slug} in {b['region']}, {b['startWhen']}" + (f" to {b['endWhen']}" if b.get("endWhen") else "")]
+    # Parents and into in order; origin links mark their parent link with how and note (as publish/legacy.py loads them).
+    desired = {}
+    for i, slug in enumerate(parents):
+        desired[(slug, "parent")] = {"position": i, "origin_position": None, "how": "", "note": ""}
+    for i, slug in enumerate(into):
+        desired[(slug, "into")] = {"position": i, "origin_position": None, "how": "", "note": ""}
+    for j, link in enumerate((origin or {}).get("links", [])):
+        d = desired.setdefault((link["id"], "parent"), {"position": len(parents) + j, "origin_position": None, "how": "", "note": ""})
+        d.update(origin_position=j, how=link["how"], note=link["note"])
+    for (slug, relation), v in desired.items():
+        services.apply_changes(BranchLink(branch=x, target=Branch.objects.get(slug=slug), relation=relation), v)
+        notes.append(f"{relation} {slug}" + (f" ({v['how']})" if v["how"] else ""))
+    _, cited = _record(x, "as_written", {"name": b["name"], "startWhen": b["startWhen"], "endWhen": b.get("endWhen"), "text": b["text"],
+                                          "parents": parents, "into": into}, b["cites"], actor)
+    notes += cited
+    if origin:
+        _, cited = _record(x, "origin", {"note": origin["note"], "links": [link["id"] for link in origin["links"]]}, origin["cites"], actor)
+        notes += [f"origin: {n}" for n in cited]
+    notes += _place(x, op.get("geo"))
+    _resplit(x, today)
+    return notes + _publish(x, op, today)
+
+
+def op_add_event(op: dict, actor: str, today: date) -> list[str]:
+    e = op["event"]
+    _new_entry_free(e["id"])
+    values = {k: e[k] for k in ("y", "when", "title", "text", "imp")} | {"end": e.get("end"), "status": Status.REVIEW}
+    x, _ = services.save_event(e["id"], branch=e["branch"], **values)
+    notes = [f"event {x.slug} on {e['branch']}, {e['when']}"]
+    for i, slug in enumerate([e["link"]] if "link" in e else e.get("links", [])):
+        services.apply_changes(EventLink(event=x, branch=Branch.objects.get(slug=slug)), {"position": i})
+        notes.append(f"link {slug}")
+    _, cited = _record(x, "as_written", {"when": e["when"], "title": e["title"], "text": e["text"]}, e["cites"], actor)
+    notes += cited
+    notes += _place(x, op.get("geo"))
+    _resplit(x, today)
+    return notes + _publish(x, op, today)
+
+
+def op_add_connection(op: dict, actor: str, today: date) -> list[str]:
+    """A TL.enrich connection. The snapshot writes an entry's connections only with its "why it matters" text, and the
+    why claim's cites support every note, so an entry without a why needs one (and cites) in the op."""
+    entry, to = _entry(op["entry"]), _entry(op["to"])
+    x = entry.concrete
+    notes = []
+    if not x.why:
+        if not op.get("why") or not op.get("cites"):
+            raise _Problem(f"{x.slug} has no why: connections are shown only with one, so give why (≤ {WHY_MAX} characters) and cites")
+        services.apply_changes(x, {"why": op["why"]})
+        notes.append("why added")
+    elif op.get("why") and op["why"] != x.why:
+        raise _Problem(f"{x.slug} already has a why: add_connection doesn't replace it (leave why out)")
+    have = list(Connection.objects.filter(source=entry).order_by("position"))
+    row = next((c for c in have if c.target_id == to.pk), None)
+    if row is None:
+        row = Connection(source=entry, target=to, position=have[-1].position + 1 if have else 0)
+        have.append(row)
+    r = services.apply_changes(row, {"note": op["note"]})
+    notes.append(f"connection → {to.slug} {r}")
+    value = {"why": x.why, "connections": [Entry.objects.get(pk=c.target_id).slug for c in have]}
+    claim, cited = _record(entry, "why", value, op.get("cites", []), actor)
+    notes += cited
+    if not claim.evidence.filter(stance__in=CITE_STANCES).exists():
+        raise _Problem(f"{x.slug}'s why has no supporting cite: give cites for the connection")
+    reassess_all(today, {}, claim_ids=[claim.pk])
     return notes
 
 
@@ -513,13 +897,14 @@ def op_resolve_conflict(op: dict, actor: str, today: date) -> list[str]:
 
 
 HANDLERS = {"edit": op_edit, "rename": op_rename, "approve": op_approve, "reject": op_reject, "add_evidence": op_add_evidence,
-            "resolve_conflict": op_resolve_conflict}
+            "resolve_conflict": op_resolve_conflict, "add_branch": op_add_branch, "add_event": op_add_event, "add_connection": op_add_connection}
 
 
 # ── the diff: the Revisions an op wrote ──
 
 SHORT = {"timeline_entry": "entry", "timeline_event": "event", "timeline_branch": "branch", "timeline_eventlink": "link",
-         "evidence_claim": "claim", "evidence_evidence": "evidence", "evidence_citation": "citation", "evidence_publisher": "publisher"}
+         "evidence_claim": "claim", "evidence_evidence": "evidence", "evidence_citation": "citation", "evidence_publisher": "publisher",
+         "timeline_branchlink": "branch link", "timeline_connection": "connection", "timeline_location": "location"}
 QUIET = {"updated_at", "created_at", "id"}
 
 
@@ -540,6 +925,14 @@ def _describe(rev: Revision) -> str:
     if t == "evidence_evidence":
         url = Citation.objects.filter(pk=row.get("citation_id")).values_list("url", flat=True).first()
         return f"evidence {rev.row_pk} (claim {row.get('claim_id')} ← {url})"
+    if t == "timeline_branchlink":
+        a, b = (Branch.objects.filter(pk=row.get(k)).values_list("slug", flat=True).first() for k in ("branch_id", "target_id"))
+        return f"branch link {rev.row_pk} ({a} {row.get('relation')} {b})"
+    if t == "timeline_connection":
+        a, b = (Entry.objects.filter(pk=row.get(k)).values_list("slug", flat=True).first() for k in ("source_id", "target_id"))
+        return f"connection {rev.row_pk} ({a} → {b})"
+    if t == "timeline_location":
+        return f"location {rev.row_pk} ({Entry.objects.filter(pk=row.get('entry_id')).values_list('slug', flat=True).first()})"
     if t == "timeline_eventlink":
         b = Branch.objects.filter(pk=row.get("branch_id")).values_list("slug", flat=True).first()
         return f"link {rev.row_pk} (→ {b})"
@@ -577,7 +970,7 @@ def apply(ops: list, *, actor: str, source: str = "edits", dry_run: bool = False
             for i, op in enumerate(ops):
                 high = Revision.objects.aggregate(m=Max("id"))["m"] or 0
                 try:
-                    with revising(actor, reason=f"apply_edits {name} #{i} {op['op']} {op['entry']}: {op['reason']}"[:2000]):
+                    with revising(actor, reason=f"apply_edits {name} #{i} {op['op']} {target(op)}: {op['reason']}"[:2000]):
                         notes = HANDLERS[op["op"]](op, actor, today)
                 except (_Problem, ValueError, ValidationError, ObjectDoesNotExist, DatabaseError) as e:
                     problems.append(f"{_label(i, op)}: {e}")
