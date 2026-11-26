@@ -19,6 +19,7 @@ class AgentTask(models.Model):
         AUDIT = "audit", "audit an entry end to end"
         REVIEW_BRANCH_PROPOSAL = "review_branch_proposal", "review a branch proposal"
         RECHECK_CITATION = "recheck_citation", "re-read a citation whose page changed or broke"
+        MAP_BRANCH_ENTITIES = "map_branch_entities", "find a branch's Wikidata items (routing)"
 
     class Status(models.TextChoices):
         QUEUED = "queued"
