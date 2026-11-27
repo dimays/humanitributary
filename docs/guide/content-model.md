@@ -245,6 +245,24 @@ year to year; nothing stored depends on it. The branch rules measure branches
 on the same scale: `governance/metrics.py` copies the constant as `C_YEARS`
 (see [branch governance](branch-governance.md)).
 
+The view can be panned a little past both ends of time (`clampView()`): past
+now by 8% of the visible span or 72 px, whichever is more (at most 20%), and
+before the Big Bang by 4% or 24 px, so the latest dots and their labels clear
+the right edge on a phone as on a wide screen. An event's label is written
+rightward from its dot; one that would run past the right edge ends at its dot
+instead, and every label is kept 8 px (`LABEL_EDGE`) inside the canvas, so a
+dot just past the left edge keeps its label in view.
+
+The vertical lines on the canvas are the date grid, the "now" line, the
+selection's cursor or period, and the dashed contact/blending links (an
+event's `link`), which run straight down through every lane between the two
+branches. Those links are drawn faint (alpha 0.28, 0.6 for the selected
+branch's, strong only when hovered or selected). Every label drawn on the
+canvas (event titles, branch names, the "from …" origin, region headers) goes
+through `haloText()`, which strokes a halo in the page background (`--bg`)
+under the text, so lines stop at the letters in both themes; rail names keep
+their small background chip.
+
 ## How entries are ordered
 
 The page breaks ties in its sorts by array order, so the snapshot lists
