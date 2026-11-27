@@ -64,7 +64,8 @@ def logtime(iso) -> str:
 @register.simple_tag
 def history_strip(runs, n=10):
     """The job's last runs as small squares, oldest first, each its state's color and a link to the run; empty slots
-    when it has run fewer than `n` times."""
+    when it has run fewer than `n` times. Each square names its run (`data-run`) for the page's run cards (ADR 0032)
+    and says in words what it is (`aria-label`); the card replaces the browser's own tooltip."""
     from django.urls import reverse
 
     cells = []
@@ -72,8 +73,8 @@ def history_strip(runs, n=10):
         tip = f"{timezone.localtime(r['started']):%b %d %H:%M} · {STATE_LABEL.get(r['state'], r['state'])}" + \
             (f" · {seconds(r['seconds'])}" if r.get("seconds") is not None else "") + (f" · {r['feed']}" if r.get("feed") else "") + \
             (" · with errors" if r.get("status") == "partial" else "")
-        cells.append(format_html('<a class="cell s-{}{}" href="{}" title="{}" aria-label="{}"></a>', r["state"],
-                                 " partial" if r.get("status") == "partial" else "", reverse("opsconsole:run", args=[r["id"]]), tip, tip))
+        cells.append(format_html('<a class="cell s-{}{}" href="{}" data-run="{}" aria-label="{}"></a>', r["state"],
+                                 " partial" if r.get("status") == "partial" else "", reverse("opsconsole:run", args=[r["id"]]), r["id"], tip))
     cells = ['<span class="cell empty"></span>'] * (n - len(cells)) + cells
     return mark_safe('<span class="strip">' + "".join(str(c) for c in cells) + "</span>")
 
@@ -229,6 +230,19 @@ def act(context, action_name, label, css="", **fields):
         '<form class="act" method="post" action="{}"><input type="hidden" name="csrfmiddlewaretoken" value="{}">'
         '<input type="hidden" name="key" value="{}">{}<button type="submit" class="btn {}">{}</button></form>',
         reverse("opsconsole:act", args=[action_name]), get_token(request), uuid.uuid4().hex, mark_safe(hidden), css, label)
+
+
+@register.simple_tag
+def json_data(value, element_id):
+    """`json_script`, without the spaces: the run cards' data (ADR 0032) is the biggest thing on the Dashboard."""
+    from django.core.serializers.json import DjangoJSONEncoder
+    from django.utils.html import json_script
+
+    class Compact(DjangoJSONEncoder):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **{**kwargs, "separators": (",", ":")})
+
+    return json_script(value, element_id, encoder=Compact)
 
 
 @register.filter

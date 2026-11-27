@@ -72,6 +72,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | `revising()` | `revisions.revising(actor, reason, task)`, the only way to write a canonical row. It tells the trigger who writes and why. |
 | Revision | One changed canonical row: who, when, why, which task, and the row before and after. A trigger writes it. |
 | Rollback | A write of the pointer that names an earlier release. It deletes nothing and does not change the database. |
+| Run card | The card that the console shows on a bar of the run graph or a square of a history strip. It shows the trigger, the runtime, the stages, the counts and the error of the run. |
 | Schema | The JSON Schema of the result of one task kind, in `agentapi/schemas.py`. `complete` refuses a result that does not match it. |
 | Scope | A task kind that a token can claim and complete. The scope `*` covers each kind that has a schema. |
 | Service layer | The functions in `timeline.services` and the related modules that write canonical rows. |
@@ -89,6 +90,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Task kind | What a task asks for, for example `write_event`, `verify_claim` or `fill_gap`. |
 | Threshold | The minimum priority that a story must have to become a `write_event` task: `WRITE_EVENT_THRESHOLD`. |
 | Tier | The reliability of a publisher, from 1 (primary or official) to 4 (weak). |
+| Trigger | What started a job run: `schedule` (the worker), `manual` (Run now, or `run_job`) or `retry` (Retry on a failed run). |
 | Verdict | The result of a read of the terms of a source: what jobs can do with it, with the clause. |
 | Web dyno | The dyno that runs gunicorn and serves the page, the admin, the console, the agent API and `/healthz`. |
 | Wikidata | The open database of items with ids such as Q1490. Jobs use it to connect documents to branches. |

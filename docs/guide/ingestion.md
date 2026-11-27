@@ -72,6 +72,8 @@ interval of the last run ([ADR 0028](../adr/0028-operations-console.md)).
   `next_run_at` is empty or has passed. After the run, `next_run_at` becomes now plus the feed's
   `interval_minutes` (the job's own interval is only a fallback).
 - **Any other job** runs when its interval has passed since the start of its last finished `FetchRun`.
+- `jobs.due_at(job, feed)` says when that was (None for a job that never ran), and the run keeps it as
+  `scheduled_for`, so the wait between due and start can be told from the run itself.
 - **A paused job** is never due. `jobs.set_paused(name, paused, by=…, reason=…)` (the console's pause and resume)
   keeps the paused jobs in the `JobState` row "paused_jobs" (`{"jobs": {name: {"by", "at", "reason"}}}`), and
   `run_due` reads it once per pass (`paused_jobs()`, which never creates the row). A run in progress finishes;
@@ -106,6 +108,20 @@ a `--opt` value first, then the feed's `config`. The status is:
 | `partial` | The job returned but called `ctx.error()` at least once (one bad day or page doesn't stop the rest). |
 | `failed` | The job raised. The exception and the last 3,000 characters of its traceback are recorded, and the next job still runs. |
 | `running` | Still going, or left behind by a crash (closed as `failed` by the next runner). |
+
+**What started it** ([ADR 0032](../adr/0032-run-cards-and-what-started-a-run.md)). Each run records its `trigger`:
+
+| Trigger | Set by | Also recorded |
+|---|---|---|
+| `schedule` | `run_due`, when the job is due | `scheduled_for`: when it became due (`jobs.due_at`: a plain job's last start plus its interval, a feed job's `next_run_at`); empty for a job's first run |
+| `manual` | "Run now" from the console, or `manage.py run_job` | `triggered_by` ("human:<username>", or "shell" for `run_job`); `ops_action`, the console's OpsAction id (a plain integer, not a foreign key: `ingest` never imports the console) |
+| `retry` | "Retry" on a failed run, from the console | the same, and `retry_of` (the failed run) and `attempt` (one more than that run's; 1 otherwise) |
+
+`run_one` takes them as keyword arguments, `run_named` defaults to `manual` by "shell", and the console's
+`execute_job` passes its action, who asked and the retried run. Runs from before this was recorded are `schedule`
+with no `scheduled_for`, except those an OpsAction's `result["runs"]` lists, which migration `opsconsole` 0002 marked
+`manual` or `retry` from the action. The console's run cards use all of it
+([operations console](operations-console.md#run-cards)).
 
 **Alerts.** After a failed run, `run_one` calls `infra.alerts.after_failure`. When that job (and feed) has now
 failed `ALERT_AFTER_FAILURES` (3) runs in a row, counted from `FetchRun` history, it sends one email to

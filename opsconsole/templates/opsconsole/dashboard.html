@@ -29,8 +29,8 @@
     <div class="lab"><a href="{% url 'opsconsole:job' row.job %}">{{ row.job }}</a></div>
     <div class="track">
       <div class="grid-lines">{% for t in timeline.ticks %}{% if t.label %}<i style="left:{{ t.left }}%"></i>{% endif %}{% endfor %}</div>
-      {% for r in row.runs %}<a href="{% url 'opsconsole:run' r.id %}" class="s-{{ r.state }}{% if r.partial %} partial{% endif %}" style="left:{{ r.left }}%;width:{{ r.width }}%"
-        title="{{ row.job }}{% if r.feed %} · {{ r.feed }}{% endif %} · {{ r.started|date:'H:i' }} · {% if r.partial %}Completed with errors{% else %}{{ r.state|capfirst }}{% endif %}{% if r.seconds is not None %} · {{ r.seconds|seconds }}{% endif %}"></a>{% endfor %}
+      {% for r in row.runs %}<a href="{% url 'opsconsole:run' r.id %}" class="s-{{ r.state }}{% if r.partial %} partial{% endif %}" style="left:{{ r.left }}%;width:{{ r.width }}%" data-run="{{ r.id }}"
+        aria-label="{{ row.job }}{% if r.feed %} · {{ r.feed }}{% endif %} · {{ r.started|date:'H:i' }} UTC · {% if r.partial %}Completed with errors{% else %}{{ r.state|capfirst }}{% endif %}{% if r.seconds is not None %} · {{ r.seconds|seconds }}{% endif %}"></a>{% endfor %}
     </div>
     {% endfor %}
   </div>
@@ -100,3 +100,4 @@
   </div>
 </div>
 {% endblock %}
+{% block scripts %}{% include "opsconsole/_run_cards.html" %}{% endblock %}

@@ -14,6 +14,11 @@ time.
   schedule.
 - A paused job is never due. `manage.py run_job <name>` runs a paused job all the same.
 - Each run makes one `FetchRun` row: the status (`ok`, `partial`, `failed` or `running`), the counts and the error.
+- The row also records the trigger of the run. The trigger is `schedule`, `manual` or `retry`. For `schedule`, the
+  row keeps the time when the job became due (`scheduled_for`). For a retry, the row keeps the failed run and the
+  attempt number.
+- On the console, put the pointer on a run in the run graph or in a history strip. A card shows the trigger, the
+  runtime against the usual runtime of the job, the stages, the counts and the error.
 - A failed job does not stop the other jobs. If a job fails three runs in a row (`ALERT_AFTER_FAILURES`), the
   system sends one alert.
 - No job calls a language model. The same input gives the same output.

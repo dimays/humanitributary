@@ -15,21 +15,24 @@ time, use this procedure.
 1. Open the Runs page of the console, `https://data.humanitributary.com/ops/runs/`, and filter by the state
    Failed.
    Make sure that you know the name of the job and, for a feed job, the name of the feed.
-2. Open the newest failed run. Read its error and its log.
+2. On the Dashboard, put the pointer on the red bar of the run.
+   Make sure that the card shows the state Failed, the trigger and the first line of the error.
+3. Open the newest failed run. Read its error and its log.
    Make sure that you know the cause. The [troubleshooting](../troubleshooting.md) table gives the usual causes.
-3. If the error says that the source policy refused the request, do not run the job again.
+4. If the error says that the source policy refused the request, do not run the job again.
    Make sure that you correct the feed or the URL first.
-4. If the job is `link_health` or `second_source`, find the start time of its last run.
+5. If the job is `link_health` or `second_source`, find the start time of its last run.
    Make sure that one day has passed since that time.
-5. Start the retry action on the failed run in the console, and type a reason.
+6. Start the retry action on the failed run in the console, and type a reason.
    Make sure that the page of the new action opens.
-6. Wait until the action status is `done`.
+7. Wait until the action status is `done`.
    Make sure that the result names a new run with the status `ok` or `partial`.
-7. If the new run fails again, pause the job with procedure [06](06-pause-and-resume-a-job.md).
+   Make sure that the card of the new run shows the trigger Retry and the attempt number.
+8. If the new run fails again, pause the job with procedure [06](06-pause-and-resume-a-job.md).
    Make sure that the console shows the job as paused.
-8. Correct the cause in the code with procedure [11](11-deploy-a-code-change.md).
+9. Correct the cause in the code with procedure [11](11-deploy-a-code-change.md).
    Make sure that CI passes on the correction.
-9. Resume the job with procedure [06](06-pause-and-resume-a-job.md).
+10. Resume the job with procedure [06](06-pause-and-resume-a-job.md).
    Make sure that its next run has the status `ok`.
 
 ## The command line
@@ -42,6 +45,9 @@ heroku run python manage.py run_job <name> --feed "<feed name>" -a humanitributa
 ```
 
 Make sure that the last line of the output for each run says `ok` or `partial`.
+
+> **NOTE:** The card of a run also opens when you move the focus to its bar with the Tab key. On a touch screen,
+> tap the bar one time to see the card. Tap it again to open the run.
 
 > **NOTE:** If the worker is in a job, `run_job` prints `another run_jobs holds the lock; exiting`. Wait some
 > minutes and then do the command again. The console action does not have this problem, because the worker runs it

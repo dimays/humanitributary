@@ -290,7 +290,7 @@ roll back), each confirmed, with a reason, and recorded as an OpsAction; the com
 
 | Where | What it tells you |
 |---|---|
-| `/ops/` (the operations console) | The Dashboard: "All good" or the problems, one per line; the last 24 hours of runs as a run graph; failed runs needing attention (with Retry); what runs next; waiting, in progress and stuck per agent queue. Then Jobs (tags, schedule, the last ten runs), Runs (each with its log), Work, Releases and Docs, and the action log. Staff only; acting needs `ops_operator`. |
+| `/ops/` (the operations console) | The Dashboard: "All good" or the problems, one per line; the last 24 hours of runs as a run graph; failed runs needing attention (with Retry); what runs next; waiting, in progress and stuck per agent queue. Pointing at a run's bar (or a square of a ten-run strip), or focusing it, shows its run card: what started it, its runtime against the job's usual one, where its time went, its counts and error. Then Jobs (tags, schedule, the last ten runs), Runs (each with its log), Work, Releases and Docs, and the action log. Staff only; acting needs `ops_operator`. |
 | `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs; on staging, the app's URL + `/healthz`) | JSON from `infra/health.py`: the database, both stores and `storage_backend` (`local` when hosted means the dyno's throwaway disk), the latest release's version, each job's last run, last run that finished ok or partial, last status and consecutive failures, and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
 | `make storage-status` | The storage backend, whether each bucket answers, and the `latest` pointer: its version, why it was written and by whom. |
 | `make digest` (`manage.py digest`) | Open tasks by kind, the top `write_event` stories, `write_event` by branch, `verify_claim` reasons, new-branch signals, the fact base's and branch governance's sections, candidates by status, and every job's runs in the last 24 hours with the last three failed or partial errors. "No runs in the last 24 hours" means the schedule isn't running. `--sources` adds every feed and lookup adapter, on or off, with its publisher's policy, tier and disabled reason, plus the sources considered and skipped. |
@@ -308,6 +308,11 @@ A FetchRun's status:
 | `ok` | Finished with no errors. |
 | `partial` | Finished, but recorded errors: some items or pages failed. The errors are in `error`. |
 | `failed` | Raised an exception. The traceback's tail is in `error`, with keys masked. |
+
+A FetchRun also says what started it (`trigger`): `schedule` (with `scheduled_for`, when it became due), `manual`
+(the console's "Run now", or `run_job` from the shell: `triggered_by` "shell") or `retry` (the console's "Retry",
+with the failed run in `retry_of` and the `attempt`). The console's run cards show it
+([ingestion](ingestion.md#the-job-runner), [ADR 0032](../adr/0032-run-cards-and-what-started-a-run.md)).
 
 `manage.py run_jobs` prints "N run(s), M failed" and exits 0 either way. `manage.py run_job` exits with an error
 when a run failed.
