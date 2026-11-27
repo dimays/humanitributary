@@ -1,0 +1,6 @@
+{% load ops %}<div class="scroll"><table>
+<thead><tr><th>Revision</th><th>When</th><th>Who</th><th>Change</th><th>Why</th></tr></thead><tbody>
+{% for v in page %}<tr><td><a class="mono" href="{% url 'opsconsole:revision' v.pk %}">#{{ v.pk }}</a></td><td class="small nowrap">{{ v.at|date:"M j, H:i" }}</td>
+  <td class="small">{{ v.actor }}</td><td class="small">{{ v.action }} <span class="muted">{{ v.table_name|cut:"timeline_"|cut:"evidence_" }} #{{ v.row_pk }}</span>{% if v.changed %}<div class="muted">{{ v.changed|join:", "|truncatechars:50 }}</div>{% endif %}</td>
+  <td class="small muted">{{ v.reason|truncatechars:90 }}{% if v.task_id %} · <a href="{% url 'opsconsole:task' v.task_id %}">task #{{ v.task_id }}</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="muted">None.</td></tr>{% endfor %}</tbody></table></div>

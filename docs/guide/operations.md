@@ -280,15 +280,15 @@ pg:backups:restore <id> DATABASE_URL`, which replaces the database, schema and d
 
 ## Is it healthy?
 
-Read these, in this order. Most of it is also on one screen each in the [operations console](operations-console.md)
-(`/ops/` on the data host, for staff; the admin's header links to it): job runs and failures, the queue, intake
-against the daily caps, Revisions, releases and the content programs. Staff with the `ops_operator` permission can
+Read these, in this order. Most of it is also in the [operations console](operations-console.md) (`/ops/` on the
+data host, for staff; the admin's header links to it): its Dashboard says in one line whether anything is wrong,
+and its Jobs, Runs (with each run's log), Work, Releases and Docs pages hold the rest. Staff with the `ops_operator` permission can
 also act from it (run or retry a job, pause one, free a lease, requeue or cancel tasks, advance the wave, publish,
 roll back), each confirmed, with a reason, and recorded as an OpsAction; the commands below do the same from a shell.
 
 | Where | What it tells you |
 |---|---|
-| `/ops/` (the operations console) | Health, one row per job (last run, failures in a row, next due, paused), queue depth per kind, today's intake, alerts, actions in progress; more pages for runs, tasks, changes, releases, the content programs and every action taken. Staff only; acting needs `ops_operator`. |
+| `/ops/` (the operations console) | The Dashboard: "All good" or the problems, one per line; the last 24 hours of runs as a run graph; failed runs needing attention (with Retry); what runs next; waiting, in progress and stuck per agent queue. Then Jobs (tags, schedule, the last ten runs), Runs (each with its log), Work, Releases and Docs, and the action log. Staff only; acting needs `ops_operator`. |
 | `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs; on staging, the app's URL + `/healthz`) | JSON from `infra/health.py`: the database, both stores and `storage_backend` (`local` when hosted means the dyno's throwaway disk), the latest release's version, each job's last run, last run that finished ok or partial, last status and consecutive failures, and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
 | `make storage-status` | The storage backend, whether each bucket answers, and the `latest` pointer: its version, why it was written and by whom. |
 | `make digest` (`manage.py digest`) | Open tasks by kind, the top `write_event` stories, `write_event` by branch, `verify_claim` reasons, new-branch signals, the fact base's and branch governance's sections, candidates by status, and every job's runs in the last 24 hours with the last three failed or partial errors. "No runs in the last 24 hours" means the schedule isn't running. `--sources` adds every feed and lookup adapter, on or off, with its publisher's policy, tier and disabled reason, plus the sources considered and skipped. |
@@ -356,13 +356,14 @@ skip them.
 
 1. **Find the error.** After three failures in a row an alert names the job and carries the latest error.
    `make digest` shows the job's runs and the first line of the last failures, and `/healthz` its consecutive
-   failures. The admin's FetchRun list (filter by job and status) has the full error and the counts.
+   failures. The console's run page (`/ops/runs/<id>/`, from the Dashboard's "Needs attention" or the job's page)
+   has the run's log, its counts and the error with its traceback; the admin's FetchRun list has the same error.
    `var/logs/run-jobs-<date>.log` (launchd) or the worker's terminal has what the run printed.
 2. **Reproduce it.** `uv run python manage.py run_job <name>` runs it now, due or not; for a feed job add
    `--feed "<feed name>"` to run one feed. It takes the same lock, so if the worker or a launchd tick is running
    jobs it exits with "another run_jobs holds the lock". Options go in with `--opt key=value`. From the console, a
-   failed run's "Retry…" does the same in the worker (not for `link_health` or `second_source` within a day of their
-   last run: they are not idempotent back to back), and "Pause…" stops the schedule running it while you look.
+   failed run's "Retry" does the same in the worker (not for `link_health` or `second_source` within a day of their
+   last run: they are not idempotent back to back), and "Pause" stops the schedule running it while you look.
 3. **Read the cause.**
 
    | The error says | Usually |
@@ -432,7 +433,7 @@ make build                                             # make release-pull, then
 the row's hash; otherwise it rewrites `releases/latest.json` (reason `rollback`, actor `job:publish` unless
 `--actor` says otherwise). `make release-pull` (`manage.py storage pull-release`) mirrors the pointer's version into
 `var/releases/<version>/` and repoints `var/releases/latest`; `make build` runs it first. The console's Releases
-page does the same ("Roll back to this…", run by the worker as `human:<you>`), after showing the pointer now and the
+page does the same ("Roll back to this", run by the worker as `human:<you>`), after showing the pointer now and the
 release it would point at, its snapshot's hash checked.
 
 This changes what readers get, not the database. The next `make publish` compares the database's content with the

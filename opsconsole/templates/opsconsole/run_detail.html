@@ -1,0 +1,49 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Run {{ r.pk }} · {{ r.job }}{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'opsconsole:runs' %}">Runs</a> / <a href="{% url 'opsconsole:job' r.job %}">{{ r.job }}</a> /</div>
+<div class="head">
+  <div><h1>{{ r.job }} <span class="muted" style="font-weight:400">#{{ r.pk }}</span>
+    {% if r.status == 'partial' %}{% badge "completed" "Completed with errors" %}{% else %}{% badge state %}{% endif %}</h1>
+    <div class="sub">{% if job %}{{ job.doc }}{% endif %}</div></div>
+  <div class="tools">{% include "opsconsole/_refresh.html" %}
+    {% if older %}<a class="btn sm quiet" href="{% url 'opsconsole:run' older %}">← Older</a>{% endif %}
+    {% if newer %}<a class="btn sm quiet" href="{% url 'opsconsole:run' newer %}">Newer →</a>{% endif %}
+    {% if r.status == 'failed' %}{% act "retry_run" "Retry" "primary" run=r.pk %}{% endif %}</div>
+</div>
+
+{% if r.status == 'failed' %}<div class="banner bad"><b>Failed:</b> {{ error_head }}</div>{% endif %}
+
+<div class="grid g2">
+  <div class="card"><dl class="kv">
+    <dt>Started</dt><dd>{{ r.started_at|date:"M j, Y H:i:s" }} UTC <span class="muted">({{ r.started_at|ago }})</span></dd>
+    <dt>Duration</dt><dd>{% if duration is not None %}{{ duration|seconds }}{% else %}running for {{ r.started_at|timesince }}{% endif %}</dd>
+    {% if r.feed_id %}<dt>Feed</dt><dd>{{ r.feed.name }}</dd>{% endif %}
+    {% if r.http_status %}<dt>HTTP</dt><dd>{{ r.http_status }}</dd>{% endif %}
+    <dt>Content written</dt><dd>{% if content.count %}{{ content.count }} Revision{{ content.count|pluralize }} by <span class="mono">job:{{ r.job }}</span>{% else %}none{% endif %}</dd>
+  </dl></div>
+  <div class="card"><h2>Counts</h2>
+    {% if counts %}<dl class="kv num">{% for k, v in counts %}<dt>{{ k }}</dt><dd{% if k == 'errors' and v %} style="color:var(--bad)"{% endif %}>{{ v }}</dd>{% endfor %}</dl>
+    {% else %}<p class="empty-note">No counts recorded.</p>{% endif %}</div>
+</div>
+
+<div class="card" style="margin-top:18px">
+  <div class="card-head"><h2>Log<span class="count">{% if log %}{{ log.line_count }} line{{ log.line_count|pluralize }}{% if log.dropped %}, {{ log.dropped }} left out{% endif %}{% endif %}</span></h2>
+    {% if log %}<div class="more acts">
+      <a class="btn sm{% if level %} quiet{% endif %}" href="?">All</a>
+      <a class="btn sm{% if level != 'warning' %} quiet{% endif %}" href="?level=warning">Warnings and errors ({{ problem_lines }})</a>
+      <a class="btn sm quiet" href="?format=text">Plain text</a></div>{% endif %}</div>
+  {% if log %}{% if lines %}<div class="log" role="log">{% for ln in lines %}<div class="ln {{ ln.1|level_class }}"><span class="ts">{{ ln.0|logtime }}</span><span class="lv {{ ln.1|level_class }}">{{ ln.1 }}</span><span class="msg"><span class="src">{{ ln.2 }}</span>{{ ln.3|masked }}</span></div>{% endfor %}</div>
+    <p class="small muted" style="margin:10px 0 0">Times are UTC. INFO and above, secrets masked; at most 2,000 lines or 200 KB a run, kept 30 days.</p>
+    {% else %}<p class="empty-note">No lines at this level.</p>{% endif %}
+  {% elif r.status == 'running' %}<p class="empty-note">The log appears here as the run goes on (written every few seconds) and in full when it finishes.</p>
+  {% else %}<p class="empty-note">No log was kept for this run (runs from before logs were captured, or older than 30 days).</p>{% endif %}
+</div>
+
+{% if error %}<div class="card" style="margin-top:18px"><h2>Error</h2><pre class="err">{{ error }}</pre></div>{% endif %}
+
+{% if content.count %}<div class="card flush" style="margin-top:18px"><h2>Content it wrote<span class="count">{{ content.count }}</span></h2><div class="scroll"><table>
+<thead><tr><th>Revision</th><th>Action</th><th>Table</th><th>Row</th><th>Changed</th></tr></thead><tbody>
+{% for v in content.rows %}<tr><td><a class="mono" href="{% url 'opsconsole:revision' v.pk %}">#{{ v.pk }}</a></td><td>{{ v.action }}</td><td class="small">{{ v.table_name }}</td><td class="mono">{{ v.row_pk }}</td><td class="small muted">{{ v.changed|join:", "|truncatechars:70 }}</td></tr>{% endfor %}
+</tbody></table></div>{% if content.count > content.rows|length %}<p class="small muted" style="padding:0 20px 14px">The first {{ content.rows|length }} of {{ content.count }}.</p>{% endif %}</div>{% endif %}
+{% endblock %}

@@ -83,7 +83,8 @@ are refused the same way. Agents read these in a browser. The decision and every
 `ingest/job_defs.py` registers them, under a Postgres advisory lock, so a second runner exits at once. The
 `worker` process runs the same thing in a loop (`run_jobs --loop`, every `WORKER_TICK_SECONDS`), and between jobs
 the actions staff queued from the operations console. A job can be paused (it is then never due). Each run of a job
-(or of a job on one feed) is a **FetchRun** with its status, counts and error; a failing job is recorded and the
+(or of a job on one feed) is a **FetchRun** with its status, counts and error, and its log, a **RunLog** (INFO and
+above, secrets masked, capped: `ingest/runlog.py`); a failing job is recorded and the
 next one runs, and one that fails three runs in a row sends an alert (`infra/alerts.py`). How runs are scheduled
 and watched is in [Operations](operations.md).
 
@@ -249,15 +250,15 @@ needs judgment becomes a task.
 | `config/settings.py` | `SITE_NAME`; `ENVIRONMENT` (`dev`, or anything else for production safety); `DATABASE_URL` (required); `VAR_DIR` (default `var/`), with `LOG_DIR` and `RELEASES_MIRROR_DIR` under it; the `raw` and `releases` storages (`STORAGE_BACKEND`, the `S3_*` variables); `TASK_LEASE_MINUTES`; `WRITE_EVENT_TASKS_PER_DAY` (20: the `process` job's daily cap on new `write_event` tasks); `FILL_GAP_TASKS_PER_DAY` (40: the `gap_waves` job's cap on new `fill_gap` tasks; `CONTENT_WAVES` and `GAP_RULES` may override `governance/waves.py`'s defaults; `GAP_RULES` sets `max_open_per_branch` to 2 from env `FILL_GAP_MAX_OPEN_PER_BRANCH`); `WRITE_EVENT_THRESHOLD` (70: the priority a story needs to become a `write_event` task; ADR 0027); `WORKER_TICK_SECONDS`; `ALERT_AFTER_FAILURES`, `ALERT_EMAILS` and the mail settings; `AGENT_API_RATE_PER_MINUTE`; `INGEST_CONTACT` and `INGEST_USER_AGENT`; the two lookup keys; `OPS_HOSTS` (the hosts that serve the operations console; empty, any). Outside `dev`: TLS to the database, HTTPS redirect, secure cookies, HSTS (`SECURE_HSTS_SECONDS`), logs to stdout at `LOG_LEVEL` (with `httpx` and `httpcore` held at `WARNING`: they print every request's URL), and the local storage backend refused unless `STORAGE_BACKEND=local` is set. `INSTALLED_APPS` lists the apps in dependency order ([ADR 0002](../adr/0002-django-and-apps-by-responsibility.md)). |
 | `config/urls.py` | The public page at `/` with `/images/*` and `/outlines.js` (`infra/site.py`), the admin (the owner's review screen), the staff's operations console under `/ops/` (`opsconsole/`, [ADR 0028](../adr/0028-operations-console.md)), the agent API under `/api/agent/` and `/healthz`. The page never touches the database. |
 | `infra/` | `storage.py` (the one door to object storage), `manage.py storage`, `health.py` (`/healthz`), `alerts.py`, and `site.py` (the public page, its images and outlines, and the `www.` redirect). No models. |
-| `opsconsole/` | The operations console: `queries.py` (every figure, aggregated in SQL), `views.py` (pages: staff only, GET only, `noindex`; actions: POST, CSRF, the `ops_operator` permission, two steps), `actions.py` (what each action checks, shows and does), `worker.py` (the worker's pick-up of queued actions), `models.py` (`OpsAction`, the audit row of every action), templates, and the admin header's link to it. See [The operations console](operations-console.md). |
-| `ingest/job_defs.py` | Every scheduled job with its interval, in run order: set-up, sources, entities, processing, upkeep. |
+| `opsconsole/` | The operations console: six pages (Dashboard, Jobs, Runs, Work, Releases, Docs). `queries.py` (every figure, aggregated in SQL), `views.py` (pages: staff only, GET only, `noindex`; actions: POST, CSRF, the `ops_operator` permission, two steps), `actions.py` (what each action checks, shows and does), `worker.py` (the worker's pick-up of queued actions), `docs.py` (the Markdown in `docs/` rendered and sanitized), `models.py` (`OpsAction`, the audit row of every action), templates, and the admin header's link to it. See [The operations console](operations-console.md). |
+| `ingest/job_defs.py` | Every scheduled job with its interval and tags, in run order: set-up, sources, entities, processing, upkeep. A job's docstring opens with one plain sentence saying what it does: the console's description of it. |
 | `Makefile` | The commands (`make help`): database and storage, publish, build (from a release), the release gates (`roundtrip`), tests, processes, jobs, schedule; `import-archive` for an empty database. |
 | `docker-compose.yml` | The local services: Postgres 16 on host port 5433, and MinIO (the local S3) on `127.0.0.1:9000`, its console on 9001. |
 | `Procfile` | The processes: `release` runs migrations, `web` runs gunicorn (admin, agent API, `/healthz`), `worker` runs `manage.py run_jobs --loop`. `make up` runs `web` and `worker` locally with honcho. |
 | `package.json` | No dependencies: it pins Node 24.x for `site/build.mjs` (the publish gates' build) on Heroku, whose `heroku/nodejs` buildpack reads it. |
 | `app.json` | Heroku's description of the app: the `heroku/nodejs` and `heroku/python` buildpacks, the formation (`web` 1, `worker` 1, Basic), Postgres Essential-1 (16) and the config vars. Read by review apps and a rebuild from scratch, not by ordinary deploys. |
 | `.github/workflows/check.yml` | CI: `make check-pr` on every pull request and push to main, with a Postgres 16 service container and `STORAGE_BACKEND=local`, no secrets. |
-| `pyproject.toml` | Python 3.12, Django 6, psycopg 3, httpx, trafilatura, feedparser, dateparser, gunicorn, whitenoise, django-storages and boto3, jsonschema; honcho for development. |
+| `pyproject.toml` | Python 3.12, Django 6, psycopg 3, httpx, trafilatura, feedparser, dateparser, gunicorn, whitenoise, django-storages and boto3, jsonschema, Markdown and nh3 (the console's Docs page renders and sanitizes the docs); honcho for development. |
 
 The job order in `ingest/job_defs.py`:
 
@@ -296,7 +297,7 @@ the page is built from a release, so a database outage stops editing, never read
 | Change | What it needs |
 |---|---|
 | A new stage or app | An ADR; the app in `INSTALLED_APPS` in dependency order; this chapter and its diagram |
-| A new job | A function in `ingest/job_defs.py` with `@job(name, interval=…)` in the right group; it must make no LLM calls; a test on recorded fixtures; [Ingestion](ingestion.md) |
+| A new job | A function in `ingest/job_defs.py` with `@job(name, interval=…, tags=…)` in the right group and a one-sentence docstring; it must make no LLM calls; a test on recorded fixtures; [Ingestion](ingestion.md) |
 | A new source | Its terms read first, its verdict in `ingest/seed.py` and [ADR 0013](../adr/0013-source-policy.md); [Sources and terms](sources-and-terms.md) |
 | A new kind of judgment | A new `AgentTask.Kind` (a migration), the job that queues it with a complete payload, a result schema in `agentapi/schemas.py` and its applier in `agentapi/apply.py`, and a skill to drain it |
 | A new canonical table | `audit_table()` in its migration (`tests/test_revisions.py` fails until it has one) |

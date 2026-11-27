@@ -67,9 +67,27 @@ class FetchRun(models.Model):
     class Meta:
         ordering = ["-started_at"]
         constraints = [models.CheckConstraint(condition=Q(status__in=["running", "ok", "partial", "failed"]), name="fetchrun_status_valid")]
+        # A job's newest runs (the console's history strips and job pages): one index scan per job.
+        indexes = [models.Index(fields=["job", "-started_at"], name="fetchrun_job_started_idx")]
 
     def __str__(self):
         return f"{self.job or self.feed} {self.started_at:%Y-%m-%d %H:%M} {self.status}"
+
+
+class RunLog(models.Model):
+    """A job run's log lines (INFO and above, secrets masked, capped), captured by ingest/runlog.py while it ran
+    (ADR 0030). Its own table, so listing runs never reads logs; deleted after runlog.KEEP_DAYS."""
+
+    run = models.OneToOneField(FetchRun, primary_key=True, on_delete=models.CASCADE, related_name="log")
+    lines = models.JSONField(default=list, help_text='[[time (ISO, UTC), level, logger, message], …], oldest first.')
+    line_count = models.PositiveIntegerField(default=0, help_text="Lines the run logged, kept or not.")
+    dropped = models.PositiveIntegerField(default=0, help_text="Lines left out between the head and the tail (the caps).")
+    bytes = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"log of run #{self.run_id} ({len(self.lines)} lines)"
 
 
 class Document(models.Model):

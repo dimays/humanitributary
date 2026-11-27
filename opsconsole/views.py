@@ -1,5 +1,10 @@
 """The operations console: pages for staff under /ops/, and the few actions operators take from them
-(docs/guide/operations-console.md, ADR 0028).
+(docs/guide/operations-console.md; ADR 0028, redesigned by ADR 0030).
+
+Six pages are in the sidebar: Dashboard (is anything wrong, what ran in the last day, what needs attention, what
+runs next, the agents' queues), Jobs (one row per job, with its tags, schedule, last state and last ten runs),
+Runs (every run, and a run's page with its log), Work (the agents' queues per task kind), Releases (and what each
+carried) and Docs (the maintainer manual, the developer reference and the decisions, rendered).
 
 Every page is wrapped by `console`: GET and HEAD only, staff only (`staff_member_required`: anyone else is sent to
 the admin's login), never cached, `X-Robots-Tag: noindex`, and, when `settings.OPS_HOSTS` names hosts, a 404 on any
@@ -15,7 +20,6 @@ per user (opsconsole/actions.py).
 """
 
 import uuid
-from datetime import datetime, timedelta
 from functools import wraps
 
 from django.conf import settings
@@ -26,26 +30,29 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_POST, require_safe
 
-from ingest.models import FetchRun
+from ingest.models import Feed, FetchRun, RunLog
 from ingest.policy import mask_secrets
 from publish.models import Release
 from work.models import AgentTask
 
 from . import actions as acts
+from . import docs as D
 from . import queries as Q
 from .models import OpsAction
 from .templatetags.ops import field_diffs
 
 PAGE_SIZE = 50
-REFRESH_SECONDS = 60
+REFRESH_SECONDS = 30         # Dashboard, Runs and a running run's page reload themselves this often (a small script)
 ACTION_REFRESH_SECONDS = 3   # an open action's page reloads itself this often
 TOKEN_SALT = "opsconsole.action"
 TOKEN_MAX_AGE = 30 * 60      # a confirmation page is good for this long
 PERMISSION = "opsconsole.ops_operator"
+LOG_LEVELS = {"debug": 10, "info": 20, "warning": 30, "error": 40, "critical": 50}
 
 
 def can_act(user) -> bool:
@@ -99,15 +106,19 @@ def operator(view):
     return require_POST(inner)
 
 
-def _render(request, template, ctx, *, section, status=200):
-    refresh = request.GET.get("refresh") == "1"
-    q = request.GET.copy()
-    q.pop("refresh", None)
-    q.pop("page", None)
-    if not refresh:
-        q["refresh"] = "1"
-    base = {"section": section, "refresh": REFRESH_SECONDS if refresh else None, "refresh_toggle": "?" + q.urlencode(),
-            "now": timezone.now(), "site_name": settings.SITE_NAME, "can_act": can_act(request.user)}
+def moved(name, *arg_names):
+    """A page of the first console that now lives elsewhere: a permanent redirect (staff only, like the rest)."""
+
+    @console
+    def view(request, **kwargs):
+        return redirect(reverse(name, args=[kwargs[a] for a in arg_names]), permanent=True)
+
+    return view
+
+
+def _render(request, template, ctx, *, section, status=200, refresh=None):
+    base = {"section": section, "auto_refresh": refresh, "now": timezone.now(), "site_name": settings.SITE_NAME,
+            "can_act": can_act(request.user), "states": Q.STATES}
     return render(request, f"opsconsole/{template}", base | ctx, status=status)
 
 
@@ -118,85 +129,187 @@ def _page(request, qs, size=PAGE_SIZE):
     return page, q.urlencode()
 
 
-def _date(value):
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date() if value else None
-    except ValueError:
-        return None
+def _duration(r):
+    return (r.finished_at - r.started_at).total_seconds() if r.finished_at else None
+
+
+def problems(now, health: dict, job_rows: list[dict], queue: list[dict]) -> list[dict]:
+    """What is wrong, worst first, each in one sentence with where to look."""
+    out = []
+    for alias, s in health["storage"].items():
+        if not s["ok"]:
+            out.append({"level": "bad", "text": f"The {alias} store can't be reached ({s['error']}).", "href": None})
+    if health["quiet"] and not health["worker"]:
+        since = f"since {timezone.localtime(health['last_run_started']):%b %d %H:%M}" if health["last_run_started"] else "ever"
+        out.append({"level": "bad", "text": f"No worker is running jobs: no run has started {since}.", "href": reverse("opsconsole:runs")})
+    for r in job_rows:
+        if r["failures"]:
+            where = f" ({r['worst_feed']})" if r["worst_feed"] else ""
+            text = f"{r['name']}{where} failed {r['failures']} run{'s' if r['failures'] != 1 else ''} in a row" + \
+                (" — alert threshold reached." if r["alerting"] else ".")
+            out.append({"level": "bad" if r["alerting"] else "warn", "text": text, "href": reverse("opsconsole:job", args=[r["name"]])})
+    stuck = sum(k["stuck"] for k in queue)
+    if stuck:
+        kinds = ", ".join(k["kind"] for k in queue if k["stuck"])
+        out.append({"level": "warn", "text": f"{stuck} stuck lease{'s' if stuck != 1 else ''} ({kinds}): an agent stopped without finishing.",
+                    "href": reverse("opsconsole:work")})
+    late = [r["name"] for r in job_rows if r["overdue"]]
+    if late:
+        out.append({"level": "warn", "text": f"Overdue by more than 30 minutes: {', '.join(late)}.", "href": reverse("opsconsole:jobs")})
+    if health["storage"].get("releases", {}).get("ok") and not health.get("pointer"):
+        out.append({"level": "warn", "text": "No release is live: the releases store has no latest pointer.", "href": reverse("opsconsole:releases")})
+    out.sort(key=lambda p: p["level"] != "bad")
+    return out
+
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+@console
+def dashboard(request):
+    now = timezone.now()
+    health = Q.health(now)
+    job_rows = Q.jobs(now, history=False)
+    queue = Q.queue(now)
+    attention = [{"job": r, "run": run} for r in job_rows for run in r["failing"]][:8]
+    latest = Release.objects.order_by("-created_at", "-id").first()
+    return _render(request, "dashboard.html", {
+        "health": health, "problems": problems(now, health, job_rows, queue), "timeline": Q.timeline(now),
+        "attention": attention, "upcoming": Q.upcoming(job_rows, now, limit=7), "queue": queue,
+        "queue_active": [k for k in queue if k["active"]], "latest": latest, "today": Q.today(now),
+        "open_actions": Q.open_actions(5), "recent_actions": Q.recent_actions(4),
+    }, section="dashboard", refresh=REFRESH_SECONDS)
+
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+@console
+def jobs(request):
+    now = timezone.now()
+    tag = request.GET.get("tag", "").strip()
+    tags = Q.tag_set()
+    if tag not in tags:
+        tag = ""
+    rows = Q.jobs(now)
+    counts = {t: sum(t in r["tags"] for r in rows) for t in tags}
+    shown = [r for r in rows if not tag or tag in r["tags"]]
+    return _render(request, "jobs.html", {"rows": shown, "tag": tag, "tags": tags, "tag_counts": counts, "total": len(rows)},
+                   section="jobs")
 
 
 @console
-def overview(request):
+def job_detail(request, name):
     now = timezone.now()
-    job_rows = Q.jobs(now)
-    latest = Release.objects.order_by("-created_at", "-id").first()
-    return _render(request, "overview.html", {
-        "health": Q.health(now), "jobs": job_rows, "alerts": Q.alerts(job_rows), "queue": Q.queue(now),
-        "intake": Q.intake(now), "latest": latest, "paused": [j for j in job_rows if j["paused"]],
-        "open_actions": Q.open_actions(),
-    }, section="overview")
+    row = next((r for r in Q.jobs(now) if r["name"] == name), None)
+    if row is None:
+        raise Http404("no such job")
+    page, qs_rest = _page(request, Q.fetch_runs(job=name), size=25)
+    for r in page:
+        r.state, r.duration, r.summary = Q.run_state(r.status), _duration(r), Q.counts_summary(r.counts)
+    feeds = []
+    if row["feed"]:
+        feeds = list(Feed.objects.filter(config__job=name).only("id", "name", "enabled", "interval_minutes", "next_run_at", "last_run_at", "url").order_by("name"))
+        for f in feeds:
+            f.schedule = Q.every(f.interval_minutes or row["interval"])
+    return _render(request, "job_detail.html", {"j": row, "page": page, "qs": qs_rest, "feeds": feeds, "tags": Q.tag_set()},
+                   section="jobs")
 
+
+# ── Runs ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 @console
 def runs(request):
-    f = {k: request.GET.get(k, "").strip() for k in ("job", "status", "since", "until")}
-    qs = Q.fetch_runs(job=f["job"], status=f["status"], since=_date(f["since"]), until=_date(f["until"]))
-    page, qs_rest = _page(request, qs)
-    for r in page:
-        r.duration = (r.finished_at - r.started_at).total_seconds() if r.finished_at else None
-        r.safe_error = mask_secrets(r.error)
-    history = Q.run_history(job=f["job"] or None)
+    now = timezone.now()
     reg = Q._registry()
-    spark = [{"job": name, "runs": history.get(name, []), "failed": sum(x["status"] == "failed" for x in history.get(name, []))}
-             for name in reg if not f["job"] or name == f["job"]]
-    return _render(request, "runs.html", {"f": f, "page": page, "qs": qs_rest, "spark": spark, "job_names": list(reg),
-                                          "statuses": [s for s, _ in FetchRun.Status.choices]}, section="runs")
+    f = {k: request.GET.get(k, "").strip() for k in ("job", "state", "tag")}
+    if f["job"] and f["job"] not in reg:
+        f["job"] = ""
+    if f["state"] not in Q.STATES:
+        f["state"] = ""
+    if f["tag"] not in Q.tag_set():
+        f["tag"] = ""
+    ctx = {"f": f, "job_names": list(reg), "tags": Q.tag_set(), "page": None, "console_runs": None, "next_up": None}
+    if f["state"] in ("scheduled", "paused") or not f["state"]:
+        allowed = set(Q.jobs_with_tag(f["tag"])) if f["tag"] else None
+        rows = [r for r in Q.jobs(now, history=False) if (not f["job"] or r["name"] == f["job"]) and (allowed is None or r["name"] in allowed)]
+        nxt = Q.upcoming(rows, now, limit=0 if f["state"] else 5)
+        ctx["next_up"] = [x for x in nxt if not f["state"] or x["state"] == f["state"]]
+    if f["state"] in ("pending", "cancelled"):
+        ctx["console_runs"] = Q.console_runs(job=f["job"], tag=f["tag"], status=f["state"] if f["state"] == "cancelled" else "pending")
+    if f["state"] in ("", "running", "completed", "failed"):
+        page, qs_rest = _page(request, Q.fetch_runs(job=f["job"], state=f["state"], tag=f["tag"]))
+        for r in page:
+            r.state, r.duration, r.summary = Q.run_state(r.status), _duration(r), Q.counts_summary(r.counts)
+        ctx.update(page=page, qs=qs_rest)
+    return _render(request, "runs.html", ctx, section="runs", refresh=REFRESH_SECONDS)
 
 
 @console
-def tasks(request):
+def run_detail(request, pk):
+    run = get_object_or_404(FetchRun.objects.select_related("feed"), pk=pk)
+    log = RunLog.objects.filter(run_id=run.pk).first()
+    level = request.GET.get("level", "").lower()
+    lines = log.lines if log else []
+    if request.GET.get("format") == "text":
+        text = "\n".join(f"{t} {lv:<8} {name}: {msg}" for t, lv, name, msg in lines) + ("\n" if lines else "")
+        return HttpResponse(text, content_type="text/plain; charset=utf-8")
+    shown = [ln for ln in lines if LOG_LEVELS.get(str(ln[1]).lower(), 20) >= LOG_LEVELS.get(level, 0)] if level in LOG_LEVELS else lines
+    levels = {}
+    for ln in lines:
+        levels[ln[1]] = levels.get(ln[1], 0) + 1
+    around = FetchRun.objects.filter(job=run.job)
+    older = around.filter(started_at__lt=run.started_at).order_by("-started_at", "-id").values_list("id", flat=True).first()
+    newer = around.filter(started_at__gt=run.started_at).order_by("started_at", "id").values_list("id", flat=True).first()
+    j = Q._registry().get(run.job)
+    counts = sorted((run.counts or {}).items(), key=lambda kv: (kv[0] != "errors", kv[0]))
+    error = mask_secrets(run.error)
+    return _render(request, "run_detail.html", {
+        "r": run, "state": Q.run_state(run.status), "duration": _duration(run), "log": log, "lines": shown, "level": level if level in LOG_LEVELS else "",
+        "problem_lines": sum(n for lv, n in levels.items() if LOG_LEVELS.get(str(lv).lower(), 20) >= 30), "counts": counts, "error": error, "error_head": Q.first_line(error, 300), "older": older, "newer": newer,
+        "job": j, "content": Q.run_revisions(run),
+    }, section="runs", refresh=REFRESH_SECONDS if run.status == "running" else None)
+
+
+# ── Work ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+@console
+def work(request):
     now = timezone.now()
-    f = {k: request.GET.get(k, "").strip() for k in ("kind", "status", "agent", "q")}
-    page, qs_rest = _page(request, Q.tasks(**f))
+    return _render(request, "work.html", {"queue": Q.queue(now), "stuck": Q.stuck_leases(now), "wave": Q.wave(now)}, section="work")
+
+
+@console
+def work_kind(request, kind):
+    if kind not in AgentTask.Kind.values:
+        raise Http404("no such task kind")
+    now = timezone.now()
+    tabs = {key: (label, status) for key, label, status in Q.TABS}
+    tab = request.GET.get("tab", "waiting")
+    if tab not in tabs:
+        tab = "waiting"
+    q = request.GET.get("q", "").strip()
+    page, qs_rest = _page(request, Q.tasks(kind=kind, status=tabs[tab][1], q=q))
     for t in page:
         t.age = now - t.created_at
         t.summary = Q.result_summary(t)
+        t.subject = Q.task_subject(t)
         t.stale = t.status == "claimed" and t.lease_until and t.lease_until < now
-    return _render(request, "tasks.html", {
-        "f": f, "page": page, "qs": qs_rest, "kinds": AgentTask.Kind.choices, "filtered": any(f.values()),
-        "statuses": [s for s, _ in AgentTask.Status.choices] + ["stale"], "agents": Q.agents(),
-        "throughput": Q.throughput(now),
-    }, section="tasks")
+    return _render(request, "work_kind.html", {
+        "kind": kind, "label": AgentTask.Kind(kind).label, "tabs": Q.TABS, "tab": tab, "status": tabs[tab][1], "q": q,
+        "page": page, "qs": qs_rest, "counts": Q.kind_counts(kind, now), "max_batch": acts.MAX_TASKS,
+    }, section="work")
 
 
 @console
 def task_detail(request, pk):
     from revisions.models import Revision
 
-    task = get_object_or_404(AgentTask.objects.select_related("target_entry", "target_candidate", "target_proposal"), pk=pk)
+    task = get_object_or_404(AgentTask.objects.select_related("target_entry"), pk=pk)
     revs = Revision.objects.filter(task_id=task.pk).defer("before", "after").order_by("-id")
     now = timezone.now()
     return _render(request, "task_detail.html", {
         "t": task, "now": now, "stale": task.status == "claimed" and task.lease_until and task.lease_until < now,
         "revisions": revs[:50], "revision_count": revs.count(), "error": mask_secrets(task.error),
-    }, section="tasks")
-
-
-@console
-def changes(request):
-    from revisions.models import ACTOR_KINDS, Revision
-
-    now = timezone.now()
-    f = {k: request.GET.get(k, "").strip() for k in ("actor_kind", "table", "action", "actor", "reason", "task", "since", "until")}
-    if f["task"] and not f["task"].isdigit():
-        f["task"] = ""
-    since, until = _date(f["since"]), _date(f["until"])
-    qs = Q.revisions(**{**f, "since": since, "until": until + timedelta(days=1) if until else None})
-    page, qs_rest = _page(request, qs)
-    return _render(request, "changes.html", {
-        "f": f, "page": page, "qs": qs_rest, "actor_kinds": ACTOR_KINDS, "tables": Q.revision_tables(),
-        "actions": [a for a, _ in Revision.Action.choices], "daily": Q.revision_daily(now), "batches": Q.batches(now),
-    }, section="changes")
+    }, section="work")
 
 
 @console
@@ -208,45 +321,74 @@ def revision_detail(request, pk):
     return _render(request, "revision_detail.html", {
         "r": rev, "label": Q.row_label(rev), "diffs": field_diffs(rev), "history": Q.row_history(rev),
         "same_change": same_change[:50], "same_change_count": same_change.count(),
-    }, section="changes")
+        "release": Release.objects.filter(revision_high_water__gte=rev.pk).order_by("revision_high_water", "id").first(),
+    }, section="releases")
 
+
+# ── Releases ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 @console
 def releases(request):
-    pointer = None
-    try:
-        from infra import storage
-
-        pointer = storage.read_pointer()
-    except Exception:  # noqa: BLE001 — shown as "unknown"
-        pointer = None
+    pointer = Q.pointer()
     page, qs_rest = _page(request, Release.objects.order_by("-created_at", "-id"), size=25)
-    for r in page:
-        m = Q.manifest(r.version) or {}
-        r.changes = m.get("changes")
-        r.previous = m.get("previous")
-        r.live = bool(pointer and pointer.get("version") == r.version)
-    return _render(request, "releases.html", {"page": page, "qs": qs_rest, "pointer": pointer}, section="releases")
+    rels = list(page)
+    before = None
+    if rels:
+        last = rels[-1]
+        before = Release.objects.filter(created_at__lte=last.created_at).exclude(pk=last.pk).order_by("-created_at", "-id").first()
+    Q.annotate_releases(rels, before, (pointer or {}).get("version"))
+    newest = Release.objects.order_by("-created_at", "-id").only("revision_high_water", "version").first()
+    pending = Q.by_actor_kind(Q.revisions_between(newest.revision_high_water if newest else 0, None))
+    return _render(request, "releases.html", {"page": page, "rels": rels, "qs": qs_rest, "pointer": pointer, "newest": newest,
+                                              "pending": pending, "pending_total": sum(pending.values()), "facts": Q.fact_base()},
+                   section="releases")
+
+
+def _release_revisions(request, low, high):
+    qs = Q.revisions_between(low, high)
+    page, qs_rest = _page(request, qs)
+    return page, qs_rest, Q.by_actor_kind(qs)
 
 
 @console
-def release_changes(request, version):
+def release_detail(request, version):
     release = get_object_or_404(Release, version=version)
     text = Q.change_report(release.version)
     if request.GET.get("raw") == "1":
         if text is None:
             raise Http404("no change report in the store")
         return HttpResponse(text, content_type="text/markdown; charset=utf-8")
-    return _render(request, "release_changes.html", {"release": release, "report": text, "manifest": Q.manifest(release.version)},
-                   section="releases")
+    prev = Release.objects.filter(created_at__lte=release.created_at).exclude(pk=release.pk).order_by("-created_at", "-id").first()
+    pointer = Q.pointer()
+    Q.annotate_releases([release], prev, (pointer or {}).get("version"))
+    page, qs_rest, kinds = _release_revisions(request, prev.revision_high_water if prev else 0, release.revision_high_water)
+    return _render(request, "release_detail.html", {
+        "release": release, "prev": prev, "manifest": Q.manifest(release.version), "pointer": pointer,
+        "report": D.render_markdown(text).html if text else None, "page": page, "qs": qs_rest, "kinds": kinds,
+    }, section="releases")
 
 
 @console
-def programs(request):
-    now = timezone.now()
-    return _render(request, "programs.html", {
-        "waves": Q.waves_overview(now), "pipeline": Q.pipeline(now), "facts": Q.fact_base(now), "proposals": Q.proposals(),
-    }, section="programs")
+def unreleased(request):
+    newest = Release.objects.order_by("-created_at", "-id").first()
+    page, qs_rest, kinds = _release_revisions(request, newest.revision_high_water if newest else 0, None)
+    return _render(request, "unreleased.html", {"newest": newest, "page": page, "qs": qs_rest, "kinds": kinds}, section="releases")
+
+
+# ── Docs ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+@console
+def docs_index(request):
+    return _render(request, "docs.html", {"tree": D.tree(), "doc": None, "rendered": None}, section="docs")
+
+
+@console
+def doc(request, section, slug):
+    d = D.find(section, slug)
+    if d is None:
+        raise Http404("no such document")
+    return _render(request, "docs.html", {"tree": D.tree(), "doc": d, "rendered": D.render(d), "section_title": D.SECTIONS[section][0],
+                                          "mermaid_url": D.MERMAID_URL}, section="docs")
 
 
 # ── actions ───────────────────────────────────────────────────────────────────────────────────────────────────────

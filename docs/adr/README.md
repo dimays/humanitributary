@@ -50,6 +50,7 @@ things work now; an ADR says why, and what was given up.
 | [0027](0027-caps-after-round-3.md) | Caps after round 3: more history gaps, fewer routine news stories | accepted |
 | [0028](0028-operations-console.md) | An operations console for staff: read-only pages now, audited interventions planned | accepted |
 | [0029](0029-release-identity-includes-the-page.md) | A release's identity includes the page's inputs, so a page-only change publishes | accepted |
+| [0030](0030-a-simpler-console-and-run-logs.md) | A simpler operations console, shaped like an orchestrator's, with every job run's log | accepted |
 <!-- index:end -->
 
 ## Template

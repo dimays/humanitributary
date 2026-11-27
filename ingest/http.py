@@ -11,6 +11,7 @@
 Tests pass an `httpx.MockTransport` (recorded fixtures, no network) and a no-op `sleep`.
 """
 
+import logging
 import re
 import time
 import urllib.robotparser
@@ -23,6 +24,14 @@ from django.conf import settings
 from evidence.publishers import defaults_for, domain_of
 
 from . import policy
+
+logger = logging.getLogger(__name__)  # one INFO line per request, without its query string (a run's log: ADR 0030)
+
+
+def _shown(url: str) -> str:
+    """A URL for a log line: scheme, host and path; the query (which may hold a key) becomes "?…"."""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc.rsplit('@', 1)[-1]}{parts.path}" + ("?…" if parts.query else "")
 
 
 class Refused(Exception):
@@ -152,6 +161,7 @@ class Fetcher:
 
     def request(self, method: str, url: str, *, params=None, headers=None, etag="", last_modified="", robots=True, timeout=None) -> Fetched:
         if reason := self.refusal(url, robots=robots):
+            logger.warning("refused %s: %s", _shown(url), reason)
             raise Refused(reason)
         h = dict(headers or {})
         if etag:
@@ -215,12 +225,19 @@ class Fetcher:
             except httpx.HTTPError as e:
                 last_error = e
                 if attempt < attempts:
+                    logger.warning("%s %s: %s; retrying (attempt %d of %d)", method, _shown(url), type(e).__name__, attempt + 2, attempts + 1)
                     self.sleep(min(2 ** (attempt + 1), 30))
                     continue
+                logger.error("%s %s: %s after %d attempts", method, _shown(url), type(e).__name__, attempts + 1)
                 raise FetchError(f"{type(e).__name__}: {e}") from e
             if resp.status_code in (429, 502, 503, 504) and attempt < attempts and not looks_like_challenge(resp.status_code, resp.content):
-                self.sleep(_retry_after(resp.headers.get("retry-after"), default=2 ** (attempt + 1)))
+                wait = _retry_after(resp.headers.get("retry-after"), default=2 ** (attempt + 1))
+                logger.warning("%s %s → %d; retrying in %.0f s", method, _shown(url), resp.status_code, wait)
+                self.sleep(wait)
                 continue
+            ms = int((time.monotonic() - t0) * 1000)
+            logger.log(logging.WARNING if resp.status_code >= 400 else logging.INFO, "%s %s → %d (%d ms, %d bytes)",
+                       method, _shown(url), resp.status_code, ms, len(resp.content))
             return Fetched(
                 url=url, final_url=str(resp.url), status=resp.status_code, headers={k.lower(): v for k, v in resp.headers.items()},
                 content=resp.content, history=[str(h.url) for h in resp.history], elapsed_ms=int((time.monotonic() - t0) * 1000),

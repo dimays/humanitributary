@@ -1,28 +1,34 @@
 {% extends "opsconsole/base.html" %}{% load ops %}
 {% block title %}Releases{% endblock %}
 {% block content %}
-<h1>Releases</h1>
-{% if pointer %}
-<p class="note">Readers get <b>{{ pointer.version }}</b> (<span class="mono">releases/latest.json</span>, written {{ pointer.updated_at }} by {{ pointer.updated_by }}, reason {{ pointer.reason }}{% if pointer.previous %}, before it {{ pointer.previous }}{% endif %}).</p>
-{% else %}<p class="note"><span class="tag warn">no pointer</span> Nothing is live, or the releases store can't be read.</p>{% endif %}
+<div class="head">
+  <div><h1>Releases</h1><div class="sub">Each release is an immutable snapshot of the content and the page built from it. Readers get the live one.</div></div>
+  <div class="tools">{% act "publish_check" "Publish…" "primary" %}</div>
+</div>
+{% if can_act %}<p class="small muted" style="margin:-12px 0 18px">Publish runs <span class="mono">publish --check</span> in the worker first: the gates and the change report. Its page is the confirmation.</p>{% endif %}
 
-{% if can_act %}<div class="acts">{% act "publish_check" "Check and publish…" %} <span class="note">runs <span class="mono">publish --check</span> in the worker; its result is the confirmation page</span></div>{% endif %}
+<div class="grid g3" style="margin-bottom:18px">
+  <div class="card"><h2>Live</h2>{% if pointer %}<div class="stat"><div><b>{{ pointer.version }}</b><span>pointed {{ pointer.updated_by|default:"" }}{% if pointer.reason %} · {{ pointer.reason }}{% endif %}</span></div></div>
+    {% else %}<p class="empty-note">Nothing is live, or the releases store can't be read.</p>{% endif %}</div>
+  <div class="card"><h2>Not released yet</h2><div class="stat"><div><b>{{ pending_total }}</b><span>content changes since {{ newest.version|default:"the start" }}</span></div></div>
+    {% if pending_total %}<p class="small muted" style="margin:10px 0 0">{% for k, n in pending.items %}{{ n }} by {{ k }}s{% if not forloop.last %} · {% endif %}{% endfor %} · <a href="{% url 'opsconsole:unreleased' %}">See them</a></p>{% endif %}</div>
+  <div class="card"><h2>Fact base</h2><div class="stat"><div><b>{% if facts.corroborated is not None %}{{ facts.corroborated|pct }}{% else %}–{% endif %}</b><span>of {{ facts.total }} published claims corroborated</span></div></div>
+    <p class="small muted" style="margin:10px 0 0">{% for s, n in facts.by.items %}{{ s|words }} {{ n }}{% if not forloop.last %} · {% endif %}{% endfor %}</p></div>
+</div>
 
-<div class="scroll"><table>
-<tr><th>Version</th><th>Created</th><th>By</th><th class="n">Branches</th><th class="n">Events</th><th class="n">Citations</th><th class="n">Single source</th><th>Since previous</th><th>Content · page hash</th><th></th></tr>
-{% for r in page %}
-<tr class="{% if r.live %}warn{% endif %}">
-  <td class="nowrap"><b>{{ r.version }}</b>{% if r.live %} <span class="tag ok">live</span>{% endif %}</td>
-  <td class="nowrap small">{{ r.created_at|date:"Y-m-d H:i" }}</td>
-  <td class="small">{{ r.created_by }}</td>
-  <td class="n">{{ r.counts|get:"branches" }}</td><td class="n">{{ r.counts|get:"events" }}</td><td class="n">{{ r.counts|get:"citations" }}</td><td class="n">{{ r.counts|get:"single_source_events" }}</td>
-  <td class="small nowrap">{% if r.changes %}<span class="tag ok">+{{ r.changes.added }}</span> <span class="tag info">~{{ r.changes.changed }}</span> <span class="tag {% if r.changes.retracted %}bad{% else %}muted{% endif %}">−{{ r.changes.retracted }}</span>{% if r.previous %}<div class="muted">vs {{ r.previous }}</div>{% endif %}{% else %}<span class="muted">no manifest</span>{% endif %}</td>
-  <td class="mono small" title="content {{ r.content_hash }} · page {{ r.page_hash|default:'not recorded' }}">{{ r.content_hash|slice:":12" }}…<div class="muted">{% if r.page_hash %}{{ r.page_hash|slice:":12" }}…{% else %}page: –{% endif %}</div></td>
-  <td class="nowrap"><a href="{% url 'opsconsole:release_changes' r.version %}">change report</a>{% if not r.live and pointer %}<div class="acts">{% act "rollback" "Roll back to this…" "danger" version=r.version %}</div>{% endif %}</td>
-</tr>
-{% empty %}<tr><td colspan="10" class="muted">No releases yet: <span class="mono">manage.py publish</span>.</td></tr>
-{% endfor %}
-</table></div>
+<div class="card flush"><div class="scroll"><table>
+<thead><tr><th>Version</th><th>Made</th><th class="n">Added</th><th class="n">Changed</th><th class="n">Retracted</th><th>Kind</th><th class="n">Events</th>{% if can_act %}<th></th>{% endif %}</tr></thead>
+<tbody>{% for r in rels %}<tr>
+  <td class="nowrap"><a href="{% url 'opsconsole:release' r.version %}"><b>{{ r.version }}</b></a> {% if r.live %}{% badge "completed" "Live" %}{% endif %}</td>
+  <td class="small nowrap">{{ r.created_at|ago }}<div class="muted">{{ r.created_by }}</div></td>
+  {% if r.totals %}<td class="n" style="color:var(--ok)">{% if r.totals.added %}+{{ r.totals.added }}{% else %}<span class="faint">0</span>{% endif %}</td>
+  <td class="n">{% if r.totals.changed %}{{ r.totals.changed }}{% else %}<span class="faint">0</span>{% endif %}</td>
+  <td class="n"{% if r.totals.retracted %} style="color:var(--bad)"{% endif %}>{% if r.totals.retracted %}−{{ r.totals.retracted }}{% else %}<span class="faint">0</span>{% endif %}</td>
+  {% else %}<td colspan="3" class="small muted">no manifest</td>{% endif %}
+  <td>{% if r.page_only %}<span class="tag on" title="nothing added, changed or retracted; the page's inputs changed">page only</span>{% endif %}</td>
+  <td class="n">{{ r.counts|get:"events" }}</td>
+  {% if can_act %}<td><div class="acts">{% if not r.live and pointer %}{% act "rollback" "Roll back to this" "sm quiet" version=r.version %}{% endif %}</div></td>{% endif %}
+</tr>{% empty %}<tr><td colspan="8" class="muted">No releases yet.</td></tr>{% endfor %}</tbody>
+</table></div></div>
 {% include "opsconsole/_pager.html" %}
-<p class="note">Green +added, blue ~changed, red −retracted entries, from each release's manifest (its change report's totals against the release readers had before it).</p>
 {% endblock %}

@@ -1,0 +1,1 @@
+{% load ops %}<div class="acts">{% if j.paused %}{% act "resume_job" "Resume" "sm" job=j.name %}{% else %}{% act "run_job" "Run now" "sm" job=j.name %}{% act "pause_job" "Pause" "sm quiet" job=j.name %}{% endif %}</div>

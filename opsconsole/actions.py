@@ -555,7 +555,7 @@ def _pause_plan(kind, data):
         raise Refused(f"{name} is not paused")
     rows = [("Job", f"{name}: {_registry()[name].doc}")]
     if kind == A.PAUSE_JOB:
-        rows.append(("Then", "the scheduler skips it until it is resumed (a run in progress finishes); `manage.py run_job` can still run it; the Overview shows who paused it and why"))
+        rows.append(("Then", "the scheduler skips it until it is resumed (a run in progress finishes); `manage.py run_job` can still run it; the Jobs page shows who paused it and why"))
     else:
         p = paused[name]
         rows += [("Paused", f"by {p.get('by')} at {p.get('at', '')[:16]}: {p.get('reason')}"), ("Then", "it runs when next due")]

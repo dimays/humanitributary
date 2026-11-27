@@ -1,0 +1,28 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Release {{ release.version }}{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'opsconsole:releases' %}">Releases</a> /</div>
+<div class="head">
+  <div><h1>{{ release.version }} {% if release.live %}{% badge "completed" "Live" %}{% endif %}{% if release.page_only %} <span class="tag on">page only</span>{% endif %}</h1>
+    <div class="sub">Made {{ release.created_at|date:"M j, Y H:i" }} UTC by {{ release.created_by }}{% if prev %}, after {{ prev.version }}{% endif %}.{% if release.notes %} {{ release.notes }}{% endif %}</div></div>
+  <div class="tools">{% if not release.live and pointer %}{% act "rollback" "Roll back to this" "sm" version=release.version %}{% endif %}
+    {% if report %}<a class="btn sm quiet" href="?raw=1">changes.md</a>{% endif %}</div>
+</div>
+<div class="grid g2">
+  <div class="card"><dl class="kv num">
+    {% for k, v in release.counts.items %}<dt>{{ k|words }}</dt><dd>{{ v }}</dd>{% endfor %}
+  </dl></div>
+  <div class="card"><dl class="kv">
+    <dt>Changes</dt><dd>{% if release.totals %}{{ release.totals.added }} added, {{ release.totals.changed }} changed, {{ release.totals.retracted }} retracted{% else %}no manifest{% endif %}</dd>
+    <dt>Content hash</dt><dd class="mono">{{ release.content_hash|slice:":16" }}…</dd>
+    <dt>Page hash</dt><dd class="mono">{% if release.page_hash %}{{ release.page_hash|slice:":16" }}…{% else %}not recorded{% endif %}</dd>
+    <dt>Snapshot</dt><dd class="mono">{{ release.snapshot_path }}</dd>
+    <dt>Revisions</dt><dd>up to #{{ release.revision_high_water }}</dd>
+  </dl></div>
+</div>
+<div class="card" style="margin-top:18px"><h2>Change report</h2>
+  {% if report %}<div class="prose" style="font-size:14px">{{ report|safe }}</div>{% else %}<p class="empty-note">No <span class="mono">changes.md</span> for this release in the releases store.</p>{% endif %}</div>
+<div class="card flush" style="margin-top:18px"><h2>Content changes in this release<span class="count">{{ page.paginator.count }}{% if kinds %} · {% for k, n in kinds.items %}{{ n }} {{ k }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span></h2>
+  {% include "opsconsole/_revisions_table.html" %}</div>
+{% include "opsconsole/_pager.html" %}
+{% endblock %}
