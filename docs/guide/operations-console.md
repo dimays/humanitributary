@@ -43,6 +43,14 @@ The admin's header has an "Operations" link for staff: `opsconsole/templates/adm
 Django's template of that name. It wins because `opsconsole` comes before `django.contrib.admin` in
 `INSTALLED_APPS`. The sidebar's foot links back to the admin.
 
+Every tab reads as the same project. A console page's title is "<page> · <SITE_NAME> Operations" ("Jobs ·
+Humanitributary Operations"), from `base.html`'s `title` block; the admin's is "<page> · <SITE_NAME> administration"
+(its `site_title`, set in `config/urls.py`, and the same override's `title` block). Both heads include
+`opsconsole/templates/opsconsole/_icons.html`, the public page's favicon (`/favicon.ico`, `/favicon.svg`) and Apple touch icon, which
+`infra/site.py` serves at the root of every host ([Publishing](publishing.md#the-brand-files),
+[ADR 0034](../adr/0034-brand-assets.md)), and a light and a dark `theme-color`. The sidebar's logo is the same
+`/favicon.svg`.
+
 ## The pages
 
 The sidebar has seven items and nothing else. The pages they lead to link on to the rest: a job, a run, a task, a
@@ -50,8 +58,8 @@ Revision, a release, an action and the action log.
 
 | Page | URL | What it shows |
 |---|---|---|
-| Dashboard | `/ops/` | **One status line**: "All good", or "N problems" with one sentence each, worst first (a store that can't be reached; no worker running and no run for 30 minutes; a job failing runs in a row, red at the alert threshold; stuck leases; jobs overdue by 30 minutes; no live release), each linking to where to look. **Runs, last 24 hours**: the run graph, one row per job that ran, a bar per run placed at its start and as wide as it took (at least a sliver), green Completed, amber completed with errors, red Failed, blue Running; each bar links to its run, and pointing at it
-(or focusing it, or tapping it once) shows its [run card](#run-cards). **Needs attention**: each job's (or feed's) last run that failed, with Retry. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck. Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
+| Dashboard | `/ops/` | **One status line**: "All good", or "N problems" with one sentence each, worst first (a store that can't be reached; no worker running and no run for 30 minutes; a job failing runs in a row, red at the alert threshold; stuck leases; jobs overdue by 30 minutes; no live release), each linking to where to look. A paused job is never a problem, whatever its last runs did: it is listed under the problems apart, with an amber Paused badge, who paused it and why, and how many failed runs before the pause are not counted ("N paused" beside the count); resumed, its failures count again. **Runs, last 24 hours**: the run graph, one row per job that ran, a bar per run placed at its start and as wide as it took (at least a sliver), green Completed, amber completed with errors, red Failed, blue Running; each bar links to its run, and pointing at it
+(or focusing it, or tapping it once) shows its [run card](#run-cards). **Needs attention**: each job's (or feed's) last run that failed, with Retry; not a paused job's. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck. Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
 | New events | `/ops/new/` | The content the platform makes, newest activity first: every current event (`write_event`), history-wave event (`fill_gap`) and branch addition (an edit file's `add_branch` or `add_event`), each with its five steps (Fetched, Queued, Drafted, Reviewed, Published) and their times, its branches, date, sources, agent and verdict, and its links; tabs, filters and a 14-day pulse above ([below](#new-events)). |
 | Jobs | `/ops/jobs/` | One row per job, in run order: its name and one-sentence description (the docstring's first sentence), its tags, its schedule in words ("every 15 minutes", "every hour" with "per feed · 1 of 1 on" for a feed job), its last run's state and age, its last ten runs as squares (oldest left, each its state's color and a link to the run, with its [run card](#run-cards) on hover, focus or tap; empty slots when it has run fewer times), its next run (or Paused, or Pending), and Run now / Pause, or Resume. Chips across the top filter by tag (`?tag=`), with counts. |
 | A job | `/ops/jobs/<name>/` | The description and tags; the schedule, next run, last run, failures in a row, console runs waiting; the ten-run strip and whether it may be run again straight away (`not_idempotent`); for a feed job its feeds (schedule, last fetched, next, a Run button each); its run history, 25 a page. |
@@ -204,7 +212,7 @@ ten times the rows and compares; the seven main pages make at most 25 queries, a
 | A job's last run | `DISTINCT ON (job, feed_id)` over FetchRuns that aren't running, newest first: one row per job and feed. A feed job's row is its newest run across its feeds. |
 | The ten-run strip | `HISTORY_SQL`: for each job name, a `LATERAL` subquery taking its newest ten runs through the `(job, started_at DESC)` index (`fetchrun_job_started_idx`, added with the run logs), one query for every job. |
 | Failures in a row | `FAILURE_STREAKS_SQL`: per job and feed, failed runs since the last `ok` or `partial` one. The same count as `infra/alerts.py` `consecutive_failures`, for every job in one query; the page shows the worst feed's. |
-| Needs attention | From the same last runs: each job's (each feed's) whose status is `failed`. |
+| Needs attention | From the same last runs: each job's (each feed's) whose status is `failed`, except a paused job's. A paused job's row also has `alerting` false; its `failures` stay, and its page shows them as "Before the pause", not "Failing". |
 | Next due | A plain job: its last run's start plus its interval. A feed job: the earliest `next_run_at` of its enabled feeds. Overdue means more than 30 minutes past. A job that never ran is due now. |
 | The run graph | FetchRuns started in the last 24 hours (on the `started_at` index), placed as shares of the window in Python. |
 | Run cards | `RUN_CARDS_SQL` ([above](#run-cards)): the shown runs, their feeds and actions, each job's median and p90 over its last 30 completed runs, each retry's earlier attempts; one query per page. |
@@ -336,11 +344,13 @@ ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `wor
 
 - anonymous and non-staff users are redirected, a POST to a page is refused, staff get `noindex` and `no-store` on
   every page, another host gets a 404 when `OPS_HOSTS` is set, the sidebar has exactly the seven items, the admin
-  links to the console, and the old addresses redirect;
+  links to the console, the old addresses redirect, and tabs are titled "<page> · <name> Operations" (the admin's
+  "<page> · <name> administration") with the brand's icons;
 - every page and detail page renders against `seed()` (runs over the last day with their logs, most with the time
   they became due, a manual run from the console and a run retried twice, a job at the alert
   threshold with a key in its error, a running run, tasks with a stuck lease, a pending and a cancelled console run,
-  a paused job, agents' and a reviewer's edits, a release, the waves' state) and shows what it should: the problems,
+  a paused job, agents' and a reviewer's edits, a release, the waves' state) and shows what it should: the problems
+  (and a failing job, once paused, out of them, out of attention and not alerting, listed as paused; back once resumed),
   the run graph, attention, up next and the queues; tags, schedules in words and the ten-run strips, the tag filter;
   the run filters by job, state and tag; a run's log, its level filter and plain text, masked; the Work cards, tabs
   and stuck leases; releases, page-only releases, unreleased changes and a Revision's diff; the Docs page, its links

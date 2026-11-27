@@ -5,6 +5,8 @@ Purpose: This procedure tells how to stop the schedule of one job for a time, an
 A paused job is never due. The worker and all other runners skip it. The list of paused jobs is in the `JobState`
 row "paused_jobs", with who paused each job, when and why.
 
+A paused job is not a problem. The Dashboard and `/healthz` show it as paused. They do not count its failures, and it sends no alert.
+
 ## Before you start
 
 - You have a staff user with the permission `ops_operator`.
@@ -25,6 +27,8 @@ row "paused_jobs", with who paused each job, when and why.
    ```
 
    Make sure that the job shows as paused.
+5. Open the Dashboard of the console.
+   Make sure that the job has an amber "Paused" badge, and that the count of problems does not include it.
 
 ## Resume a job
 
@@ -34,6 +38,9 @@ row "paused_jobs", with who paused each job, when and why.
    Make sure that the job does not have the tag `paused`.
 3. Wait for the next due time of the job.
    Make sure that its next run has the status `ok` or `partial`.
+
+> **NOTE:** When you resume a job, its failures from before the pause count again. If its next run fails, the
+> Dashboard shows a problem, and an alert can come.
 
 > **NOTE:** A run that is in progress when you pause the job continues to its end. The pause stops the next runs.
 

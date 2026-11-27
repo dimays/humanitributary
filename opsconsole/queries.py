@@ -194,8 +194,9 @@ def pending_runs() -> dict[str, list]:
 
 def jobs(now, *, history: bool = True) -> list[dict]:
     """One row per registered job, in run order: tags, schedule, its last finished run (the newest across its feeds),
-    failures in a row (the worst feed's), the next due time, whether it is paused (by whom, why), console runs waiting
-    for the worker, and the last HISTORY_RUNS runs. Six queries."""
+    failures in a row (the worst feed's), the next due time, whether it is paused (by whom, why; a paused job has no
+    failing runs to attend to and never alerts), console runs waiting for the worker, and the last HISTORY_RUNS runs.
+    Six queries."""
     from ingest.jobs import paused_jobs
 
     reg = _registry()
@@ -250,7 +251,9 @@ def jobs(now, *, history: bool = True) -> list[dict]:
             "counts": counts_summary(run.counts) if run else "",
             "error": first_line(run.error) if run and run.status in ("failed", "partial") else "",
             "failures": worst, "worst_feed": feeds[name]["names"].get(worst_feed) if worst_feed else None,
-            "failing": failing, "alerting": worst >= alert_after, "next_due": next_due,
+            # A paused job isn't failing (what it did before the pause stays in its history and in `failures`): it is
+            # left out of "needs attention" and never alerting; resuming it brings both back.
+            "failing": [] if name in paused else failing, "alerting": name not in paused and worst >= alert_after, "next_due": next_due,
             "overdue": name not in paused and bool(next_due and next_due < now - OVERDUE),
             "paused": paused.get(name), "not_idempotent": j.not_idempotent,
             "history": hist.get(name, []), "pending": pending.get(name, []),

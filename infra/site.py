@@ -4,14 +4,17 @@
 from the releases store and kept in memory by version: the pointer is re-read at most every POINTER_TTL seconds, so a
 publish (or a rollback) reaches readers within a minute without a deploy, and the database is never in the page's
 path (ADR 0001). The page loads `images/…` and `outlines.js` next to itself; those are inputs kept in the repository
-(`site/`), so they are served from the slug. Responses carry Cache-Control, so a CDN put in front later caches them.
+(`site/`), so they are served from the slug. So are the brand files (`site/brand/`, drawn by scripts/build_brand.py:
+the favicons, app icons, web manifest and link-preview image; docs/adr/0034-brand-assets.md), at the root of every
+host, since browsers ask for /favicon.ico there whatever the page says. Responses carry Cache-Control, so a CDN put in
+front later caches them.
 """
 
 import threading
 import time
 
 from django.conf import settings
-from django.http import HttpResponse, HttpResponseNotModified, HttpResponsePermanentRedirect
+from django.http import Http404, HttpResponse, HttpResponseNotModified, HttpResponsePermanentRedirect
 from django.views.decorators.http import require_safe
 from django.views.static import serve
 
@@ -19,7 +22,19 @@ from . import storage
 
 POINTER_TTL = 60  # seconds between reads of releases/latest.json
 PAGE_MAX_AGE = 300  # browsers and a CDN may keep the page this long
-ASSET_MAX_AGE = 86400  # images and outlines.js change only with a deploy
+ASSET_MAX_AGE = 86400  # images, outlines.js and the brand files change only with a deploy
+# The brand files served at the root, with the type each is sent as (mimetypes doesn't know .webmanifest, and
+# guesses image/vnd.microsoft.icon for .ico, which some browsers ignore). Nothing else in site/brand/ is served.
+BRAND_FILES = {
+    "favicon.ico": "image/x-icon",
+    "favicon.svg": "image/svg+xml",
+    "favicon-32.png": "image/png",
+    "apple-touch-icon.png": "image/png",
+    "icon-192.png": "image/png",
+    "icon-512.png": "image/png",
+    "og-image.png": "image/png",
+    "site.webmanifest": "application/manifest+json",
+}
 
 _lock = threading.Lock()
 _cache: dict = {}
@@ -84,6 +99,15 @@ def image(request, path):
 @require_safe
 def outlines(request):
     return _asset(request, "outlines.js", settings.SITE_DIR)
+
+
+@require_safe
+def brand(request, name):
+    if name not in BRAND_FILES:
+        raise Http404("no such file")
+    response = _asset(request, name, settings.SITE_DIR / "brand")
+    response["Content-Type"] = BRAND_FILES[name]
+    return response
 
 
 class WwwRedirect:

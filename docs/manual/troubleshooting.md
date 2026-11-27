@@ -22,6 +22,7 @@ procedure.
 | A console action stays `pending`. | No worker holds the scheduler lock, or the worker is in a long job. | If the action page says that no worker runs, start the worker. Otherwise wait for the job to end. You can withdraw a `pending` action from its page. |
 | `run_job` prints `another run_jobs holds the lock; exiting`. | The worker runs a job now. Only one runner can hold the lock. | Wait some minutes and do the command again. Or use the console action, which runs between jobs. |
 | `run_jobs --list` shows a job as paused. | An operator paused it from the console. | Read who paused it and why on the page of the job in the console. Resume it with procedure [06](procedures/06-pause-and-resume-a-job.md). |
+| The Dashboard shows a job with an amber "Paused" badge, and its last runs failed. | An operator paused the job after the failures. A paused job is not a problem. | No action. When you correct the cause, resume the job with procedure [06](procedures/06-pause-and-resume-a-job.md). |
 
 ## The queue and the agents
 

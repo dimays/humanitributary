@@ -237,7 +237,11 @@ The domain, `humanitributary.com`, is registered at Namecheap (contact verified)
 The public page is the web process's `/` ([ADR 0024](../adr/0024-the-app-serves-the-page.md)): the latest release's
 `timeline.html` from the S3 releases bucket, kept in memory and re-checked against `releases/latest.json` at most
 once a minute, so `heroku run python manage.py publish` (or `publish --rollback <version>`) is live within a minute.
-`/images/*` and `/outlines.js` come from the slug's `site/`, so a changed image needs a deploy. Before the first
+`/images/*` and `/outlines.js` come from the slug's `site/`, so a changed image needs a deploy; so do the brand files
+(`/favicon.ico`, `/favicon.svg`, `/apple-touch-icon.png`, `/icon-192.png`, `/icon-512.png`, `/og-image.png`,
+`/site.webmanifest`, from `site/brand/`), which every host serves at its root ([Publishing](publishing.md#the-brand-files)).
+The preview card is remade by hand (`make release-pull`, `make card`, commit, deploy) after a big content wave or a
+change to how the page draws: the manual's procedure 13. Before the first
 release `/` answers 503; the `X-Release` header names the version being served. `ALLOWED_HOSTS` must list
 `humanitributary.com` and `www.humanitributary.com`. Mail for the domain needs an MX (Cloudflare Email Routing for forwarding) and an SPF
 that names the sender before anything sends as it.
@@ -291,7 +295,7 @@ roll back), each confirmed, with a reason, and recorded as an OpsAction; the com
 | Where | What it tells you |
 |---|---|
 | `/ops/` (the operations console) | The Dashboard: "All good" or the problems, one per line; the last 24 hours of runs as a run graph; failed runs needing attention (with Retry); what runs next; waiting, in progress and stuck per agent queue. Pointing at a run's bar (or a square of a ten-run strip), or focusing it, shows its run card: what started it, its runtime against the job's usual one, where its time went, its counts and error. Then Jobs (tags, schedule, the last ten runs), Runs (each with its log), Work, Releases and Docs, and the action log. Staff only; acting needs `ops_operator`. |
-| `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs; on staging, the app's URL + `/healthz`) | JSON from `infra/health.py`: the database, both stores and `storage_backend` (`local` when hosted means the dyno's throwaway disk), the latest release's version, each job's last run, last run that finished ok or partial, last status and consecutive failures, and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
+| `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs; on staging, the app's URL + `/healthz`) | JSON from `infra/health.py`: the database, both stores and `storage_backend` (`local` when hosted means the dyno's throwaway disk), the latest release's version, each job's state (`failing` when its last run failed, `ok`, `never_run`, or `paused`, with who paused it and why), last run, last run that finished ok or partial, last status and consecutive failures, `failing_jobs` and `paused_jobs` (a paused job is never in `failing_jobs`, whatever its last runs did; resumed, it is again), and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
 | `make storage-status` | The storage backend, whether each bucket answers, and the `latest` pointer: its version, why it was written and by whom. |
 | `make digest` (`manage.py digest`) | Open tasks by kind, the top `write_event` stories, `write_event` by branch, `verify_claim` reasons, new-branch signals, the fact base's and branch governance's sections, candidates by status, and every job's runs in the last 24 hours with the last three failed or partial errors. "No runs in the last 24 hours" means the schedule isn't running. `--sources` adds every feed and lookup adapter, on or off, with its publisher's policy, tier and disabled reason, plus the sources considered and skipped. |
 | `uv run python manage.py facts report` | The fact base: record claims by status (corroborated, single source, contested, stale, unverified), by era and region, and what is due, broken, contested or blocking publication. `--brief` drops the tables. |
@@ -325,7 +329,8 @@ count. It is counted from FetchRun history, so nothing extra is stored. It goes 
 Django's `ADMINS`; with neither set it is only a log line ("ALERT (no ALERT_EMAILS or ADMINS set): …"). In `dev`
 the mail uses the console backend, so with `ALERT_EMAILS` set the message is printed in the run's output (the
 worker's terminal or the day's log) instead of sent. Error text in the mail is masked like the logs. An alert that can't be sent is logged and
-never stops the runner.
+never stops the runner. A paused job never alerts (it runs only by hand, with `run_job`); once resumed, its failures
+count as usual, so its next failure alerts if it reaches the threshold.
 
 ## Backups
 

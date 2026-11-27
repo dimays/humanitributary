@@ -2,7 +2,7 @@
 PY := uv run python
 M := $(PY) manage.py
 
-.PHONY: help env db db-stop psql migrate import-archive publish release-pull build build-release roundtrip test check check-adr check-manual adr-index check-guide guide-stamp guide-status guide-index check-pr serve up worker jobs digest storage-init storage-status storage-migrate schedule-install schedule-uninstall schedule-status
+.PHONY: help env db db-stop psql migrate import-archive publish release-pull build build-release brand card roundtrip test check check-adr check-manual adr-index check-guide guide-stamp guide-status guide-index check-pr serve up worker jobs digest storage-init storage-status storage-migrate schedule-install schedule-uninstall schedule-status
 
 help: ## List the commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -46,6 +46,12 @@ build: build-release ## site/timeline.html from the latest release (the only way
 
 build-release: release-pull ## site/timeline.html from the latest release snapshot
 	node site/build.mjs --from-json var/releases/latest/content.json
+
+brand: ## The favicons, app icons, web manifest and link-preview image in site/brand/, drawn from the page's mark
+	uv run python scripts/build_brand.py --preview var/brand-preview.png
+
+card: ## The link-preview card (site/brand/og-image.png): the page from the latest release, in headless Chrome; after a big wave or a visual change
+	node site/cards.mjs
 
 roundtrip: ## The release gates on your database's content, writing nothing: deterministic export, build --check and read-back, contested, change report
 	$(M) publish --check

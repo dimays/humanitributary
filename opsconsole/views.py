@@ -136,7 +136,8 @@ def _duration(r):
 
 
 def problems(now, health: dict, job_rows: list[dict], queue: list[dict]) -> list[dict]:
-    """What is wrong, worst first, each in one sentence with where to look."""
+    """What is wrong, worst first, each in one sentence with where to look. A paused job is not a problem, whatever its
+    last run did: the Dashboard lists it apart, in amber (`paused`), and it counts again once resumed."""
     out = []
     for alias, s in health["storage"].items():
         if not s["ok"]:
@@ -145,7 +146,7 @@ def problems(now, health: dict, job_rows: list[dict], queue: list[dict]) -> list
         since = f"since {timezone.localtime(health['last_run_started']):%b %d %H:%M}" if health["last_run_started"] else "ever"
         out.append({"level": "bad", "text": f"No worker is running jobs: no run has started {since}.", "href": reverse("opsconsole:runs")})
     for r in job_rows:
-        if r["failures"]:
+        if r["failures"] and not r["paused"]:
             where = f" ({r['worst_feed']})" if r["worst_feed"] else ""
             text = f"{r['name']}{where} failed {r['failures']} run{'s' if r['failures'] != 1 else ''} in a row" + \
                 (" — alert threshold reached." if r["alerting"] else ".")
@@ -177,6 +178,7 @@ def dashboard(request):
     tl = Q.timeline(now)
     return _render(request, "dashboard.html", {
         "health": health, "problems": problems(now, health, job_rows, queue), "timeline": tl,
+        "paused": [r for r in job_rows if r["paused"]],
         "run_cards": Q.run_cards((r["id"] for row in tl["rows"] for r in row["runs"]), now),
         "attention": attention, "upcoming": Q.upcoming(job_rows, now, limit=7), "queue": queue,
         "queue_active": [k for k in queue if k["active"]], "latest": latest, "today": Q.today(now),

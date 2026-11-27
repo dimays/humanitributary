@@ -93,3 +93,4 @@ script. Write a comment that tells why.
 | 10 | [Restore the database from a backup](procedures/10-restore-the-database-from-a-backup.md) |
 | 11 | [Deploy a code change](procedures/11-deploy-a-code-change.md) |
 | 12 | [Add a data source](procedures/12-add-a-data-source.md) |
+| 13 | [Make the preview card again](procedures/13-make-the-preview-card-again.md) |

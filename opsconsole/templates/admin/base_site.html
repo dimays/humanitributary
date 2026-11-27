@@ -1,8 +1,13 @@
 {% extends "admin/base.html" %}
 {% comment %}Django's admin/base_site.html (Django 6), plus a link to the operations console (/ops/) in the header's user
-links for staff. opsconsole comes before django.contrib.admin in INSTALLED_APPS, so this template wins.{% endcomment %}
+links for staff, the brand's icons, and tab titles in the console's form ("<page> · <site_title>", the site title set in
+config/urls.py). opsconsole comes before django.contrib.admin in INSTALLED_APPS, so this template wins.{% endcomment %}
 
-{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+{% block title %}{% if subtitle %}{{ subtitle }} · {% endif %}{{ title }} · {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}{{ block.super }}{% include "opsconsole/_icons.html" %}
+<meta name="theme-color" content="#417690" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#264b5d" media="(prefers-color-scheme: dark)">{% endblock %}
 
 {% block branding %}
 <div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></div>

@@ -25,5 +25,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "honcho>=2.0,<3.0",
+    "pillow>=11,<13",
     "tblib>=3.2.2",
 ]

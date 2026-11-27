@@ -4,7 +4,8 @@ release-gates.md).
 Counted per job and feed from FetchRun history, so nothing extra is stored: the alert goes out on exactly the Nth
 consecutive failure (not again on the N+1th), and a success resets the count. Mail uses Django's settings: the console
 backend locally (printed in the worker's output), SMTP or a provider in production. With no ALERT_EMAILS set it goes
-to ADMINS, and with neither it is only logged.
+to ADMINS, and with neither it is only logged. A paused job never alerts (it fails only when run by hand, and someone
+is already looking at it); once resumed, its next failures count as usual.
 """
 
 from django.conf import settings
@@ -26,6 +27,10 @@ def consecutive_failures(job: str, feed_id: int | None) -> int:
 
 def after_failure(run: FetchRun, *, log=print) -> bool:
     """Called by the runner after a failed run. → True if an alert was sent."""
+    from ingest.jobs import paused_jobs
+
+    if run.job in paused_jobs():
+        return False
     n = consecutive_failures(run.job, run.feed_id)
     if n != settings.ALERT_AFTER_FAILURES:
         return False

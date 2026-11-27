@@ -2,13 +2,16 @@
 the health check (docs/adr/0016, 0018, 0019). The storages are temporary directories (tests/runner.py)."""
 
 import hashlib
+import importlib.util
 import json
 import shutil
+import subprocess
 import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 from unittest import mock, skipUnless
 
+from django.conf import settings
 from django.core import mail
 from django.db import connections
 from django.test import TestCase, override_settings
@@ -262,6 +265,22 @@ class AlertTests(TestCase):
         self.assertNotIn("SECRET", mail.outbox[0].body)
         self.assertEqual(consecutive_failures("boom", None), 4, "counted up to ALERT_AFTER_FAILURES + 1")
 
+    def test_a_paused_job_never_alerts_and_counts_again_once_resumed(self):
+        boom = jobs.Job("boom", lambda ctx: (_ for _ in ()).throw(RuntimeError("down")), 15)
+        t0 = timezone.now()
+        with mock.patch.dict(jobs.REGISTRY, {"boom": boom}), mock.patch.object(jobs, "_load_registry"):
+            jobs.set_paused("boom", True, by="human:owner", reason="its robots.txt now disallows us")
+            for i in range(4):  # run by hand while paused (manage.py run_job)
+                with mock.patch.object(timezone, "now", return_value=t0 + timedelta(minutes=i)):
+                    jobs.run_one(boom, log=lambda m: None)
+            self.assertEqual(len(mail.outbox), 0, "a paused job doesn't alert")
+            jobs.set_paused("boom", False, by="human:owner", reason="allowed again")
+            FetchRun.objects.filter(job="boom").delete()
+            for i in range(3):
+                with mock.patch.object(timezone, "now", return_value=t0 + timedelta(minutes=10 + i)):
+                    jobs.run_one(boom, log=lambda m: None)
+        self.assertEqual(len(mail.outbox), 1, "resumed, it alerts as usual")
+
 
 class HealthTests(FreshStorage, TestCase):
     def test_healthz(self):
@@ -273,6 +292,24 @@ class HealthTests(FreshStorage, TestCase):
         self.assertIsNotNone(body["jobs"]["process"]["last_ok"])
         self.assertEqual(body["storage_backend"], "local")
         self.assertIn("queued_total", body["queue"])
+
+    def test_a_paused_job_is_paused_not_failing(self):
+        t0 = timezone.now()
+        for i in range(3):
+            FetchRun.objects.create(job="gazette", started_at=t0 - timedelta(hours=3 - i), status="failed", error="robots.txt disallows")
+        body = self.client.get("/healthz").json()
+        self.assertEqual((body["jobs"]["gazette"]["state"], body["jobs"]["gazette"]["consecutive_failures"]), ("failing", 3))
+        self.assertIn("gazette", body["failing_jobs"])
+        jobs.set_paused("gazette", True, by="human:owner", reason="its robots.txt now disallows us")
+        r = self.client.get("/healthz")
+        self.assertEqual(r.status_code, 200)
+        g = r.json()["jobs"]["gazette"]
+        self.assertEqual((g["state"], g["paused"]["by"], g["consecutive_failures"]), ("paused", "human:owner", 3), "paused, its history kept")
+        self.assertNotIn("gazette", r.json()["failing_jobs"])
+        self.assertEqual(r.json()["paused_jobs"], ["gazette"])
+        jobs.set_paused("gazette", False, by="human:owner", reason="allowed again")
+        body = self.client.get("/healthz").json()
+        self.assertEqual((body["jobs"]["gazette"]["state"], body["failing_jobs"], body["paused_jobs"]), ("failing", ["gazette"], []))
 
     def test_unreachable_storage_is_a_503(self):
         with mock.patch.object(storage, "reachable", return_value=(False, "ConnectionError: refused")):
@@ -346,6 +383,77 @@ class PublicPageTests(FreshStorage, TestCase):
         self.assertEqual(self.client.get("/outlines.js").status_code, 200)
         self.assertIn(self.client.get("/images/../build.mjs").status_code, (400, 404), "refused, never served")
         self.assertEqual(self.client.get("/build.mjs").status_code, 404)
+
+    @override_settings(ALLOWED_HOSTS=["humanitributary.test", "data.humanitributary.test"])
+    def test_brand_files_at_the_root_of_both_hosts(self):
+        from infra import site
+
+        types = {"favicon.ico": "image/x-icon", "favicon.svg": "image/svg+xml", "favicon-32.png": "image/png",
+                 "apple-touch-icon.png": "image/png", "icon-192.png": "image/png", "icon-512.png": "image/png",
+                 "og-image.png": "image/png", "site.webmanifest": "application/manifest+json"}
+        self.assertEqual(site.BRAND_FILES, types)
+        for host in ("humanitributary.test", "data.humanitributary.test"):
+            for name, ctype in types.items():
+                r = self.client.get(f"/{name}", HTTP_HOST=host)
+                self.assertEqual((r.status_code, r["Content-Type"]), (200, ctype), (host, name))
+                self.assertEqual(r["Cache-Control"], f"public, max-age={site.ASSET_MAX_AGE}", name)
+                self.assertEqual(b"".join(r.streaming_content), (settings.SITE_DIR / "brand" / name).read_bytes())
+        self.assertEqual(self.client.head("/favicon.ico", HTTP_HOST="data.humanitributary.test").status_code, 200)
+        self.assertEqual(self.client.post("/favicon.ico", HTTP_HOST="humanitributary.test").status_code, 405)
+        for missing in ("/brand/favicon.svg", "/favicon.png", "/site.json"):
+            self.assertEqual(self.client.get(missing, HTTP_HOST="humanitributary.test").status_code, 404, missing)
+        m = json.loads((settings.SITE_DIR / "brand" / "site.webmanifest").read_text())
+        self.assertEqual((m["name"], m["short_name"], m["start_url"]), (settings.SITE_NAME, settings.SITE_NAME, "/"))
+        self.assertEqual({i["src"] for i in m["icons"]}, {"/icon-192.png", "/icon-512.png", "/favicon.svg"})
+
+    @skipUnless(importlib.util.find_spec("PIL"), "needs Pillow (the dev group)")
+    def test_brand_files_are_what_the_script_draws(self):
+        """site/brand/ is scripts/build_brand.py's output, from the template's mark and SITE_NAME, and the preview card
+        site/cards.mjs renders from the page (ADR 0034)."""
+        spec = importlib.util.spec_from_file_location("build_brand", settings.BASE_DIR / "scripts" / "build_brand.py")
+        brand = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(brand)
+        files = brand.build()
+        self.assertEqual(sorted([*files, "og-image.png"]), sorted(p.name for p in (settings.SITE_DIR / "brand").iterdir()),
+                         "the icons and the manifest from build_brand.py, and the preview card from site/cards.mjs")
+        for name, data in files.items():
+            self.assertIsNone(brand.differs(name, data, (settings.SITE_DIR / "brand" / name).read_bytes()), name)
+        from PIL import Image
+
+        sizes = {"favicon-32.png": (32, 32), "apple-touch-icon.png": (180, 180), "icon-192.png": (192, 192),
+                 "icon-512.png": (512, 512), "og-image.png": (1200, 630)}
+        for name, size in sizes.items():
+            self.assertEqual(Image.open(settings.SITE_DIR / "brand" / name).size, size, name)
+        self.assertEqual(Image.open(settings.SITE_DIR / "brand" / "apple-touch-icon.png").mode, "RGB", "iOS: a solid background")
+        self.assertEqual(Image.open(settings.SITE_DIR / "brand" / "favicon.ico").ico.sizes(), {(16, 16), (32, 32), (48, 48)})
+        svg = (settings.SITE_DIR / "brand" / "favicon.svg").read_text()
+        self.assertIn("@media (prefers-color-scheme: dark)", svg)
+        self.assertIn('d="M4 16 C9 16 9 7.5 16 7.5 C23 7.5 23 16 28 16"', svg, "the template's braided river")
+
+    @skipUnless(shutil.which("node"), "needs Node")
+    def test_the_built_page_has_the_head_tags(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        (tmp / "c.json").write_text(dumps(small()))
+        subprocess.run(["node", str(settings.SITE_DIR / "build.mjs"), "--from-json", str(tmp / "c.json"), "--built", "2026-01-01",
+                        "--out", str(tmp / "p.html")], check=True, capture_output=True)
+        page = (tmp / "p.html").read_text()
+        head = page.split("</head>", 1)[0]
+        name = settings.SITE_NAME
+        for tag in (f"<title>{name} — all of history, cited</title>", '<meta name="description" content="',
+                    '<link rel="canonical" href="https://humanitributary.com/">',
+                    '<link rel="icon" href="favicon.ico" sizes="48x48">', '<link rel="icon" href="favicon.svg" type="image/svg+xml">',
+                    '<link rel="apple-touch-icon" href="apple-touch-icon.png">', '<link rel="manifest" href="site.webmanifest">',
+                    '<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">',
+                    '<meta name="theme-color" content="#1c1d21" media="(prefers-color-scheme: dark)">',
+                    f'<meta property="og:site_name" content="{name}">', f'<meta property="og:title" content="{name} — all of history, cited">',
+                    '<meta property="og:url" content="https://humanitributary.com/">', '<meta property="og:description" content="',
+                    '<meta property="og:image" content="https://humanitributary.com/og-image.png">',
+                    '<meta name="twitter:card" content="summary_large_image">', '<meta name="twitter:title" content="',
+                    '<meta name="twitter:description" content="', '<meta name="twitter:image" content="',
+                    '<meta property="og:image:alt" content="', '<meta name="twitter:image:alt" content="'):
+            self.assertIn(tag, head)
+        self.assertNotIn("data:image/svg+xml", head, "the inline favicon gave way to the brand files")
 
     @override_settings(ALLOWED_HOSTS=["example.org", "www.example.org", "testserver"])
     def test_www_redirects_to_the_bare_host(self):

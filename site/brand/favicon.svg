@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+<style>
+.t{fill:#1c1d21} .b{stroke:#6f97ee} .c{stroke:#ee8a6a} .g{stroke:#46b8a0}
+@media (prefers-color-scheme: dark) { .t{fill:#ececef} .b{stroke:#3d73db} .c{stroke:#e5683d} .g{stroke:#30a68d} }
+</style>
+<rect class="t" width="32" height="32" rx="7"/>
+<g fill="none" stroke-width="3.2" stroke-linecap="round">
+<path class="b" d="M4 16 C9 16 9 7.5 16 7.5 C23 7.5 23 16 28 16"/>
+<path class="c" d="M4 16 C9 16 9 24.5 16 24.5 C23 24.5 23 16 28 16"/>
+<path class="g" d="M9 16 H23"/>
+</g>
+</svg>
