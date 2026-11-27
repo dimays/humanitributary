@@ -5,12 +5,14 @@ order: 110
 covers:
   - guide/**
   - scripts/check_adr.py
+  - scripts/check_ste.py
   - scripts/check_pr.py
   - .claude/settings.json
   - .claude/hooks/**
   - .github/pull_request_template.md
   - docs/guide/README.md
   - tests/test_guide.py
+  - tests/test_check_ste.py
 ---
 
 Docs about code usually go wrong quietly: the code changes and the words
@@ -18,6 +20,12 @@ don't. This guide declares, chapter by chapter, which code each one
 explains, and keeps a stamp of that code. When the code changes, the check
 names the chapters to read again and the diff to read, and the commit is
 blocked until someone has.
+
+The owner's side, what to do to run and repair the platform, is a separate
+book: the Maintainer's Manual in `docs/manual/` ([ADR 0030](../adr/0030-a-maintainers-manual-in-simplified-technical-english.md)),
+written in Simplified Technical English and held to it by a script. This
+guide stays the developer reference. The console's Docs page renders both
+([The operations console](operations-console.md#the-docs-page)).
 
 Decisions get the same care. The why behind the code lives in ADRs
 (`docs/adr/`), and a check holds them to each other: a new decision that
@@ -35,10 +43,11 @@ request, and CI runs the same command.
 | `guide/checks.py` | `make check-guide`: everything the guide is held to. |
 | `guide/management/commands/guide.py` | `manage.py guide check`, `stamp`, `status`, `covers`, `index`. |
 | `scripts/check_adr.py` | `make check-adr`: the ADRs agree with each other and the index is complete. |
+| `scripts/check_ste.py` | `make check-manual`: the Maintainer's Manual (`docs/manual/`) obeys its STE rules. |
 | `scripts/check_pr.py` | `make check-pr`: the gate, and its receipt. |
 | `.claude/settings.json`, `.claude/hooks/` | The Claude Code hooks that block a stale commit and hold a pull request until the gate passed. |
 | `.github/pull_request_template.md` | What a pull request says: what changed, decisions, chapters, checks, data impact. |
-| `tests/test_guide.py` | Tests for all of the above. |
+| `tests/test_guide.py`, `tests/test_check_ste.py` | Tests for all of the above. |
 
 The `guide` app has no models and no URLs; it is in `INSTALLED_APPS` only
 so `manage.py guide` exists. Its modules use the standard library alone, so
@@ -148,6 +157,39 @@ other:
   status word (`make adr-index` rewrites it). The README also holds the
   template.
 
+## The manual's check
+
+`make check-manual` (`scripts/check_ste.py`, standard library only) reads
+every Markdown file under `docs/manual/` and fails on what a program can
+tell about ASD-STE100 Simplified Technical English
+([ADR 0030](../adr/0030-a-maintainers-manual-in-simplified-technical-english.md)):
+
+- **Length.** A sentence in a numbered list (a procedural step) has at most
+  20 words (`STEP_LIMIT`), any other at most 25 (`PROSE_LIMIT`), and a
+  paragraph, list item or table cell at most 6 sentences
+  (`PARAGRAPH_LIMIT`). Inline code counts as one word.
+- **Words.** Likely passive voice (a form of "be", optional adverbs, then a
+  word ending in "-ed" or an irregular past participle), "-ing" words, and
+  "will", "would" or "shall". `ING_ALLOW` and `PASSIVE_ALLOW` hold the
+  exceptions (words that aren't "-ing" forms, and technical names such as
+  "staging"), each with its reason.
+- **Shape.** Each file starts with `# Title`, then a `Purpose:` line; every
+  relative link lands on a file.
+- **Mermaid.** Each `mermaid` block starts with a known diagram type (and a
+  flowchart with a known direction), its brackets balance outside quoted
+  labels (an `erDiagram`'s cardinality marks and a `sequenceDiagram`'s
+  arrows are taken out first), its double quotes pair up on each line, and
+  every `subgraph` or sequence block (`loop`, `alt`, `opt` …) has its
+  `end`. It is a sanity check, not a renderer.
+
+Fenced code, inline code, URLs and HTML comments are skipped, and so is a
+table cell that holds only code, so code identifiers are never reworded.
+The rules a program can't check (one instruction per sentence, the
+imperative, articles, phrasal verbs, conditions first, one word one
+meaning) are listed in `docs/manual/README.md` for the writer and the
+reviewer. `tests/test_check_ste.py` tests each rule, and that the manual
+passes.
+
 ## The gate
 
 `make check-pr` (`scripts/check_pr.py`) runs everything a pull request must
@@ -156,7 +198,7 @@ pass, and it is what CI runs too:
 1. `manage.py guide check` first, alone: it is quick, and a stale guide is
    the most common failure.
 2. Then three lanes side by side:
-   - **quick checks**, one after another: `check-adr`, `manage.py check`,
+   - **quick checks**, one after another: `check-adr`, `check-manual`, `manage.py check`,
      `makemigrations --check --dry-run`, and `ruff check` when
      `pyproject.toml` or a `ruff.toml` configures ruff;
    - **tests**: `manage.py test` (on its own `test_<database>`);

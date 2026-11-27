@@ -25,7 +25,7 @@ from evidence.publishers import defaults_for, domain_of
 
 from . import policy
 
-logger = logging.getLogger(__name__)  # one INFO line per request, without its query string (a run's log: ADR 0030)
+logger = logging.getLogger(__name__)  # one INFO line per request, without its query string (a run's log: ADR 0031)
 
 
 def _shown(url: str) -> str:

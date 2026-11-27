@@ -5,8 +5,9 @@
                                                   before `gh pr create` asks this)
 
 The guide's check runs first, since it's quick and names the chapters to
-review; then the quick checks one after another (the ADRs, Django's checks,
-missing migrations, ruff when it's configured), and beside them the test
+review; then the quick checks one after another (the ADRs, the Maintainer's
+Manual's STE rules, Django's checks, missing migrations, ruff when it's
+configured), and beside them the test
 suite and the release gates on the database's content (`make roundtrip`:
 `manage.py publish --check`, which writes nothing), each in its own lane. The gate takes
 as long as its slowest lane. Each lane's output is printed when it finishes,
@@ -50,6 +51,7 @@ def lanes() -> list[tuple[str, list[tuple[str, list[str]]]]]:
     """(lane, [(step, command)]): the steps of a lane run one after another, stopping at a failure."""
     quick = [
         ("check-adr", [sys.executable, "scripts/check_adr.py"]),
+        ("check-manual", [sys.executable, "scripts/check_ste.py"]),
         ("django check", [*MANAGE, "check"]),
         ("makemigrations --check", [*MANAGE, "makemigrations", "--check", "--dry-run"]),
     ]

@@ -298,7 +298,7 @@ lists them empty. Without its key an adapter is disabled cleanly, and it starts 
   (`ingest/http.py` `_shown`), so its lines never carry a key parameter. Every line of a run's captured log
   (`ingest/runlog.py`) also goes through `mask_secrets` and `runlog.mask` (bearer tokens, `password=`-style
   values, a URL's `user:password@`), and `httpx`/`httpcore` records below `WARNING` are never kept
-  ([ADR 0030](../adr/0030-a-simpler-console-and-run-logs.md)). `RunLogTests` checks it.
+  ([ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md)). `RunLogTests` checks it.
 - **Lookup errors** are only counted, never logged with their message.
 - **Cassettes.** `tests/cassette.py` keys recorded responses by method and URL with `api_key` and `wskey` values
   masked (`KEY_RE`), and matches requests the same way, so a test with a real key in its URL still finds its

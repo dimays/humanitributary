@@ -1,5 +1,5 @@
 """The operations console: pages for staff under /ops/, and the few actions operators take from them
-(docs/guide/operations-console.md; ADR 0028, redesigned by ADR 0030).
+(docs/guide/operations-console.md; ADR 0028, redesigned by ADR 0031).
 
 Six pages are in the sidebar: Dashboard (is anything wrong, what ran in the last day, what needs attention, what
 runs next, the agents' queues), Jobs (one row per job, with its tags, schedule, last state and last ten runs),

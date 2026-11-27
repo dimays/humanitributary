@@ -76,7 +76,7 @@ class FetchRun(models.Model):
 
 class RunLog(models.Model):
     """A job run's log lines (INFO and above, secrets masked, capped), captured by ingest/runlog.py while it ran
-    (ADR 0030). Its own table, so listing runs never reads logs; deleted after runlog.KEEP_DAYS."""
+    (ADR 0031). Its own table, so listing runs never reads logs; deleted after runlog.KEEP_DAYS."""
 
     run = models.OneToOneField(FetchRun, primary_key=True, on_delete=models.CASCADE, related_name="log")
     lines = models.JSONField(default=list, help_text='[[time (ISO, UTC), level, logger, message], …], oldest first.')

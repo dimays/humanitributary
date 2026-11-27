@@ -1,4 +1,4 @@
-"""What the operations console reads (docs/guide/operations-console.md; ADR 0028, redesigned by ADR 0030).
+"""What the operations console reads (docs/guide/operations-console.md; ADR 0028, redesigned by ADR 0031).
 
 Read-only: every function here only selects. Totals are computed by Postgres (GROUP BY, FILTER, DISTINCT ON,
 LATERAL), never by loading rows into Python to count them, so a page makes the same handful of queries however many

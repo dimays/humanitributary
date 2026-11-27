@@ -11,7 +11,7 @@ covers:
 The operations console is a handful of web pages for staff, at `/ops/` on the data host. Its shape is borrowed from
 an orchestrator's console (Prefect Cloud's, which the owner likes), cut down to one project: a left sidebar of six
 pages, state badges in a few colors, a run graph, and a page per run with its log
-([ADR 0030](../adr/0030-a-simpler-console-and-run-logs.md), which redesigned the first console of
+([ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md), which redesigned the first console of
 [ADR 0028](../adr/0028-operations-console.md)). Everything on it is read from the database, the releases store and
 the repository's `docs/`, and reading changes nothing. Staff with the `ops_operator` permission also get a few
 buttons: run or retry a job, pause or resume one, release a stuck lease (or extend one), requeue or cancel tasks,
@@ -59,7 +59,7 @@ Revision, a release, an action and the action log.
 | Releases | `/ops/releases/` | Three cards: the live release (and who pointed at it, why), the content changes not released yet (by agents, people and jobs, linking to them) and the fact base's corroborated share. Then every release, 25 a page: version, Live, when and by whom, added, changed and retracted (its manifest's totals), "page only" when nothing was added, changed or retracted and the page's hash differs from the release before, its events; Publish (top) and Roll back to this (each release not live). |
 | A release | `/ops/releases/<version>/` | Its counts and hashes, its change report (`changes.md`, rendered; `?raw=1` serves the file), and the content changes it carried: the Revisions after the previous release's high-water mark up to its own, 50 a page, each linking to its diff. `/ops/releases/unreleased/` lists those after the newest release. |
 | A Revision | `/ops/changes/<id>/` | Who, when, why and for which task; each changed column before and after, long text as a word diff; the row's whole history; the other rows changed in the same transaction; a link back to the release that carried it. |
-| Docs | `/ops/docs/`, `/ops/docs/<section>/<slug>/` | The maintainer manual (the `manual` folder in `docs/`), the developer reference (`docs/guide/`) and the decisions (`docs/adr/`), rendered: a left table of contents of every document, the open one's headings under it, and the document in readable type, its Mermaid diagrams drawn ([below](#the-docs-page)). |
+| Docs | `/ops/docs/`, `/ops/docs/<section>/<slug>/` | The Maintainer's Manual ([`docs/manual/`](../manual/README.md)), the developer reference (`docs/guide/`) and the decisions (`docs/adr/`), rendered: a left table of contents of every document, the open one's headings under it, and the document in readable type, its Mermaid diagrams drawn ([below](#the-docs-page)). |
 | Action log | `/ops/actions/`, `/ops/actions/<id>/` | Every OpsAction, newest first, filtered by kind, status and who; an action's page: its state (reloading every 3 seconds while pending or running; a pending one says when no worker holds the scheduler lock, and can be withdrawn), the reason, the runs it made, the output, and behind "Details" the result, what the confirmation showed and the parameters. A finished `publish --check` is the publish confirmation. Linked from the Dashboard. |
 
 The first console's addresses redirect (301): `/ops/tasks/` to Work, `/ops/programs/` to the Dashboard,
@@ -117,11 +117,11 @@ key transforms; Revisions defer `before` and `after`. Error text and log lines a
 
 ## The Docs page
 
-`opsconsole/docs.py` reads three folders of `docs/`: `manual` (the maintainer manual, written beside this guide), `guide` and `adr`
-(`SECTIONS`). A document is a `.md` file there or one folder down (the manual's procedures); its slug is its path
+`opsconsole/docs.py` reads three folders of `docs/`: `manual` (the Maintainer's Manual, [ADR 0030](../adr/0030-a-maintainers-manual-in-simplified-technical-english.md)), `guide` and `adr`
+(`SECTIONS`). A document is a `.md` file there or one folder down (the manual's `procedures/`); its slug is its path
 there without `.md`, its title the front
 matter's `title` (the guide's chapters) or its first `# ` heading, its order the front matter's `order` or the file
-name, a README first and a subfolder's documents last, under its name. A folder that doesn't exist shows "Not written yet". A URL's slug is looked up in the folder's
+name, a README first and a subfolder's documents last, under its name. A URL's slug is looked up in the folder's
 listing, never joined onto a path, so nothing else on disk can be read.
 
 Rendering is on the server: Python-Markdown (tables, fenced code, definition lists, abbreviations, a table of
@@ -236,7 +236,8 @@ ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `wor
   and stuck leases; releases, page-only releases, unreleased changes and a Revision's diff; the Docs page, its links
   and Mermaid only where a diagram is;
 - the Docs page against a stand-in `docs/` folder: the manual's stub, links rewritten, code links as code, the
-  table of contents, a script, an event handler and a `javascript:` link removed, and a missing manual;
+  table of contents, a script, an event handler and a `javascript:` link removed; and the real `docs/manual/`: its README first, its top-level files, then its
+  procedures under "Procedures", each one rendering;
 - a run's log (`RunLogTests`): what a job logs, prints and reports as an error, masked (a key parameter, a bearer
   token, a URL's password), nothing below INFO, `httpx`'s noise dropped, the cap (head, the left-out line, tail), a
   failure's traceback, other threads ignored, old logs pruned;
@@ -271,11 +272,11 @@ it on a development database only.
 | A new page | Think twice: the sidebar is six items on purpose. A detail page linked from one of them, its test, the query-count test |
 | A new problem on the Dashboard | `views.problems()`: one sentence, a level (`bad` or `warn`) and where to look; a test |
 | A table the console reads changes shape | Its query here and the test; the chapter that owns the table |
-| An index for a slow page | A migration in the app that owns the table, and a note in [ADR 0030](../adr/0030-a-simpler-console-and-run-logs.md) |
+| An index for a slow page | A migration in the app that owns the table, and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md) |
 | A new job tag | `ingest/jobs.py` `TAGS` and the job's `@job(tags=…)`; [ingestion](ingestion.md#the-job-runner) and this chapter |
 | A new docs folder | `opsconsole/docs.py` `SECTIONS`; the link rewriting follows |
 | The Mermaid version | `docs.MERMAID_URL` (a pinned version, at least two weeks old); look at a page with a diagram in both themes |
 | Restricting it to the data host | Set `OPS_HOSTS` on the app (a config var; no deploy) |
-| A new action | An `OpsAction.Kind` (and a migration for the choices), `prepare` and `execute` in `opsconsole/actions.py` and an `Action` in `ACTIONS` (`runs_in` worker for anything that could outlast gunicorn's 30 seconds), a button through `{% act %}`, tests of its effect and refusals, this chapter, and a note in [ADR 0030](../adr/0030-a-simpler-console-and-run-logs.md) |
+| A new action | An `OpsAction.Kind` (and a migration for the choices), `prepare` and `execute` in `opsconsole/actions.py` and an `Action` in `ACTIONS` (`runs_in` worker for anything that could outlast gunicorn's 30 seconds), a button through `{% act %}`, tests of its effect and refusals, this chapter, and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md) |
 | Who may act | Grant or revoke `ops_operator` in the admin; no deploy |
 | The limits | `RATE_LIMIT`, `RATE_WINDOW_MINUTES`, `FEED_COOLDOWN_MINUTES`, `CHECK_FRESH_MINUTES` in `opsconsole/actions.py`, `MAX_BATCH` in `work/queue.py`; a job's idempotency is `not_idempotent` on its `@job` in `ingest/job_defs.py` |

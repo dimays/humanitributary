@@ -1,8 +1,9 @@
 # The technical guide
 
 The technical guide explains how every part of the platform works, from the
-code as it is. It is read in the repository (GitHub renders it); nothing
-serves it. Its chapters are the Markdown files in this folder; this README
+code as it is. It is read in the repository (GitHub renders it) or on the
+operations console's Docs page (`/ops/docs/`, beside the Maintainer's Manual
+and the ADRs). Its chapters are the Markdown files in this folder; this README
 and `stamps.json` aren't chapters. How the guide stays true to the code is a
 chapter of its own, [this-guide.md](this-guide.md). The rest of this
 file is for writers.

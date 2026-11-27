@@ -1,4 +1,4 @@
-# 0030 — A simpler operations console, shaped like an orchestrator's, with every job run's log
+# 0031 — A simpler operations console, shaped like an orchestrator's, with every job run's log
 
 **Status:** accepted (November 2026); amends [0028](0028-operations-console.md) (the console's pages, its "no JavaScript and no new dependency" rule, and its "no index" note)
 

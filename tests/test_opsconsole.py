@@ -1,4 +1,4 @@
-"""The operations console (/ops/; ADR 0028, redesigned by ADR 0030): staff only, read-only pages that each render
+"""The operations console (/ops/; ADR 0028, redesigned by ADR 0031): staff only, read-only pages that each render
 with populated tables, a run's captured log (masked and capped), the Docs page's rendering, and each page's query
 count staying fixed as the tables grow.
 
@@ -15,6 +15,7 @@ from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db import connection
@@ -466,12 +467,23 @@ class DocsRenderingTests(TestCase):
         self.assertContains(r, 'href="#draw-it"')
         self.assertContains(r, "mermaid.render")
 
-    def test_a_missing_manual_says_so(self):
-        shutil.rmtree(self.root / "manual")
-        r = self.client.get(reverse("opsconsole:docs"))
-        self.assertEqual(r.status_code, 200)
-        self.assertContains(r, "Not written yet")
-        self.assertEqual(self.client.get(reverse("opsconsole:doc", args=["manual", "readme"])).status_code, 404)
+    def test_the_real_manual(self):
+        """docs/manual/ as it is: the README first, the top-level files, then procedures/ under its name; each renders."""
+        real = Path(settings.BASE_DIR) / "docs"
+        with mock.patch.object(D, "DOCS_DIR", real):
+            docs = D.listing("manual")
+            slugs = [d.slug for d in docs]
+            top = sorted(p.stem.lower() for p in (real / "manual").glob("*.md"))
+            procedures = sorted("procedures/" + p.stem for p in (real / "manual" / "procedures").glob("*.md"))
+            self.assertEqual(slugs[0], "readme")
+            self.assertEqual(sorted(slugs), sorted(top + procedures))
+            self.assertEqual(slugs[len(top):], procedures)
+            self.assertGreater(len(procedures), 0)
+            self.assertEqual({d.group for d in docs[len(top):]}, {"Procedures"})
+            r = self.client.get(reverse("opsconsole:docs"))
+            self.assertNotContains(r, "Not written yet")
+            for d in docs:
+                self.assertEqual(self.client.get(reverse("opsconsole:doc", args=["manual", d.slug])).status_code, 200, d.slug)
 
 
 def logging_job(ctx):

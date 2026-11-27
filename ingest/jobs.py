@@ -17,7 +17,7 @@
   until it is resumed. `run_named` (`manage.py run_job`) still runs it: naming a job is the owner's explicit choice.
 - `Job.not_idempotent` says why a job is not safe to run twice back to back (ADR 0028): the console refuses to run
   such a job again within its interval.
-- `Job.tags` sorts jobs for the console (ADR 0030): a fixed set, `TAGS`, each job naming one or more; an unknown tag
+- `Job.tags` sorts jobs for the console (ADR 0031): a fixed set, `TAGS`, each job naming one or more; an unknown tag
   fails at import. `Job.doc` is the first sentence of the job's docstring, the console's one-line description.
 - Every run's log (INFO and above, secrets masked, capped) is captured while it runs and kept as a `RunLog`
   (ingest/runlog.py): the job's `logging` calls, the fetcher's requests, `ctx.log` and `ctx.error` lines, the
@@ -49,7 +49,7 @@ LOCK_KEY = 7_302_118_015  # pg advisory lock id for the job runner (any constant
 SCHEDULER_LOCK_KEY = 7_302_118_016  # held by the one `run_jobs --loop` worker for its lifetime
 
 
-# The jobs' tags (ADR 0030): what kind of work a job does, for the console's filters. Fixed and documented here and
+# The jobs' tags (ADR 0031): what kind of work a job does, for the console's filters. Fixed and documented here and
 # in docs/guide/operations-console.md; the console adds "paused" to a paused job. A new tag is a change to this list.
 TAGS = {
     "collect": "fetches material from an outside source (a feed job runs once per enabled feed)",

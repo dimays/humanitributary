@@ -26,7 +26,9 @@ collection jobs every few minutes, checking that they are healthy, and what to d
 source changes its terms or a release has to be undone. It runs on one laptop, with production's patterns: Postgres
 and MinIO (a local stand-in for S3) in Docker, the `Procfile`'s `web` and `worker` processes (`make up`), a macOS
 launchd schedule for when they aren't running, and logs and a mirror of the latest release under `var/`. The same
-`Procfile` runs on Heroku as the staging app ([Hosted: Heroku](#hosted-heroku)).
+`Procfile` runs on Heroku as the staging app ([Hosted: Heroku](#hosted-heroku)). The owner's tasks (an agent round,
+applying an edit file, publishing, a rollback, a restore …) are also written as numbered procedures, in Simplified
+Technical English, in the Maintainer's Manual ([docs/manual/](../manual/README.md), `make check-manual`).
 
 ## Setting up a local copy
 
@@ -108,7 +110,7 @@ waits for its next tick.
 Between jobs, and once a tick when nothing is due, the worker also runs the actions staff queued from the
 [operations console](operations-console.md) (a job run, `publish --check`, a publish, a rollback): they wait as
 `pending` OpsAction rows until a worker holding the scheduler lock picks them up, so with no worker running
-(staging's `worker` at 0, or no `make up` locally) they wait, and the console says so. A job paused from the console
+(staging's `worker` scaled to 0, or no `make up` locally) they wait, and the console says so. A job paused from the console
 (`JobState` "paused_jobs") is skipped by every runner until it is resumed; `run_jobs --list` shows it as paused.
 
 SIGTERM (Heroku's shutdown, Ctrl-C under honcho) lets the job that is running finish, then stops before the next
@@ -186,7 +188,7 @@ next due. `run_jobs --only portal,process` limits a run to some jobs.
 
 On Heroku a `worker` dyno runs `run_jobs --loop`, or Heroku Scheduler runs `python manage.py run_jobs`; the locks
 keep either from overlapping with the other. A dyno's disk is thrown away on restart, which is why raw documents
-and releases live in object storage, and why staging's worker stays at 0 until the `S3_*` variables are set
+and releases live in object storage, and why a worker never runs on a dyno without the `S3_*` variables set
 ([Hosted: Heroku](#hosted-heroku)).
 
 ## Hosted: Heroku
@@ -466,5 +468,6 @@ the database is reset, the day's counter starts again at 1, and `publish` skips 
 | A different worker tick | `WORKER_TICK_SECONDS` in `.env` or the environment; the code default is in `config/settings.py` |
 | A new process | A line in the `Procfile`, the `make up` target if it should run locally, its size and count in `app.json`'s `formation`, `heroku ps:scale` on each app, and this chapter |
 | A new `make` command | A target in the `Makefile` with a `## ` comment, so `make help` lists it, and `.PHONY` |
+| A changed procedure (a command, a cap's default, a job, a step) | The procedure and the tables in `docs/manual/` too, in its STE rules (`make check-manual`; AGENTS.md rule 16) |
 | A backup system | An ADR first: what is copied (the database and the `raw` store), where, how often, and how a restore is tested; then the Backups section |
 | A new runbook | A `###` section under Runbooks, written from the code it depends on, with that code in `covers` |

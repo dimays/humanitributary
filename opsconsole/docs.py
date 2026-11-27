@@ -1,4 +1,4 @@
-"""The console's Docs page (ADR 0030): the Markdown in `docs/manual/` (the maintainer manual), `docs/guide/` (the
+"""The console's Docs page (ADR 0031): the Markdown in `docs/manual/` (the maintainer manual), `docs/guide/` (the
 developer reference) and `docs/adr/` (the decisions), rendered on the server and sanitized.
 
 - A document is a `.md` file in one of `SECTIONS`' folders or one folder below (`manual/procedures/`); its slug is
@@ -205,5 +205,5 @@ def render(doc: Doc) -> Rendered:
 
 def tree() -> list[dict]:
     """Every section with its documents, for the left table of contents."""
-    return [{"key": k, "title": t, "about": about, "docs": listing(k), "missing": not folder(k).is_dir()}
+    return [{"key": k, "title": t, "about": about, "docs": listing(k)}
             for k, (t, _, about) in SECTIONS.items()]

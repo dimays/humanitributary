@@ -2,7 +2,7 @@
 PY := uv run python
 M := $(PY) manage.py
 
-.PHONY: help env db db-stop psql migrate import-archive publish release-pull build build-release roundtrip test check check-adr adr-index check-guide guide-stamp guide-status guide-index check-pr serve up worker jobs digest storage-init storage-status storage-migrate schedule-install schedule-uninstall schedule-status
+.PHONY: help env db db-stop psql migrate import-archive publish release-pull build build-release roundtrip test check check-adr check-manual adr-index check-guide guide-stamp guide-status guide-index check-pr serve up worker jobs digest storage-init storage-status storage-migrate schedule-install schedule-uninstall schedule-status
 
 help: ## List the commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-14s %s\n", $$1, $$2}'
@@ -59,6 +59,9 @@ check: ## Django checks and missing migrations (the content is checked by the re
 
 check-adr: ## The ADRs agree: names, numbers, Status lines, amendments both ways, the index
 	@python3 scripts/check_adr.py
+
+check-manual: ## The Maintainer's Manual (docs/manual/) obeys its Simplified Technical English rules (scripts/check_ste.py)
+	@python3 scripts/check_ste.py
 
 adr-index: ## Rewrite docs/adr/README.md's index
 	@python3 scripts/check_adr.py --write

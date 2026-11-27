@@ -1,4 +1,4 @@
-"""A job run's log, captured while it runs and kept beside its FetchRun as a `RunLog` (ADR 0030).
+"""A job run's log, captured while it runs and kept beside its FetchRun as a `RunLog` (ADR 0031).
 
 `capture(run)` is a context manager `ingest.jobs.run_one` wraps each job in. For the run's duration it attaches a
 `logging.Handler` to the root logger that keeps every record at INFO and above emitted by the running thread (the

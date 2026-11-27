@@ -49,7 +49,7 @@ Importing `ingest/job_defs.py` registers them all, and the order of that file is
 Its docstring's first sentence is its description (`Job.doc`, `ingest.jobs.first_sentence`): `run_jobs --list` and
 the operations console show it, so it is one plain sentence saying what the job does ("Re-checks cited URLs, …").
 `tags` names one or more of the fixed set in `ingest/jobs.py` `TAGS`, which the console filters by
-([ADR 0030](../adr/0030-a-simpler-console-and-run-logs.md)); an unknown tag fails at import:
+([ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md)); an unknown tag fails at import:
 
 | Tag | Jobs |
 |---|---|
@@ -118,7 +118,7 @@ through `ingest.policy.mask_secrets`, so API keys never reach the database or th
 ([keys](sources-and-terms.md#keeping-keys-out-of-logs-errors-and-fixtures)). A job that writes canonical rows
 runs as `ctx.actor`, which is `job:<name>`.
 
-**Every run keeps its log** ([ingest/runlog.py](../../ingest/runlog.py), [ADR 0030](../adr/0030-a-simpler-console-and-run-logs.md)).
+**Every run keeps its log** ([ingest/runlog.py](../../ingest/runlog.py), [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md)).
 `run_one` wraps the job in `runlog.capture(run)`: for the run's duration a `logging.Handler` on the root logger keeps
 every record at INFO and above from the running thread (the root's level is lowered to INFO for that time only, and
 other threads' records are ignored), and the runner adds its own lines: "<job> started", whatever the job prints
@@ -641,7 +641,7 @@ Hand-made responses (`cassette.response`) cover what live services won't reliabl
 | A wrong mapping | A guard in `seed_branch_entities` if the mistake has a pattern, else a line in `routing.CORRECTIONS`; then `run_job seed_branch_entities --opt branches=<slug>`. |
 | What can be a branch, or how a parent is chosen | `ingest/branchable.py`; `FirstRunTests.test_new_branch_proposals` pins the first run's 17 signals. A change in what NEW-BRANCH proposes bumps `governance/thresholds.py` `RULES_VERSION`. |
 | A new job | A function in `ingest/job_defs.py` with `@job(name, interval=…, tags=…)` and a docstring whose first sentence says what it does, placed where it should run in the order. A feed job also needs a `Feed` row with `config.job` (add it to `ingest/seed.py` `FEEDS`). Add it to the tables above and to ADR 0012. |
-| A new tag | `ingest/jobs.py` `TAGS` (with what it means), the tag table above, [the console's chapter](operations-console.md) and a note in [ADR 0030](../adr/0030-a-simpler-console-and-run-logs.md). |
+| A new tag | `ingest/jobs.py` `TAGS` (with what it means), the tag table above, [the console's chapter](operations-console.md) and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md). |
 | What a run's log keeps | `ingest/runlog.py`: `LEVEL`, `MAX_LINES`, `MAX_BYTES`, `TAIL_LINES`, `KEEP_DAYS`, the masks; `tests/test_opsconsole.py` `RunLogTests`. |
 | A new source | Read its terms first ([adding a source](sources-and-terms.md#adding-a-source)), then a reader in `sources_news.py` or `sources_wiki.py` using `NewsWriter` or `upsert_candidate`, and a recorded cassette and test. |
 | A new Wikidata property or kind class | `ingest/wikidata.py` `PROPS` or `KIND_CLASSES`; `refresh_entities` re-derives kinds on its next run. |

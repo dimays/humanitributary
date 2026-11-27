@@ -43,7 +43,8 @@ flowchart LR
 | 6. Canonical Postgres and validation | The content, its evidence and its audit log; the daily and weekly checks that feed work back | `timeline/`, `evidence/`, `revisions/`, `governance/` | [Content model](content-model.md), [Revisions](revisions.md), [Evidence and fact-checking](evidence-and-fact-checking.md), [Branch governance](branch-governance.md) |
 | 7. Publish | Release gates, then a versioned, immutable release in object storage, and the page built from it | `publish/`, `infra/storage.py`, `site/build.mjs` | [Publishing](publishing.md) |
 
-How to run, schedule and repair all of this is in [Operations](operations.md), and staff watch it in the
+How to run, schedule and repair all of this is in [Operations](operations.md) (and, as numbered procedures with
+diagrams, in the Maintainer's Manual, [docs/manual/](../manual/README.md)), and staff watch it in the
 [operations console](operations-console.md) at `/ops/`, where operators can also take a few audited actions; terms are in the
 [glossary](glossary.md). Every table is in [the data model](../data-model.md).
 
@@ -185,7 +186,7 @@ Four scheduled checks read the canonical tables and feed work back into the queu
 | `link_health` | `DAY` | Re-checks cited URLs and records a `LinkCheck` for each |
 | `facts_sweep` | `DAY`, right after `link_health` | Splits entries into atomic claims, recomputes each claim's status and confidence, schedules rechecks by claim type and entry age, records date conflicts from candidates, and queues `verify_claim` tasks |
 | `branches_review` | `WEEK` | Measures every branch, runs the named rules (SPLIT-PLACE, SPLIT-TIME, MERGE-OVERLAP, END-STALE, NEW-BRANCH, THIN) and turns findings into proposals and tasks, with hysteresis |
-| `gap_waves` | `DAY` | Measures every branch window by window in the content waves (W1 1925 to this year … W6 3500–1000 BCE) and queues the gaps as `fill_gap` tasks, at most `FILL_GAP_TASKS_PER_DAY` (20) new a day; the active wave moves back in time when it is nearly done |
+| `gap_waves` | `DAY` | Measures every branch window by window in the content waves (W1 1925 to this year … W6 3500–1000 BCE) and queues the gaps as `fill_gap` tasks, at most `FILL_GAP_TASKS_PER_DAY` (40) new a day; the active wave moves back in time when it is nearly done |
 
 The details are in [Evidence and fact-checking](evidence-and-fact-checking.md),
 [Branch governance](branch-governance.md) and [Content waves](content-waves.md).
@@ -252,7 +253,7 @@ needs judgment becomes a task.
 | `infra/` | `storage.py` (the one door to object storage), `manage.py storage`, `health.py` (`/healthz`), `alerts.py`, and `site.py` (the public page, its images and outlines, and the `www.` redirect). No models. |
 | `opsconsole/` | The operations console: six pages (Dashboard, Jobs, Runs, Work, Releases, Docs). `queries.py` (every figure, aggregated in SQL), `views.py` (pages: staff only, GET only, `noindex`; actions: POST, CSRF, the `ops_operator` permission, two steps), `actions.py` (what each action checks, shows and does), `worker.py` (the worker's pick-up of queued actions), `docs.py` (the Markdown in `docs/` rendered and sanitized), `models.py` (`OpsAction`, the audit row of every action), templates, and the admin header's link to it. See [The operations console](operations-console.md). |
 | `ingest/job_defs.py` | Every scheduled job with its interval and tags, in run order: set-up, sources, entities, processing, upkeep. A job's docstring opens with one plain sentence saying what it does: the console's description of it. |
-| `Makefile` | The commands (`make help`): database and storage, publish, build (from a release), the release gates (`roundtrip`), tests, processes, jobs, schedule; `import-archive` for an empty database. |
+| `Makefile` | The commands (`make help`): database and storage, publish, build (from a release), the release gates (`roundtrip`), tests, the docs' checks (`check-guide`, `check-adr`, `check-manual`) and the gate (`check-pr`), processes, jobs, schedule; `import-archive` for an empty database. |
 | `docker-compose.yml` | The local services: Postgres 16 on host port 5433, and MinIO (the local S3) on `127.0.0.1:9000`, its console on 9001. |
 | `Procfile` | The processes: `release` runs migrations, `web` runs gunicorn (admin, agent API, `/healthz`), `worker` runs `manage.py run_jobs --loop`. `make up` runs `web` and `worker` locally with honcho. |
 | `package.json` | No dependencies: it pins Node 24.x for `site/build.mjs` (the publish gates' build) on Heroku, whose `heroku/nodejs` buildpack reads it. |

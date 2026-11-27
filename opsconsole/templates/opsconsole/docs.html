@@ -4,10 +4,10 @@
 <div class="docs">
   <nav class="toc" aria-label="Documents">
     {% for s in tree %}<h4>{{ s.title }}</h4>
-      {% if s.missing %}<p class="small muted" style="margin:0 8px">Not written yet.</p>{% else %}<ul>{% for d in s.docs %}{% ifchanged d.group %}{% if d.group %}<li class="sub">{{ d.group }}</li>{% endif %}{% endifchanged %}<li>
+      <ul>{% for d in s.docs %}{% ifchanged d.group %}{% if d.group %}<li class="sub">{{ d.group }}</li>{% endif %}{% endifchanged %}<li>
         <a href="{% url 'opsconsole:doc' s.key d.slug %}" class="{% if doc and doc.section == s.key and doc.slug == d.slug %}on{% endif %}">{{ d.title }}</a>
         {% if doc and doc.section == s.key and doc.slug == d.slug and rendered.toc %}<ul>{% for h in rendered.toc %}{% if h.level == 2 %}<li><a href="#{{ h.id }}">{{ h.name }}</a></li>{% endif %}{% for c in h.children %}{% if c.level == 2 %}<li><a href="#{{ c.id }}">{{ c.name }}</a></li>{% endif %}{% endfor %}{% endfor %}</ul>{% endif %}
-      </li>{% endfor %}</ul>{% endif %}
+      </li>{% endfor %}</ul>
     {% endfor %}
   </nav>
   <div>
@@ -17,9 +17,8 @@
   {% else %}
     <div class="head"><div><h1>Docs</h1><div class="sub">The platform's documentation, rendered from the repository's Markdown.</div></div></div>
     <div class="grid g3">{% for s in tree %}<div class="card"><h2>{{ s.title }}</h2><p class="muted small" style="margin-top:-6px">{{ s.about }}</p>
-      {% if s.missing %}<p class="empty-note">Not written yet: <span class="mono">docs/{{ s.key }}/</span> is empty.</p>
-      {% else %}<ul class="list">{% for d in s.docs|slice:":8" %}<li><a href="{% url 'opsconsole:doc' s.key d.slug %}">{{ d.title }}</a></li>{% endfor %}
-        {% if s.docs|length > 8 %}<li class="small muted">and {{ s.docs|length|add:"-8" }} more in the list on the left</li>{% endif %}</ul>{% endif %}</div>{% endfor %}</div>
+      <ul class="list">{% for d in s.docs|slice:":8" %}<li><a href="{% url 'opsconsole:doc' s.key d.slug %}">{{ d.title }}</a></li>{% endfor %}
+        {% if s.docs|length > 8 %}<li class="small muted">and {{ s.docs|length|add:"-8" }} more in the list on the left</li>{% endif %}</ul></div>{% endfor %}</div>
   {% endif %}
   </div>
 </div>

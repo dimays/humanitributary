@@ -1,4 +1,4 @@
-"""/ops/: the operations console (staff only; actions need ops_operator; ADR 0028, redesigned by ADR 0030).
+"""/ops/: the operations console (staff only; actions need ops_operator; ADR 0028, redesigned by ADR 0031).
 
 Six pages in the sidebar (Dashboard, Jobs, Runs, Work, Releases, Docs) and the pages they link to: a job, a run, a
 task, a Revision, a release, an action and the action log. The old addresses redirect to their new places.
