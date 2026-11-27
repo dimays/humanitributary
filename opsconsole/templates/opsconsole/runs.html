@@ -1,40 +1,35 @@
 {% extends "opsconsole/base.html" %}{% load ops %}
-{% block title %}Job runs{% endblock %}
+{% block title %}Runs{% endblock %}
 {% block content %}
-<h1>Job runs</h1>
-
+<div class="head">
+  <div><h1>Runs</h1><div class="sub">Every job run, newest first. Open one to read its log.</div></div>
+  <div class="tools">{% include "opsconsole/_refresh.html" %}</div>
+</div>
 <form class="filters" method="get">
-  <label>Job <select name="job"><option value="">any</option>{% for n in job_names %}<option{% if f.job == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
-  <label>Status <select name="status"><option value="">any</option>{% for s in statuses %}<option{% if f.status == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
-  <label>From <input type="date" name="since" value="{{ f.since }}"></label>
-  <label>To <input type="date" name="until" value="{{ f.until }}"></label>
-  <button type="submit">Filter</button> <a href="{% url 'opsconsole:runs' %}">clear</a>
+  <label>Job<select name="job" onchange="this.form.submit()"><option value="">all jobs</option>{% for n in job_names %}<option{% if n == f.job %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+  <label>State<select name="state" onchange="this.form.submit()"><option value="">any state</option>{% for s, d in states.items %}<option value="{{ s }}"{% if s == f.state %} selected{% endif %}>{{ d.0 }}</option>{% endfor %}</select></label>
+  <label>Tag<select name="tag" onchange="this.form.submit()"><option value="">any tag</option>{% for t in tags %}<option{% if t == f.tag %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  <noscript><button class="btn" type="submit">Filter</button></noscript>
+  {% if f.job or f.state or f.tag %}<a class="btn quiet" href="{% url 'opsconsole:runs' %}">Clear</a>{% endif %}
 </form>
 
-<h2>History per job <span class="muted small">last 40 runs within 30 days: bar height is the run's duration; red bars failed, amber partial</span></h2>
-<div class="scroll"><table>
-<tr><th>Job</th><th>Runs</th><th class="n">Failed</th></tr>
-{% for s in spark %}
-<tr class="{% if s.failed %}warn{% endif %}"><td><a href="?job={{ s.job }}">{{ s.job }}</a></td><td>{% sparkline s.runs %}</td><td class="n">{{ s.failed }}</td></tr>
-{% endfor %}
-</table></div>
+{% if next_up is not None %}<div class="card" style="margin-bottom:18px">
+  <div class="card-head"><h2>{% if f.state %}{{ states|get:f.state|first }}{% else %}Up next{% endif %}</h2></div>
+  <ul class="list">{% for u in next_up %}<li>{% badge u.state %}
+    <div class="grow t"><a href="{% url 'opsconsole:job' u.job %}">{{ u.job }}</a></div>
+    <div class="end small muted nowrap">{% if u.state == 'pending' %}asked for {{ u.at|ago }}{% elif u.state == 'paused' %}by {{ u.paused.by }}{% elif u.overdue %}overdue since {{ u.at|date:"M j, H:i" }}{% elif u.at <= now %}due now{% elif u.at %}{{ u.at|date:"M j, H:i" }} · {{ u.at|ago }}{% endif %}</div></li>
+  {% empty %}<li class="muted">None.</li>{% endfor %}</ul>
+</div>{% endif %}
 
-<h2>Runs <span class="muted small">{{ page.paginator.count }} match</span></h2>
-<div class="scroll"><table>
-<tr><th>#</th><th>Job</th><th>Started</th><th class="n">Took</th><th>Status</th><th>Counts</th><th>Error</th></tr>
-{% for r in page %}
-<tr class="{% if r.status == 'failed' %}bad{% elif r.status == 'partial' %}warn{% endif %}">
-  <td class="mono">{{ r.pk }}</td>
-  <td><a href="?job={{ r.job }}">{{ r.job }}</a>{% if r.feed %}<div class="muted small">{{ r.feed.name }}</div>{% endif %}</td>
-  <td class="nowrap">{{ r.started_at|date:"Y-m-d H:i:s" }}<div class="muted small">{{ r.started_at|ago }}</div></td>
-  <td class="n">{{ r.duration|seconds }}</td>
-  <td><span class="tag {{ r.status|status_class }}">{{ r.status }}</span>{% if r.http_status %} <span class="muted small">HTTP {{ r.http_status }}</span>{% endif %}
-    {% if r.status == 'failed' %}<div class="acts">{% act "retry_run" "Retry…" run=r.pk %}</div>{% endif %}</td>
-  <td>{% if r.counts %}<details><summary class="small">{{ r.counts|length }} counts</summary><pre>{{ r.counts|pretty }}</pre></details>{% endif %}</td>
-  <td>{% if r.safe_error %}<details><summary class="small">{{ r.safe_error|truncatechars:90 }}</summary><div class="err">{{ r.safe_error }}</div></details>{% endif %}</td>
-</tr>
-{% empty %}<tr><td colspan="7" class="muted">No runs match.</td></tr>
-{% endfor %}
-</table></div>
-{% include "opsconsole/_pager.html" %}
+{% if console_runs is not None %}<div class="card flush"><h2>Asked for from the console</h2><div class="scroll"><table>
+<thead><tr><th>State</th><th>Job</th><th>Asked</th><th>By</th><th>Reason</th></tr></thead><tbody>
+{% for a in console_runs %}<tr><td><a href="{% url 'opsconsole:action' a.pk %}">{% badge a.status|action_state %}</a></td><td>{{ a.target|cut:"job:" }}</td>
+  <td class="small">{{ a.created_at|ago }}</td><td class="small">{{ a.requested_by }}</td><td class="small muted">{{ a.reason|truncatechars:80 }}{% if a.error %} · {{ a.error|masked|truncatechars:60 }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="muted">None.</td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
+
+{% if page is not None %}<div class="card flush">
+  <h2>{% if f.state %}{{ states|get:f.state|first }} runs{% else %}History{% endif %}<span class="count">{{ page.paginator.count }}</span></h2>
+  {% include "opsconsole/_runs_table.html" %}
+</div>
+{% include "opsconsole/_pager.html" %}{% endif %}
 {% endblock %}

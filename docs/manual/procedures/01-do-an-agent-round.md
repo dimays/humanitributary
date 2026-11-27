@@ -57,13 +57,13 @@ An agent round has three parts. First, agents do the queued tasks. Then a review
    Make sure that the first call of the agent (`GET /api/agent/`) shows the correct name and scopes.
 10. Do steps 5 to 9 again for each other agent.
     Make sure that each agent has its own token.
-11. Monitor the queue on the console work queue page.
-    Make sure that the number of claimed tasks goes up and the number of queued tasks goes down.
-12. If a task shows `stale` (the lease time is past), examine the agent that holds it.
+11. Monitor the queue on the Work page of the console.
+    Make sure that the number in progress goes up and the number of tasks that wait goes down.
+12. If a task shows as stuck (the lease time is past), examine the agent that holds it.
     Make sure that the agent is still at work on the task.
 13. At the end of the round, tell each agent to stop after its current task.
     Make sure that each agent completes, releases or fails its task.
-14. Find the tasks that are still `claimed` on the console work queue page.
+14. Find the tasks that are still in progress on the Work page of the console.
     Make sure that no stopped agent holds a task.
 15. If a stopped agent holds a task, release it with procedure [07](07-release-a-stuck-task.md).
     Make sure that the task is `queued` again.

@@ -1,0 +1,42 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Work{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Work</h1><div class="sub">The agents' queues, one card per kind of task. Jobs queue tasks; agents claim them over the API, under a lease.</div></div>
+</div>
+<div class="grid g4">{% for k in queue %}
+  <div class="card qcard">
+    <h3><a href="{% url 'opsconsole:work_kind' k.kind %}">{{ k.kind }}</a></h3>
+    <div class="what">{{ k.label|capfirst }}</div>
+    <div class="stat four">
+      <div class="{% if not k.waiting %}zero{% endif %}"><b>{{ k.waiting }}</b><span>waiting</span></div>
+      <div class="{% if not k.in_progress %}zero{% endif %}"><b>{{ k.in_progress }}</b><span>in progress</span></div>
+      <div class="{% if k.stuck %}warn{% else %}zero{% endif %}"><b>{{ k.stuck }}</b><span>stuck</span></div>
+      <div class="{% if not k.done_today %}zero{% endif %}"><b>{{ k.done_today }}</b><span>done today</span></div>
+    </div>
+    <div class="foot">{% if k.oldest_age %}<span>oldest waiting {{ k.oldest_age|span }}</span>{% endif %}
+      {% if k.cap %}<span title="{{ k.cap.setting }}">{{ k.cap.made }} / {{ k.cap.cap }} made today</span>{% endif %}
+      {% if k.failed %}<a href="{% url 'opsconsole:work_kind' k.kind %}?tab=failed" style="color:var(--bad)">{{ k.failed }} failed</a>{% endif %}</div>
+  </div>{% endfor %}
+</div>
+
+<div class="grid g2" style="margin-top:18px">
+<div class="card">
+  <div class="card-head"><h2>Stuck leases<span class="count">{{ stuck|length }}</span></h2></div>
+  {% if stuck %}<ul class="list">{% for t in stuck %}<li>{% badge "stuck" %}
+    <div class="grow"><div class="t"><a href="{% url 'opsconsole:task' t.pk %}">#{{ t.pk }} {{ t.kind }}</a></div>
+      <div class="small muted t">{{ t.claimed_by }} · lease ran out {{ t.lease_until|ago }} · attempt {{ t.attempts }} of {{ t.max_attempts }}</div></div>
+    <div class="end">{% act "release_lease" "Release" "sm" task=t.pk holder=t.claimed_by %}</div></li>{% endfor %}</ul>
+    <p class="small muted" style="margin:12px 0 0">Releasing puts the task back in the queue for any agent; the attempt stays counted.</p>
+  {% else %}<p class="empty-note">None: every claimed task's lease is live.</p>{% endif %}
+</div>
+<div class="card">
+  <div class="card-head"><h2>Content wave</h2><a class="more" href="{% url 'opsconsole:work_kind' 'fill_gap' %}">fill_gap tasks →</a></div>
+  <div class="stat"><div><b>{{ wave.active }}</b><span>{{ wave.span }}</span></div>
+    <div><b>{% if wave.share is not None %}{{ wave.share|pct }}{% else %}–{% endif %}</b><span>covered{% if wave.pairs %} of {{ wave.pairs }} branch-windows{% endif %}</span></div>
+    <div><b>{{ wave.gaps|default:"–" }}</b><span>gaps</span></div></div>
+  <p class="small muted" style="margin:12px 0 0">{% if wave.last_at %}At the last gap_waves run, {{ wave.last_at|slice:":16" }} UTC{% if wave.held_cap %}; {{ wave.held_cap }} gaps waited for the daily cap{% endif %}.{% else %}gap_waves has not run yet.{% endif %}</p>
+  {% if wave.next %}<div class="acts" style="justify-content:flex-start;margin-top:12px">{% act "advance_wave" "Advance to "|add:wave.next "sm" %}</div>{% endif %}
+</div>
+</div>
+{% endblock %}

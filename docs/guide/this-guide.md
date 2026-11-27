@@ -24,7 +24,8 @@ blocked until someone has.
 The owner's side, what to do to run and repair the platform, is a separate
 book: the Maintainer's Manual in `docs/manual/` ([ADR 0030](../adr/0030-a-maintainers-manual-in-simplified-technical-english.md)),
 written in Simplified Technical English and held to it by a script. This
-guide stays the developer reference.
+guide stays the developer reference. The console's Docs page renders both
+([The operations console](operations-console.md#the-docs-page)).
 
 Decisions get the same care. The why behind the code lives in ADRs
 (`docs/adr/`), and a check holds them to each other: a new decision that

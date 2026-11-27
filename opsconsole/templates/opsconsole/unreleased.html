@@ -1,0 +1,10 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Not released yet{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'opsconsole:releases' %}">Releases</a> /</div>
+<div class="head"><div><h1>Not released yet</h1><div class="sub">Content changes since {% if newest %}{{ newest.version }}{% else %}the start{% endif %}: what the next release would be checked against.</div></div>
+  <div class="tools">{% act "publish_check" "Publish…" "primary" %}</div></div>
+<div class="card flush"><h2>Changes<span class="count">{{ page.paginator.count }}{% if kinds %} · {% for k, n in kinds.items %}{{ n }} {{ k }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span></h2>
+  {% include "opsconsole/_revisions_table.html" %}</div>
+{% include "opsconsole/_pager.html" %}
+{% endblock %}

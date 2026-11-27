@@ -1,0 +1,43 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}{% if doc %}{{ rendered.title }}{% else %}Docs{% endif %}{% endblock %}
+{% block content %}
+<div class="docs">
+  <nav class="toc" aria-label="Documents">
+    {% for s in tree %}<h4>{{ s.title }}</h4>
+      <ul>{% for d in s.docs %}{% ifchanged d.group %}{% if d.group %}<li class="sub">{{ d.group }}</li>{% endif %}{% endifchanged %}<li>
+        <a href="{% url 'opsconsole:doc' s.key d.slug %}" class="{% if doc and doc.section == s.key and doc.slug == d.slug %}on{% endif %}">{{ d.title }}</a>
+        {% if doc and doc.section == s.key and doc.slug == d.slug and rendered.toc %}<ul>{% for h in rendered.toc %}{% if h.level == 2 %}<li><a href="#{{ h.id }}">{{ h.name }}</a></li>{% endif %}{% for c in h.children %}{% if c.level == 2 %}<li><a href="#{{ c.id }}">{{ c.name }}</a></li>{% endif %}{% endfor %}{% endfor %}</ul>{% endif %}
+      </li>{% endfor %}</ul>
+    {% endfor %}
+  </nav>
+  <div>
+  {% if doc %}
+    <div class="crumb"><a href="{% url 'opsconsole:docs' %}">Docs</a> / {{ section_title }} /</div>
+    <article class="prose">{% if not rendered.has_h1 %}<h1>{{ rendered.title }}</h1>{% endif %}{% if rendered.summary %}<p class="muted" style="font-size:15.5px">{{ rendered.summary }}</p>{% endif %}{{ rendered.html|safe }}</article>
+  {% else %}
+    <div class="head"><div><h1>Docs</h1><div class="sub">The platform's documentation, rendered from the repository's Markdown.</div></div></div>
+    <div class="grid g3">{% for s in tree %}<div class="card"><h2>{{ s.title }}</h2><p class="muted small" style="margin-top:-6px">{{ s.about }}</p>
+      <ul class="list">{% for d in s.docs|slice:":8" %}<li><a href="{% url 'opsconsole:doc' s.key d.slug %}">{{ d.title }}</a></li>{% endfor %}
+        {% if s.docs|length > 8 %}<li class="small muted">and {{ s.docs|length|add:"-8" }} more in the list on the left</li>{% endif %}</ul></div>{% endfor %}</div>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}{% if rendered.has_mermaid %}
+<script src="{{ mermaid_url }}" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+<script>
+/* Draw ```mermaid blocks; if Mermaid didn't load or a diagram doesn't parse, the code block stays. */
+window.addEventListener("load", function () {
+  if (!window.mermaid) return;
+  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  try { mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "neutral", fontFamily: "inherit" }); } catch (e) { return; }
+  document.querySelectorAll("pre > code.language-mermaid").forEach(function (code, i) {
+    var pre = code.parentNode, src = code.textContent;
+    mermaid.render("mmd-" + i, src).then(function (out) {
+      var box = document.createElement("div");
+      box.className = "mermaid"; box.innerHTML = out.svg; box.title = "Click to show it full size, click again to fit";
+      box.addEventListener("click", function () { box.classList.toggle("full"); }); pre.replaceWith(box);
+    }).catch(function () { pre.title = "This diagram could not be drawn; its source is shown."; });
+  });
+});
+</script>{% endif %}{% endblock %}

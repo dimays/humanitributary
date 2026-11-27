@@ -12,10 +12,10 @@ time, use this procedure.
 
 ## Procedure
 
-1. Open the job runs page of the console, `https://data.humanitributary.com/ops/runs/`, and filter by the status
-   `failed`.
+1. Open the Runs page of the console, `https://data.humanitributary.com/ops/runs/`, and filter by the state
+   Failed.
    Make sure that you know the name of the job and, for a feed job, the name of the feed.
-2. Read the error of the newest failed run.
+2. Open the newest failed run. Read its error and its log.
    Make sure that you know the cause. The [troubleshooting](../troubleshooting.md) table gives the usual causes.
 3. If the error says that the source policy refused the request, do not run the job again.
    Make sure that you correct the feed or the URL first.

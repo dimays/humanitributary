@@ -1,28 +1,21 @@
 {% extends "opsconsole/base.html" %}{% load ops %}
-{% block title %}Actions{% endblock %}
+{% block title %}Action log{% endblock %}
 {% block content %}
-<h1>Actions</h1>
-<p class="note">Every intervention made from the console: who, what, why, what the confirmation showed and what happened (the OpsAction audit rows; read-only in the admin too).
-{% if not can_act %} You can read them; acting needs the <span class="mono">opsconsole.ops_operator</span> permission.{% endif %}</p>
+<div class="crumb"><a href="{% url 'opsconsole:dashboard' %}">Dashboard</a> /</div>
+<div class="head"><div><h1>Action log</h1><div class="sub">Every action taken from the console: who, what, why, what the confirmation showed and what happened.{% if not can_act %} Acting needs the <span class="mono">opsconsole.ops_operator</span> permission.{% endif %}</div></div></div>
 <form class="filters" method="get">
-  <label>Kind <select name="kind"><option value="">any</option>{% for k, l in kinds %}<option value="{{ k }}"{% if f.kind == k %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
-  <label>Status <select name="status"><option value="">any</option>{% for s in statuses %}<option{% if f.status == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
-  <label>By <input name="by" value="{{ f.by }}" placeholder="human:owner"></label>
-  <button type="submit">Filter</button> <a href="{% url 'opsconsole:actions' %}">clear</a>
+  <label>Action<select name="kind"><option value="">any</option>{% for k, l in kinds %}<option value="{{ k }}"{% if f.kind == k %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+  <label>Status<select name="status"><option value="">any</option>{% for s in statuses %}<option{% if f.status == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>By<input name="by" value="{{ f.by }}" placeholder="human:owner"></label>
+  <button class="btn" type="submit">Filter</button>{% if f.kind or f.status or f.by %}<a class="btn quiet" href="{% url 'opsconsole:actions' %}">Clear</a>{% endif %}
 </form>
-<div class="scroll"><table>
-<tr><th>#</th><th>Requested</th><th>Action</th><th>Target</th><th>By</th><th>Reason</th><th>Where</th><th>Status</th><th class="n">Took</th></tr>
-{% for a in page %}
-<tr class="{% if a.status == 'failed' %}bad{% elif a.status == 'pending' or a.status == 'running' %}warn{% endif %}">
-  <td class="mono"><a href="{% url 'opsconsole:action' a.pk %}">{{ a.pk }}</a></td>
-  <td class="nowrap small">{{ a.created_at|date:"Y-m-d H:i:s" }}<div class="muted">{{ a.created_at|ago }}</div></td>
-  <td>{{ a.get_kind_display }}</td><td class="mono small">{{ a.target }}</td><td class="small">{{ a.requested_by }}</td>
-  <td class="small">{{ a.reason|truncatechars:80 }}</td><td class="small">{{ a.runs_in }}</td>
-  <td><span class="tag {{ a.status|status_class }}">{{ a.status }}</span>{% if a.error %}<div class="err">{{ a.error|truncatechars:90 }}</div>{% endif %}</td>
-  <td class="n">{{ a|took }}</td>
-</tr>
-{% empty %}<tr><td colspan="9" class="muted">No actions yet.</td></tr>
-{% endfor %}
-</table></div>
+<div class="card flush"><div class="scroll"><table>
+<thead><tr><th>State</th><th>Action</th><th>Target</th><th>By</th><th>Why</th><th>When</th><th class="n">Took</th></tr></thead><tbody>
+{% for a in page %}<tr>
+  <td><a href="{% url 'opsconsole:action' a.pk %}">{% badge a.status|action_state %}</a></td>
+  <td><a href="{% url 'opsconsole:action' a.pk %}">{{ a.get_kind_display|capfirst }}</a>{% if a.error %}<div class="small err">{{ a.error|masked|truncatechars:80 }}</div>{% endif %}</td>
+  <td class="mono small">{{ a.target }}</td><td class="small">{{ a.requested_by }}</td><td class="small muted">{{ a.reason|truncatechars:70 }}</td>
+  <td class="small nowrap" title="{{ a.created_at|date:'Y-m-d H:i:s' }} UTC">{{ a.created_at|ago }}</td><td class="n small">{{ a|took }}</td>
+</tr>{% empty %}<tr><td colspan="7" class="muted">No actions yet.</td></tr>{% endfor %}</tbody></table></div></div>
 {% include "opsconsole/_pager.html" %}
 {% endblock %}

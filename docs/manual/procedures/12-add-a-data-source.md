@@ -74,7 +74,7 @@ request goes through `ingest.http.Fetcher`, which obeys the policy.
    ```
 
    Make sure that the new feed shows as on, with the policy `allowed`.
-5. Open the job runs page of the console after the next due time of the feed.
+5. Open the Runs page of the console after the next due time of the feed.
    Make sure that the first run has the status `ok` or `partial`.
 
 > **NOTE:** `VERDICTS` goes into a database only one time (`JobState` "terms_verdicts_v1"). A new verdict does not

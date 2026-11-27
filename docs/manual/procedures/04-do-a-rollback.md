@@ -42,7 +42,7 @@ database.
 
 ## Correct the content after a rollback
 
-1. Find the rows that caused the problem on the console changes page.
+1. Find the rows that caused the problem in the content changes of the release, on its page in the console.
    Make sure that you know the old value of each row from its `Revision`.
 2. Write an edit file that corrects the rows, or use `manage.py branches revert <id>` for a branch operation.
    Make sure that the dry run of the correction shows the correct values.

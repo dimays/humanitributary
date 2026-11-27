@@ -70,7 +70,7 @@ together.
    ```
 
    Make sure that `heroku ps` shows the `worker` dyno as `up`.
-10. Open the overview page of the console after 15 minutes.
+10. Open the Dashboard of the console after 15 minutes.
     Make sure that the jobs run and no job fails.
 11. Show the agent tokens with `manage.py agent_token list`.
     Make sure that each agent has a token. If not, make one with procedure [09](09-replace-an-agent-token.md).

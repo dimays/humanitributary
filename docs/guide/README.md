@@ -1,8 +1,9 @@
 # The technical guide
 
 The technical guide explains how every part of the platform works, from the
-code as it is. It is read in the repository (GitHub renders it); nothing
-serves it. Its chapters are the Markdown files in this folder; this README
+code as it is. It is read in the repository (GitHub renders it) or on the
+operations console's Docs page (`/ops/docs/`, beside the Maintainer's Manual
+and the ADRs). Its chapters are the Markdown files in this folder; this README
 and `stamps.json` aren't chapters. How the guide stays true to the code is a
 chapter of its own, [this-guide.md](this-guide.md). The rest of this
 file is for writers.
@@ -24,7 +25,7 @@ guide-index` rewrites it):
 9. [Revisions](revisions.md): How every change to canonical content is recorded with who made it, why and for which task, how the database refuses changes that skip that, and how to read the log.
 10. [Publishing](publishing.md): How published content leaves Postgres as a versioned static snapshot, the gates a release must pass, how the page is built from it, and the round trip (DB → snapshot → DB) that proves nothing is lost; the legacy files are frozen since the cutover.
 11. [Operations](operations.md): How to set the platform up on a laptop, run its jobs on a schedule, tell whether it is healthy, what is and isn't backed up, and what to do when something goes wrong.
-12. [The operations console](operations-console.md): The staff-only pages under /ops/ that show, on one screen each, whether the platform is healthy, what the jobs and agents did, what changed in the content, which release is live and how the content programs are going, and the few audited actions operators can take from them.
+12. [The operations console](operations-console.md): The staff-only pages under /ops/, modeled on an orchestrator's console: a Dashboard that says whether anything is wrong, the jobs with their tags and run histories, every run with its log, the agents' queues, the releases, the docs rendered, and the few audited actions operators take from them.
 13. [How this guide stays true](this-guide.md): How the guide, the ADRs and the gate keep the docs in step with the code, and what blocks a commit or a pull request when they drift.
 14. [Glossary](glossary.md): Every term the guide uses, in a sentence or two, with the chapter that explains it.
 <!-- chapters:end -->

@@ -15,71 +15,71 @@ from .models import Candidate, Entity
 DAY, WEEK = 1440, 10080
 
 
-@job("seed_sources", interval=WEEK)
+@job("seed_sources", interval=WEEK, tags="maintenance")
 def seed_sources(ctx):
-    """Publishers and Feeds for every source (idempotent; keeps ratings and enabled flags)."""
+    """Creates or updates the Publisher and Feed rows for every source, keeping ratings and enabled flags."""
     ctx.counts.update(seed.seed(actor=ctx.actor))
 
 
-@job("seed_branch_entities", interval=WEEK)
+@job("seed_branch_entities", interval=WEEK, tags="maintenance")
 def seed_branch_entities(ctx):
-    """Map branches to Wikidata items by exact match; queue map_branch_entities tasks for the rest."""
+    """Maps branches to their Wikidata items by exact match, and queues map_branch_entities tasks for the rest."""
     branches = ctx.opt("branches")
     routing.seed_branch_entities(ctx.fetcher, ctx, branches=branches.split(",") if isinstance(branches, str) else branches,
                                  actor=ctx.actor, limit=ctx.opt("limit"))
 
 
-@job("portal", interval=60, feed=True)
+@job("portal", interval=60, feed=True, tags="collect")
 def portal(ctx):
-    """Wikipedia Current events portal."""
+    """Collects new items from Wikipedia's Current events portal."""
     sources_wiki.run_portal(ctx)
 
 
-@job("year_pages", interval=DAY, feed=True)
+@job("year_pages", interval=DAY, feed=True, tags="collect")
 def year_pages(ctx):
-    """Wikipedia "<Year> in <Country>" pages."""
+    """Collects events from Wikipedia's "<Year> in <Country>" pages."""
     sources_wiki.run_year_pages(ctx)
 
 
-@job("rss", interval=60, feed=True)
+@job("rss", interval=60, feed=True, tags="collect")
 def rss(ctx):
-    """News RSS / Atom feeds."""
+    """Collects headlines from the permitted news RSS and Atom feeds."""
     sources_news.run_rss(ctx)
 
 
-@job("who_don", interval=360, feed=True)
+@job("who_don", interval=360, feed=True, tags="collect")
 def who_don(ctx):
-    """WHO Disease Outbreak News."""
+    """Collects the WHO's Disease Outbreak News."""
     sources_news.run_who_don(ctx)
 
 
-@job("federal_register", interval=360, feed=True)
+@job("federal_register", interval=360, feed=True, tags="collect")
 def federal_register(ctx):
-    """Federal Register presidential documents."""
+    """Collects presidential documents from the Federal Register."""
     sources_news.run_federal_register(ctx)
 
 
-@job("gazette", interval=720, feed=True)
+@job("gazette", interval=720, feed=True, tags="collect")
 def gazette(ctx):
-    """The Gazette (UK) state notices."""
+    """Collects state notices from The Gazette (UK)."""
     sources_news.run_gazette(ctx)
 
 
-@job("nobel", interval=DAY, feed=True)
+@job("nobel", interval=DAY, feed=True, tags="collect")
 def nobel(ctx):
-    """Nobel Prize announcements."""
+    """Collects Nobel Prize announcements."""
     sources_news.run_nobel(ctx)
 
 
-@job("historian_sync", interval=WEEK, feed=True)
+@job("historian_sync", interval=WEEK, feed=True, tags="collect")
 def historian_sync(ctx):
-    """Office of the Historian Milestones TEI (for the historian lookup)."""
+    """Syncs the Office of the Historian's Milestones (TEI), which the historian lookup reads."""
     sources_news.run_historian_sync(ctx)
 
 
-@job("refresh_entities", interval=DAY, feed=True)
+@job("refresh_entities", interval=DAY, feed=True, tags="maintenance")
 def refresh_entities(ctx):
-    """Re-read Wikidata facts for entities older than the TTL (`per_run` a run)."""
+    """Re-reads Wikidata facts for entities older than the TTL (`per_run` a run), and re-derives every kind."""
     cutoff = timezone.now() - timedelta(days=wikidata.ENTITY_TTL_DAYS)
     qids = list(Entity.objects.filter(Q(resolved_at__isnull=True) | Q(resolved_at__lt=cutoff)).order_by("resolved_at").values_list("qid", flat=True)[: int(ctx.opt("per_run", 2000))])
     wikidata.fetch_entities(ctx.fetcher, qids, refresh=True, counts=ctx.counts)
@@ -91,9 +91,9 @@ def refresh_entities(ctx):
             ctx.counts["kinds_changed"] += 1
 
 
-@job("pageviews", interval=360)
+@job("pageviews", interval=360, tags="process")
 def pageviews(ctx):
-    """Wikipedia pageviews for the entities of recent candidates' stories (significance for priority)."""
+    """Fetches Wikipedia pageviews for the entities in recent candidates' stories, which raise their priority."""
     since = timezone.now() - timedelta(days=45)
     recent = Candidate.objects.filter(created_at__gte=since, status__in=["queued", "claimed"])
     topic_qids = {q for q in recent.values_list("details__topic_qid", flat=True) if q}
@@ -102,17 +102,19 @@ def pageviews(ctx):
     wikidata.refresh_pageviews(ctx.fetcher, ents, counts=ctx.counts, limit=int(ctx.opt("limit", 400)))
 
 
-@job("process", interval=15)
+@job("process", interval=15, tags="process")
 def process_(ctx):
-    """Route, de-duplicate, cluster, prioritize; write_event tasks; new-branch signals."""
+    """Routes, de-duplicates, clusters and prioritizes candidates, then queues write_event tasks and new-branch signals."""
     process.run(ctx)
 
 
-@job("entity_relations", interval=60)
+@job("entity_relations", interval=60, tags="governance")
 def entity_relations(ctx):
-    """Wikidata relations (part of, follows, replaces, subclass of; subnational or party) for the entities behind
-    new-branch signals, and for what those relations name, up to branchable.MAX_HOPS steps: what the NEW-BRANCH rule
-    reads (ingest/branchable.py). A few requests a run; cached for ENTITY_TTL_DAYS."""
+    """Fetches the Wikidata relations of the entities behind new-branch signals, which the NEW-BRANCH rule reads.
+
+    The relations are part of, follows, replaces, subclass of, subnational or party, for those entities and for what
+    the relations name, up to branchable.MAX_HOPS steps (ingest/branchable.py). A few requests a run; cached for
+    ENTITY_TTL_DAYS."""
     from . import branchable
 
     qids = sorted({q for q in Candidate.objects.filter(kind="new_branch_signal", status__in=["queued", "claimed"]).values_list("details__qid", flat=True) if q})
@@ -127,23 +129,23 @@ def entity_relations(ctx):
         qids = sorted(branchable.relation_targets(Entity.objects.filter(qid__in=todo)) - seen)
 
 
-@job("enrich_tasks", interval=60)
+@job("enrich_tasks", interval=60, tags="process")
 def enrich_tasks(ctx):
-    """Lookup adapters for queued write_event tasks (suggested sources in the payload)."""
+    """Adds the lookup adapters' suggested sources to queued write_event tasks."""
     second_source.run_enrich_tasks(ctx)
 
 
 @job("link_health", interval=DAY, not_idempotent=(
     "each run is a round: three failed rounds in a row make a citation dead (ingest/linkhealth.py), so back-to-back "
-    "runs can turn a host's bad hour into dead links, and every run appends LinkCheck rows"))
+    "runs can turn a host's bad hour into dead links, and every run appends LinkCheck rows"), tags="fact-check")
 def link_health(ctx):
-    """Re-check cited URLs; stale claims and verify_claim tasks for dead or changed ones."""
+    """Re-checks cited URLs, and marks claims stale and queues verify_claim tasks for dead or changed ones."""
     linkhealth.run(ctx)
 
 
-@job("facts_sweep", interval=DAY)
+@job("facts_sweep", interval=DAY, tags="fact-check")
 def facts_sweep(ctx):
-    """The fact base's daily sweep (evidence/sweep.py): recompute, stale dead or changed links, verify_claim tasks."""
+    """Runs the fact base's daily sweep (evidence/sweep.py): recomputes claims, stales dead or changed links and queues verify_claim tasks."""
     from evidence import sweep
 
     out = sweep.sweep(actor=ctx.actor)
@@ -154,9 +156,9 @@ def facts_sweep(ctx):
                     ctx.counts[f"{section}.{k}"] += v
 
 
-@job("branches_review", interval=WEEK)
+@job("branches_review", interval=WEEK, tags="governance")
 def branches_review(ctx):
-    """Branch governance's weekly review (governance/review.py): rules → proposals and tasks."""
+    """Runs branch governance's weekly review (governance/review.py): the rules make proposals and review tasks."""
     from governance import review
 
     out = review.review(actor="job:branches_review")
@@ -166,15 +168,15 @@ def branches_review(ctx):
 
 @job("second_source", interval=DAY, not_idempotent=(
     "it walks claims from a bookmark (JobState \"second_source\"): each run does the next batch, so a second run is "
-    "\"more\", not \"again\""))
+    "\"more\", not \"again\""), tags="fact-check")
 def second_source_(ctx):
-    """Suggested second sources for claims only Wikipedia supports (verify_claim tasks)."""
+    """Suggests second sources for claims only Wikipedia supports, as verify_claim tasks."""
     second_source.run_second_source(ctx)
 
 
-@job("gap_waves", interval=DAY)
+@job("gap_waves", interval=DAY, tags="waves")
 def gap_waves(ctx):
-    """Content waves (governance/waves.py): gaps in each branch's windows → fill_gap tasks; the active wave advances."""
+    """Finds the gaps in each branch's windows for the content waves (governance/waves.py), queues fill_gap tasks and advances the active wave."""
     from governance import waves
 
     per_day = ctx.opt("per_day")
@@ -185,9 +187,9 @@ def gap_waves(ctx):
     ctx.counts["advanced"] = len(out["advanced_to"])
 
 
-@job("gap_pointers", interval=60)
+@job("gap_pointers", interval=60, tags="waves")
 def gap_pointers(ctx):
-    """Pointers for queued fill_gap tasks (governance/pointers.py): Wikipedia history sections, lookup hits (unread)."""
+    """Adds pointers to queued fill_gap tasks (governance/pointers.py): Wikipedia history sections and lookup hits, unread."""
     from governance import pointers
 
     pointers.run(ctx)

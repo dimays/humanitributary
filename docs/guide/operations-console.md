@@ -1,6 +1,6 @@
 ---
 title: The operations console
-summary: The staff-only pages under /ops/ that show, on one screen each, whether the platform is healthy, what the jobs and agents did, what changed in the content, which release is live and how the content programs are going, and the few audited actions operators can take from them.
+summary: The staff-only pages under /ops/, modeled on an orchestrator's console: a Dashboard that says whether anything is wrong, the jobs with their tags and run histories, every run with its log, the agents' queues, the releases, the docs rendered, and the few audited actions operators take from them.
 order: 105
 covers:
   - opsconsole/**
@@ -8,13 +8,15 @@ covers:
   - tests/test_opsconsole_actions.py
 ---
 
-The operations console is a handful of web pages for staff, at `/ops/` on the data host. They answer the questions
-the [Operations](operations.md) chapter answers with several commands: is it healthy, did the jobs run, is the
-queue moving, what changed today, which release do readers have. Everything on them is read from the database and
-the releases store, and reading them changes nothing. Staff with the `ops_operator` permission also get a few
-buttons on them: run or retry a job, pause or resume one, free or extend a lease, requeue or cancel tasks, advance
-the content wave, publish, roll back ([actions](#actions)). Each is confirmed on a page that shows what will happen,
-needs a reason, and leaves an `OpsAction` row ([ADR 0028](../adr/0028-operations-console.md)).
+The operations console is a handful of web pages for staff, at `/ops/` on the data host. Its shape is borrowed from
+an orchestrator's console (Prefect Cloud's, which the owner likes), cut down to one project: a left sidebar of six
+pages, state badges in a few colors, a run graph, and a page per run with its log
+([ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md), which redesigned the first console of
+[ADR 0028](../adr/0028-operations-console.md)). Everything on it is read from the database, the releases store and
+the repository's `docs/`, and reading changes nothing. Staff with the `ops_operator` permission also get a few
+buttons: run or retry a job, pause or resume one, release a stuck lease (or extend one), requeue or cancel tasks,
+advance the content wave, publish, roll back ([actions](#actions)). Each is confirmed on a page that shows what will
+happen, needs a reason, and leaves an `OpsAction` row.
 
 ## Who can see it
 
@@ -31,69 +33,109 @@ Every action goes through `operator` instead: the same host check, staff only, t
 `opsconsole.ops_operator` (defined on the `OpsAction` model's `Meta.permissions`), else a 403; POST only
 (`require_POST`), with Django's CSRF middleware checking the token every form carries. The templates draw the
 buttons only when `can_act` (an active staff user with the permission) is true, through the `{% act %}` tag in
-`templatetags/ops.py`, so staff without it see the console as before, read-only, and the header says
-"Read-only" (an operator's says "Operator (name)"). Superusers have every permission, so the owner needs nothing
-special; anyone else is granted `ops_operator` in the admin (Users or Groups → "Can act from the operations
-console").
+`templatetags/ops.py`, so staff without it see the console read-only, and the sidebar's foot says "Read-only" (an
+operator's says "Operator (name)"). Superusers have every permission, so the owner needs nothing special; anyone
+else is granted `ops_operator` in the admin (Users or Groups → "Can act from the operations console").
 
 The admin's header has an "Operations" link for staff: `opsconsole/templates/admin/base_site.html` overrides
-Django's template of that name, adding the link to its user links. It wins because `opsconsole` comes before
-`django.contrib.admin` in `INSTALLED_APPS`.
+Django's template of that name. It wins because `opsconsole` comes before `django.contrib.admin` in
+`INSTALLED_APPS`. The sidebar's foot links back to the admin.
 
 ## The pages
 
+The sidebar has six items and nothing else. The pages they lead to link on to the rest: a job, a run, a task, a
+Revision, a release, an action and the action log.
+
 | Page | URL | What it shows |
 |---|---|---|
-| Overview | `/ops/` | Health cards (database, both stores, the worker, the live release, alerts); actions in progress; paused jobs (who, when, why); one row per job in run order with its last run, status, duration, a counts summary, failures in a row and next due time (red at the alert threshold, amber when failing or overdue; a paused job is marked and never overdue); the queue per task kind (queued, claimed, stale leases, done and failed today, created today, the oldest queued task's age); today's intake (documents, candidates, stories over the threshold in the last `process` run, new tasks against the daily caps); the jobs that are failing. |
-| Job runs | `/ops/runs/` | FetchRuns filtered by job, status and date range, 50 a page, each with its counts (collapsed), duration and error; above them, a sparkline per job of its last 40 runs within 30 days. |
-| Work queue | `/ops/tasks/` | Tasks filtered by kind, status (including `stale`: claimed with an expired lease), agent and a text match on the dedupe key, target ref or creator, with age, priority, lease holder and expiry, attempts and the result's decision; below, tasks done per agent per day for 14 days and the mean minutes from claim to done. |
-| A task | `/ops/tasks/<id>/` | Its fields, the result, the error, the payload in a collapsed block, and the Revisions it made. |
-| Changes | `/ops/changes/` | The Revision feed filtered by actor kind, table, action, actor, reason text, task and dates; Revisions per day by actor kind for 14 days; recent batches. |
-| A Revision | `/ops/changes/<id>/` | Who, when, why and for which task; each changed column before and after, long text as a word diff; the row's whole history; the other rows changed in the same transaction. |
-| Releases | `/ops/releases/` | Every Release with its counts, content and page hashes, the change report's totals (added, changed, retracted against the release before it), and which one `releases/latest.json` points at. |
-| A change report | `/ops/releases/<version>/changes/` | The release's `changes.md` from the store (`?raw=1` serves the file itself). |
-| Content programs | `/ops/programs/` | Content waves (the active wave, and per wave its coverage, gaps, `fill_gap` tasks by status and outcome, gaps held by each cap, windows tried recently), the current-event pipeline (candidates by status, open stories, the last `process` run's stories over the threshold, `write_event` tasks by status and decision), the fact base's shares and rechecks due, and open branch proposals. |
-| Actions | `/ops/actions/` | Every OpsAction, newest first, filtered by kind, status and who: what, the target, who, the reason, where it ran, its status and error, how long it took. Readable by all staff. |
-| An action | `/ops/actions/<id>/` | Its status (reloading every 3 seconds while pending or running; a pending one says when no worker holds the scheduler lock, and can be withdrawn), the reason, what the job runs did and the Revisions they wrote, the output, the result, what the confirmation showed and the parameters. A finished `publish --check` is the publish confirmation (below). |
+| Dashboard | `/ops/` | **One status line**: "All good", or "N problems" with one sentence each, worst first (a store that can't be reached; no worker running and no run for 30 minutes; a job failing runs in a row, red at the alert threshold; stuck leases; jobs overdue by 30 minutes; no live release), each linking to where to look. **Runs, last 24 hours**: the run graph, one row per job that ran, a bar per run placed at its start and as wide as it took (at least a sliver), green Completed, amber completed with errors, red Failed, blue Running; each bar links to its run. **Needs attention**: each job's (or feed's) last run that failed, with Retry. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck. Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
+| Jobs | `/ops/jobs/` | One row per job, in run order: its name and one-sentence description (the docstring's first sentence), its tags, its schedule in words ("every 15 minutes", "every hour" with "per feed · 1 of 1 on" for a feed job), its last run's state and age, its last ten runs as squares (oldest left, each its state's color and a link to the run; empty slots when it has run fewer times), its next run (or Paused, or Pending), and Run now / Pause, or Resume. Chips across the top filter by tag (`?tag=`), with counts. |
+| A job | `/ops/jobs/<name>/` | The description and tags; the schedule, next run, last run, failures in a row, console runs waiting; the ten-run strip and whether it may be run again straight away (`not_idempotent`); for a feed job its feeds (schedule, last fetched, next, a Run button each); its run history, 25 a page. |
+| Runs | `/ops/runs/` | Every run, newest first, 50 a page: state, run, job, started, duration, a counts summary (or the masked error's start). Filters: job, state and tag. Without a state, "Up next" (five) sits above the list; the states Scheduled and Paused list the jobs' next runs, Pending and Cancelled the console's run requests (waiting, or withdrawn), the others the runs. |
+| A run | `/ops/runs/<id>/` | The state (Completed with errors for a partial run), the job's description, older and newer runs of the job, Retry when it failed; when it started and how long it took, its feed, how much content it wrote; its counts as a key and value list (errors first); **its log**: one line each with the time (UTC, to the millisecond), the level in its color (INFO blue, WARNING amber, ERROR red), the logger and the message, with "Warnings and errors" to show only those and "Plain text" (`?format=text`) for the raw lines; the error with its traceback; and the Revisions it wrote (the first 20, each linking to its diff). |
+| Work | `/ops/work/` | A card per task kind: waiting, in progress, stuck, done today, the oldest waiting task's age, today's new tasks against the daily cap (`write_event`, `fill_gap`) and how many failed; the stuck leases, longest-expired first, each with Release; the content wave (active wave, coverage, gaps, the last `gap_waves` run) with "Advance to W2". |
+| A task kind | `/ops/work/<kind>/` | Tabs: Waiting, In progress, Stuck, Done, Failed, Cancelled (with counts), a search on dedupe key, target and creator, and the tasks, 50 a page: state, priority, what it is about, the agent, age, the outcome in a few words; Release, Requeue or Cancel per task; "Requeue these" (Failed, Cancelled) or "Cancel these" (Waiting, Stuck) for the tab's tasks, at most 50 at once. No payloads. |
+| A task | `/ops/tasks/<id>/` | Its fields, the result, the error, the payload behind "Show the payload", and the Revisions it made, each linking to its diff. Release and Extend on a claimed task, Requeue, Cancel. |
+| Releases | `/ops/releases/` | Three cards: the live release (and who pointed at it, why), the content changes not released yet (by agents, people and jobs, linking to them) and the fact base's corroborated share. Then every release, 25 a page: version, Live, when and by whom, added, changed and retracted (its manifest's totals), "page only" when nothing was added, changed or retracted and the page's hash differs from the release before, its events; Publish (top) and Roll back to this (each release not live). |
+| A release | `/ops/releases/<version>/` | Its counts and hashes, its change report (`changes.md`, rendered; `?raw=1` serves the file), and the content changes it carried: the Revisions after the previous release's high-water mark up to its own, 50 a page, each linking to its diff. `/ops/releases/unreleased/` lists those after the newest release. |
+| A Revision | `/ops/changes/<id>/` | Who, when, why and for which task; each changed column before and after, long text as a word diff; the row's whole history; the other rows changed in the same transaction; a link back to the release that carried it. |
+| Docs | `/ops/docs/`, `/ops/docs/<section>/<slug>/` | The Maintainer's Manual ([`docs/manual/`](../manual/README.md)), the developer reference (`docs/guide/`) and the decisions (`docs/adr/`), rendered: a left table of contents of every document, the open one's headings under it, and the document in readable type, its Mermaid diagrams drawn ([below](#the-docs-page)). |
+| Action log | `/ops/actions/`, `/ops/actions/<id>/` | Every OpsAction, newest first, filtered by kind, status and who; an action's page: its state (reloading every 3 seconds while pending or running; a pending one says when no worker holds the scheduler lock, and can be withdrawn), the reason, the runs it made, the output, and behind "Details" the result, what the confirmation showed and the parameters. A finished `publish --check` is the publish confirmation. Linked from the Dashboard. |
 
-Operators also see an "Act" column or buttons: on the Overview (Run now, Pause or Resume per job; paused jobs in
-their own table with who paused them and why; actions in progress), on Job runs (Retry on a failed run), on the Work
-queue and a task's page (Release and Extend on a claimed task, Requeue on a failed or cancelled one, Cancel on a
-queued one or one whose lease expired, and, once the list is filtered, Requeue or Cancel for the matching tasks), on
-Releases (Check and publish; Roll back on each release that isn't live) and on Content programs (Advance to the next
-wave).
+The first console's addresses redirect (301): `/ops/tasks/` to Work, `/ops/programs/` to the Dashboard,
+`/ops/changes/` to the unreleased changes, `/ops/releases/<version>/changes/` to the release. The first console's
+Changes feed, its Content programs page (the pipeline, the waves table, branch proposals) and its throughput and
+batch tables are gone: the waves card, the caps and the fact base's share kept what the owner reads, and
+`manage.py digest`, `waves status`, `facts report` and `branches list` have the detail.
 
-Any page can reload itself every 60 seconds: the header's "auto-refresh" link adds `refresh=1` to the address, which
-puts a `<meta http-equiv="refresh">` on the page.
+**States.** The console speaks in run states (`queries.STATES`), each a badge with a dot: **Completed** (green; an
+`ok` or `partial` FetchRun, "with errors" for partial), **Failed** (red), **Running** (blue, the dot pulsing),
+**Scheduled** (gray: a job's next due time), **Pending** (gray: a run asked for from the console, not yet taken by
+the worker), **Cancelled** (gray: one withdrawn) and **Paused** (amber). Tasks use Waiting, In progress, Stuck
+(amber: claimed, lease expired), Completed, Failed and Cancelled.
+
+**Tags.** A job's tags come from the registry: `@job(…, tags=…)` in `ingest/job_defs.py`, from the fixed set in
+`ingest/jobs.py` `TAGS` ([ingestion](ingestion.md#the-job-runner)): `collect`, `process`, `fact-check`,
+`governance`, `waves` and `maintenance`. The console adds `paused` to a paused job.
+
+**Auto-refresh.** The Dashboard, Runs and a running run's page reload themselves every 30 seconds
+(`views.REFRESH_SECONDS`) with a few lines of script in `base.html`: only while the tab is visible and no field has
+focus. The header's "Auto-refresh on" button turns it off, remembered in the browser (`localStorage`). An open
+action's page reloads every 3 seconds with a `<meta http-equiv="refresh">`.
+
+**Look.** One stylesheet in `base.html`: a system font stack, a left sidebar (a top bar of icons under 860 px), white
+cards on a light gray page, the state colors as CSS variables, redefined for `prefers-color-scheme: dark`. No
+front-end framework, no build step; the only script besides the reload is Mermaid on Docs pages.
 
 ## Where the numbers come from
 
 All reading is in `opsconsole/queries.py`; the views only arrange it. It computes totals in Postgres and never loads
-rows to count them in Python, so each page makes the same number of queries whatever the table sizes (on a local
-copy of the archive: about 20 for the Overview, 17 for Content programs, 5 to 9 for the others, counting the
-session's own).
+rows to count them in Python, so each page makes the same number of queries whatever the table sizes (a test seeds
+ten times the rows and compares; the six main pages make at most 25 queries, a detail page at most 15).
 
 | Figure | Query |
 |---|---|
 | A job's last run | `DISTINCT ON (job, feed_id)` over FetchRuns that aren't running, newest first: one row per job and feed. A feed job's row is its newest run across its feeds. |
+| The ten-run strip | `HISTORY_SQL`: for each job name, a `LATERAL` subquery taking its newest ten runs through the `(job, started_at DESC)` index (`fetchrun_job_started_idx`, added with the run logs), one query for every job. |
 | Failures in a row | `FAILURE_STREAKS_SQL`: per job and feed, failed runs since the last `ok` or `partial` one. The same count as `infra/alerts.py` `consecutive_failures`, for every job in one query; the page shows the worst feed's. |
-| Next due | A plain job: its last run's start plus its interval (`ingest/job_defs.py`). A feed job: the earliest `next_run_at` of its enabled feeds. Overdue means more than 30 minutes past. |
-| The worker | `pg_locks`: whether a session holds the scheduler lock (`ingest/jobs.py` `SCHEDULER_LOCK_KEY`, held by `run_jobs --loop` for its life) or the runner's lock (`LOCK_KEY`, held while jobs run). With no lock and no run started for 30 minutes, the card is red. |
-| Queue depth | One `GROUP BY kind` with a `FILTER` per column. "Today" starts at local midnight, as the daily caps do. |
-| Daily caps | Tasks created since midnight by `job:process` (`write_event`) and `job:gap_waves` (`fill_gap`), against `WRITE_EVENT_TASKS_PER_DAY` and `FILL_GAP_TASKS_PER_DAY`. |
-| Intake | Documents fetched since midnight (on the `fetched_at` index), split into new and changed; candidates created since midnight; the newest `process` run's `clusters`, `clusters_over_threshold` and `tasks_held_by_daily_cap` counts. |
-| Throughput | Done tasks of the last 14 days by `claimed_by` and day, with the mean of `completed_at − claimed_at`. A re-claim moves `claimed_at`, so it is the last attempt's time. |
-| Batches | `BATCH_SQL`: Revisions of the last 30 days grouped by the reason up to its first ` #`, `:` or ` (`, so `apply_edits round-3 #12 …` and every other verdict of that edit file fall in `apply_edits round-3`, and agent results in their task kind (`write_event`). |
-| A row's history | Revisions with the same `row_pk`; for an entry, in `timeline_entry`, `timeline_branch` and `timeline_event` together, since they share the key (`revision_row_idx`). |
-| Release totals | Each release's `manifest.json` (its `changes` key), read once per process and cached, since release files are never rewritten. |
-| Waves | `JobState` "gap_waves": the active wave and the last run's gaps, coverage and counts, read directly (`governance.waves.state()` would create the row). `fill_gap` tasks are counted by `payload.wave.name`, status and `result.decision`. |
+| Needs attention | From the same last runs: each job's (each feed's) whose status is `failed`. |
+| Next due | A plain job: its last run's start plus its interval. A feed job: the earliest `next_run_at` of its enabled feeds. Overdue means more than 30 minutes past. A job that never ran is due now. |
+| The run graph | FetchRuns started in the last 24 hours (on the `started_at` index), placed as shares of the window in Python. |
+| The worker | `pg_locks`: whether a session holds the scheduler lock (`ingest/jobs.py` `SCHEDULER_LOCK_KEY`, held by `run_jobs --loop` for its life) or the runner's lock (`LOCK_KEY`). With neither and no run started for 30 minutes, the Dashboard says no worker is running jobs. |
+| Agent queues | One `GROUP BY kind` with a `FILTER` per number: waiting (`queued`), in progress (`claimed`, lease live), stuck (`claimed`, lease expired), done and failed today, failed; and one count of today's tasks by the jobs with a daily cap. "Today" starts at local midnight, as the caps do. |
+| A run's log | The run's `RunLog` row (`ingest/runlog.py`, [ingestion](ingestion.md#the-job-runner)): one row, read only on the run's page. Lines are masked when captured and masked again when shown. |
+| Content a run wrote | Revisions by `job:<name>` between the run's start and finish (the `at` index). |
+| Release totals | Each release's `manifest.json` (its `changes` key), read once per process and cached, since release files are never rewritten. Page only: totals all zero and a page hash unlike the previous release's. |
+| Not released yet | Revisions after the newest release's `revision_high_water`, by actor kind. |
+| Fact base | Record claims (`as_written`, `why`, `origin`) on published entries by status: one aggregate. |
+| Waves | `JobState` "gap_waves" read directly (`governance.waves.state()` would create the row). |
 | Paused jobs | `JobState` "paused_jobs" through `ingest.jobs.paused_jobs()`, which reads without creating the row. |
-| Actions in progress | OpsActions `pending` or `running`, oldest first, at most 10 (`queries.open_actions`); the "no worker running" tag is the scheduler lock's `pg_locks` check. |
-| Fact base | Record claims (`as_written`, `why`, `origin`) on published entries by status, and claims whose `recheck_after` is due now or within 30 days: two aggregates. `evidence.health.collect()` (`facts report`) gives the same shares with more detail, but loads every event to place it by era and region. |
 
 Lists never load the big JSON columns: tasks defer `payload` and `result` and read the decision and note with JSON
-key transforms; Revisions defer `before` and `after`. Error text is passed through `ingest.policy.mask_secrets`
-again before it is shown, though FetchRun errors are already masked when they are written.
+key transforms; Revisions defer `before` and `after`. Error text and log lines are passed through
+`ingest.runlog.mask` (the `masked` filter) again before they are shown.
+
+## The Docs page
+
+`opsconsole/docs.py` reads three folders of `docs/`: `manual` (the Maintainer's Manual, [ADR 0030](../adr/0030-a-maintainers-manual-in-simplified-technical-english.md)), `guide` and `adr`
+(`SECTIONS`). A document is a `.md` file there or one folder down (the manual's `procedures/`); its slug is its path
+there without `.md`, its title the front
+matter's `title` (the guide's chapters) or its first `# ` heading, its order the front matter's `order` or the file
+name, a README first and a subfolder's documents last, under its name. A URL's slug is looked up in the folder's
+listing, never joined onto a path, so nothing else on disk can be read.
+
+Rendering is on the server: Python-Markdown (tables, fenced code, definition lists, abbreviations, a table of
+contents giving each heading an id) and then `nh3`, which keeps only an allow-list of tags and attributes (no
+scripts, styles, event handlers or `javascript:` links; links get `rel="noopener noreferrer"`). Links between
+documents become console links (`operations.md#actions` → `/ops/docs/guide/operations/#actions`, `../adr/…md` →
+the Decisions section); a link to code becomes its path in `<code>`. Rendered pages are cached per process by file
+and modification time, so an edited file shows on the next request.
+
+A fenced ```` ```mermaid ```` block stays a code block on the server. On a page that has one, the template loads
+Mermaid from a pinned version on jsDelivr (`docs.MERMAID_URL`, `mermaid@11.4.1`) and draws each block
+(`securityLevel: "strict"`, the dark theme in dark mode, each diagram at most as wide as the text; a click shows it full size, scrolling sideways). If the script doesn't
+load or a diagram doesn't parse, the code stays as it is. These are staff-only pages, so a CDN is acceptable; no
+other page loads anything from outside.
 
 ## Actions
 
@@ -115,7 +157,8 @@ fresh idempotency key (a random 32-hex). Nothing is written in this step. The fo
 5. inserts the OpsAction under the key (the unique index settles a race the same way as step 2);
 6. runs it now if it is quick, or leaves it `pending` for the worker; then redirects (303) to the action's page.
 
-Only `publish --check` skips the confirmation (it writes nothing); its button carries a key minted with the page.
+Only `publish --check` (the Releases page's "Publish") skips the confirmation (it writes nothing); its button carries
+a key minted with the page.
 
 **The actions.**
 
@@ -164,23 +207,40 @@ it running, runs it outside any wrapping transaction (a job manages its own), an
 ("interrupted") at the next pick-up. A pending one can be withdrawn from its page ("Withdraw it"), and it then
 never runs. With no worker running, actions wait; the page says so.
 
+**Where the buttons are.** Run now, Pause and Resume on Jobs and a job's page (and Run per feed); Retry on the
+Dashboard's "Needs attention" and a failed run's page; Release on Work's stuck leases and a task kind's list,
+Extend on a task's page; Requeue and Cancel per task and for a tab's tasks; Advance on Work's wave card; Publish
+on Releases (and the unreleased changes); Roll back to this on each release that isn't live.
+
 ## Template helpers
 
-`opsconsole/templatetags/ops.py` holds the filters the templates use: durations (`seconds`), ages (`span`, `ago`),
-intervals (`minutes`), shares (`pct`), JSON (`pretty`), the status colors (`status_class`), and two tags that draw
-SVG: `sparkline` (one bar per run, its height the duration against the longest, a failed run full height and red)
-and `bar` (a daily count), and `act`, a one-button POST form for an action (only for operators); `took` is how long an action ran. `field_diffs` turns a Revision into rows of column, before and after, with a word diff
-(`difflib`) for long text.
+`opsconsole/templatetags/ops.py` holds the tags and filters the templates use: `badge` (a state badge), `task_state`
+and `action_state` (a task's or an action's status in state words), `history_strip` (the ten-run squares),
+`level_class` and `logtime` (a log line's color and time), `every` (an interval in words), durations (`seconds`),
+ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `words` (a key as words), JSON
+(`pretty`), `act` (a one-button POST form for an action, only for operators) and `took` (how long an action ran).
+`field_diffs` turns a Revision into rows of column, before and after, with a word diff (`difflib`) for long text.
 
 ## Tests
 
 `tests/test_opsconsole.py` holds the line:
 
-- anonymous and non-staff users are redirected, a POST is refused, staff get `noindex` and `no-store`, another host
-  gets a 404 when `OPS_HOSTS` is set, and the admin links to the console;
-- every page renders against `seed()` (runs with a job at the alert threshold and a masked key in its error, tasks
-  with a stale lease and agents' results, an agent's and a reviewer's edits, a release, the waves' state) and shows
-  what it should;
+- anonymous and non-staff users are redirected, a POST to a page is refused, staff get `noindex` and `no-store` on
+  every page, another host gets a 404 when `OPS_HOSTS` is set, the sidebar has exactly the six items, the admin
+  links to the console, and the old addresses redirect;
+- every page and detail page renders against `seed()` (runs over the last day with their logs, a job at the alert
+  threshold with a key in its error, a running run, tasks with a stuck lease, a pending and a cancelled console run,
+  a paused job, agents' and a reviewer's edits, a release, the waves' state) and shows what it should: the problems,
+  the run graph, attention, up next and the queues; tags, schedules in words and the ten-run strips, the tag filter;
+  the run filters by job, state and tag; a run's log, its level filter and plain text, masked; the Work cards, tabs
+  and stuck leases; releases, page-only releases, unreleased changes and a Revision's diff; the Docs page, its links
+  and Mermaid only where a diagram is;
+- the Docs page against a stand-in `docs/` folder: the manual's stub, links rewritten, code links as code, the
+  table of contents, a script, an event handler and a `javascript:` link removed; and the real `docs/manual/`: its README first, its top-level files, then its
+  procedures under "Procedures", each one rendering;
+- a run's log (`RunLogTests`): what a job logs, prints and reports as an error, masked (a key parameter, a bearer
+  token, a URL's password), nothing below INFO, `httpx`'s noise dropped, the cap (head, the left-out line, tail), a
+  failure's traceback, other threads ignored, old logs pruned;
 - reading every page writes nothing;
 - each page's query count is the same after the tables grow tenfold.
 
@@ -191,25 +251,32 @@ and `bar` (a daily count), and `act`, a one-button POST form for an action (only
 - the first step writes nothing; a missing reason is a 400; the same token twice acts once; a token made for
   another action or user is refused, a tampered one is a 400; the eleventh action in ten minutes is a 429; the
   audit row holds who, why, the check and the key;
-- each action's effect: pause and resume (and `run_due` skipping a paused job), releasing and extending a lease and
-  refusing one that changed hands, requeue and cancel (a live lease refused; a filtered batch showing its count and
-  stopping at the cap, highest priority first), advancing the wave, a job run in the worker (through `pick_up()` and
-  through the worker loop) with the Revision it wrote, a retry, a failing job, a withdrawn and an interrupted
-  action, `link_health` and `second_source` refused within their cooldown, and check → publish → refusing a second
-  publish from the same check, content changed since the check, and a rollback (the build gate stubbed: no Node).
+- each action's effect: pause and resume (and `run_due` skipping a paused job, the job's page and the `paused` tag
+  showing it), releasing and extending a lease and refusing one that changed hands, requeue and cancel (a live
+  lease refused; a filtered batch showing its count and stopping at the cap, highest priority first), advancing the
+  wave, a job run in the worker (through `pick_up()` and through the worker loop) with the Revision it wrote, a
+  retry, a failing job, a withdrawn and an interrupted action, `link_health` and `second_source` refused within
+  their cooldown, and check → publish → refusing a second publish from the same check, content changed since the
+  check, and a rollback (the build gate stubbed: no Node).
 
 `seed()` also fills a local database for a look at the pages: `uv run python manage.py shell -c "from
-tests.test_opsconsole import seed; seed(skip_gates=())"` (with `skip_gates=()` it runs every publish gate, so it
-needs Node). It edits one archive event as an agent and as `human:owner`, so use it on a development database only.
+tests.test_opsconsole import seed; seed(skip_gates=(), releases=2)"` (with `skip_gates=()` it runs every publish
+gate, so it needs Node). It edits one archive event as an agent and as `human:owner` and pauses `year_pages`, so use
+it on a development database only.
 
 ## Changing it
 
 | Change | What it needs |
 |---|---|
-| A new figure or page | A function in `opsconsole/queries.py` that aggregates in SQL, its template, a line in `test_opsconsole.py`'s page tests, and the query-count test still equal; this chapter |
+| A new figure | A function in `opsconsole/queries.py` that aggregates in SQL, its place on a page (a card, not a table, unless it is a list), a line in `test_opsconsole.py`'s page tests, and the query-count test still equal; this chapter |
+| A new page | Think twice: the sidebar is six items on purpose. A detail page linked from one of them, its test, the query-count test |
+| A new problem on the Dashboard | `views.problems()`: one sentence, a level (`bad` or `warn`) and where to look; a test |
 | A table the console reads changes shape | Its query here and the test; the chapter that owns the table |
-| An index for a slow page | A migration in the app that owns the table (the console has no models), and a note in [ADR 0028](../adr/0028-operations-console.md) |
+| An index for a slow page | A migration in the app that owns the table, and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md) |
+| A new job tag | `ingest/jobs.py` `TAGS` and the job's `@job(tags=…)`; [ingestion](ingestion.md#the-job-runner) and this chapter |
+| A new docs folder | `opsconsole/docs.py` `SECTIONS`; the link rewriting follows |
+| The Mermaid version | `docs.MERMAID_URL` (a pinned version, at least two weeks old); look at a page with a diagram in both themes |
 | Restricting it to the data host | Set `OPS_HOSTS` on the app (a config var; no deploy) |
-| A new action | An `OpsAction.Kind` (and a migration for the choices), `prepare` and `execute` in `opsconsole/actions.py` and an `Action` in `ACTIONS` (`runs_in` worker for anything that could outlast gunicorn's 30 seconds), a button through `{% act %}`, tests of its effect and refusals, this chapter, and a note in [ADR 0028](../adr/0028-operations-console.md) |
+| A new action | An `OpsAction.Kind` (and a migration for the choices), `prepare` and `execute` in `opsconsole/actions.py` and an `Action` in `ACTIONS` (`runs_in` worker for anything that could outlast gunicorn's 30 seconds), a button through `{% act %}`, tests of its effect and refusals, this chapter, and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md) |
 | Who may act | Grant or revoke `ops_operator` in the admin; no deploy |
 | The limits | `RATE_LIMIT`, `RATE_WINDOW_MINUTES`, `FEED_COOLDOWN_MINUTES`, `CHECK_FRESH_MINUTES` in `opsconsole/actions.py`, `MAX_BATCH` in `work/queue.py`; a job's idempotency is `not_idempotent` on its `@job` in `ingest/job_defs.py` |

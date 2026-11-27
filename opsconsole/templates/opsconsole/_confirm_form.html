@@ -7,7 +7,7 @@
     (a page-only change already makes one; this is for a change the page hash cannot see).</label>{% endif %}
   <label for="reason">Reason <span class="muted small">(required; recorded with the action{% if kind == 'publish' or kind == 'rollback' %} and the release pointer's actor{% endif %})</span></label>
   <textarea id="reason" name="reason" rows="2" required maxlength="2000">{{ reason }}</textarea>
-  <div class="go"><button type="submit" class="primary">{{ plan.summary }}</button>
-    <a href="{% url 'opsconsole:overview' %}">Cancel</a>
+  <div class="go"><button type="submit" class="btn primary">{{ plan.summary }}</button>
+    <a class="btn quiet" href="{% url 'opsconsole:dashboard' %}">Cancel</a>
     <span class="muted small">{% if runs_in == 'worker' %}queued for the worker; the next page follows it{% else %}done now, in one transaction{% endif %} · as {{ plan.by }}</span></div>
 </form>

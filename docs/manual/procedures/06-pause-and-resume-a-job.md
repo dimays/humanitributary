@@ -12,12 +12,12 @@ row "paused_jobs", with who paused each job, when and why.
 
 ## Pause a job
 
-1. Open the overview page of the console, `https://data.humanitributary.com/ops/`.
+1. Open the Jobs page of the console, `https://data.humanitributary.com/ops/jobs/`.
    Make sure that you can see the row of the job.
-2. Start the pause action on the row of the job, and type a reason.
+2. Start the Pause action on the row of the job, and type a reason.
    Make sure that the reason tells why the job must stop.
-3. Examine the table of paused jobs on the overview page.
-   Make sure that the table shows the job, your name and your reason.
+3. Open the page of the job.
+   Make sure that the page shows the job as paused, with your name and your reason.
 4. Show the job registry from the command line:
 
    ```bash
@@ -28,10 +28,10 @@ row "paused_jobs", with who paused each job, when and why.
 
 ## Resume a job
 
-1. Open the overview page of the console.
-   Make sure that the job is in the table of paused jobs.
-2. Start the resume action on the job, and type a reason.
-   Make sure that the job is not in the table of paused jobs.
+1. Open the Jobs page of the console, and filter by the tag `paused`.
+   Make sure that the job is in the list.
+2. Start the Resume action on the job, and type a reason.
+   Make sure that the job does not have the tag `paused`.
 3. Wait for the next due time of the job.
    Make sure that its next run has the status `ok` or `partial`.
 

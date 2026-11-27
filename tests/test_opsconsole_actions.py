@@ -86,7 +86,7 @@ class ActionsBase(FreshStorage, TestCase):
 class GatingTests(ActionsBase):
     def test_staff_without_the_permission_see_no_buttons_and_get_403(self):
         self.client.force_login(self.staff)
-        for name in ("overview", "tasks", "releases", "programs", "runs"):
+        for name in ("dashboard", "jobs", "runs", "work", "releases"):
             r = self.client.get(reverse(f"opsconsole:{name}"))
             self.assertEqual(r.status_code, 200)
             self.assertNotIn(b"/ops/act/", r.content, name)
@@ -98,7 +98,7 @@ class GatingTests(ActionsBase):
         self.assertEqual(self.client.get(reverse("opsconsole:actions")).status_code, 200, "the audit is readable by staff")
 
     def test_operators_see_the_buttons(self):
-        r = self.client.get(reverse("opsconsole:overview"))
+        r = self.client.get(reverse("opsconsole:jobs"))
         self.assertIn(b"/ops/act/run_job/", r.content)
         self.assertIn(b"/ops/act/pause_job/", r.content)
         self.assertIn(b"Operator (op)", r.content)
@@ -121,7 +121,7 @@ class GatingTests(ActionsBase):
         c = Client(enforce_csrf_checks=True)
         c.force_login(self.op)
         self.assertEqual(c.post(reverse("opsconsole:act", args=["pause_job"]), {"job": "process"}).status_code, 403)
-        page = c.get(reverse("opsconsole:overview"))
+        page = c.get(reverse("opsconsole:jobs"))
         csrf = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page.content.decode()).group(1)
         r = c.post(reverse("opsconsole:act", args=["pause_job"]), {"job": "process", "csrfmiddlewaretoken": csrf})
         self.assertEqual(r.status_code, 200)
@@ -191,9 +191,11 @@ class QuickActionTests(ActionsBase):
         self.assertFalse(jobs.is_due(jobs.REGISTRY["test_write"], timezone.now()))
         self.assertEqual(jobs.run_due(only=["test_write"], log=self.logs.append), [])
         self.assertFalse(FetchRun.objects.filter(job="test_write").exists())
-        r = self.client.get(reverse("opsconsole:overview"))
-        self.assertContains(r, "Paused jobs")
+        r = self.client.get(reverse("opsconsole:job", args=["test_write"]))
+        self.assertContains(r, "Paused by human:op")
         self.assertContains(r, "feed is broken")
+        self.assertContains(r, "/ops/act/resume_job/")
+        self.assertContains(self.client.get(reverse("opsconsole:jobs"), {"tag": "paused"}), "test_write")
         self.assertEqual(self.act("run_job", job="test_write").status_code, 409, "a paused job is not run from here")
         self.do("resume_job", job="test_write")
         self.assertEqual(jobs.paused_jobs(), {})

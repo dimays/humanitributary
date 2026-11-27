@@ -42,8 +42,8 @@ when you make it.
    ```
 
    Make sure that the answer names `agent:writer-2` and the correct scopes.
-7. Find the tasks that the old token holds on the console work queue page. Filter by the old agent name.
-   Make sure that the old token holds no `claimed` task.
+7. Find the tasks that the old token holds on the Work page of the console. Open the In progress tab of each kind.
+   Make sure that the old agent holds no task.
 8. If the old token holds a task, release it with procedure [07](07-release-a-stuck-task.md).
    Make sure that the task is `queued`.
 9. Revoke the old token:

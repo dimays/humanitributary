@@ -44,8 +44,23 @@ through the service layer.
 | `manage.py run_jobs --loop [--tick N]` | The worker process (Procfile `worker`): runs what is due every `WORKER_TICK_SECONDS` (60), or every `--tick` seconds, until stopped. `make worker` runs it alone; `make up` runs it beside `web`. |
 | `manage.py run_job <name> [--feed F] [--opt k=v …]` | Runs one job now, due or not, paused or not (naming it is the owner's explicit choice). A feed job runs for every enabled feed, or for the one named by `--feed` (an id or exact name, even a disabled one; the Fetcher still applies the source policy). `--opt` values are parsed as JSON when they can be. |
 
-A **job** is a function `fn(ctx)` registered with `@job(name, interval=…, feed=…, not_idempotent=…)`. Importing
-`ingest/job_defs.py` registers them all, and the order of that file is the order `run_due` runs them.
+A **job** is a function `fn(ctx)` registered with `@job(name, interval=…, feed=…, not_idempotent=…, tags=…)`.
+Importing `ingest/job_defs.py` registers them all, and the order of that file is the order `run_due` runs them.
+Its docstring's first sentence is its description (`Job.doc`, `ingest.jobs.first_sentence`): `run_jobs --list` and
+the operations console show it, so it is one plain sentence saying what the job does ("Re-checks cited URLs, …").
+`tags` names one or more of the fixed set in `ingest/jobs.py` `TAGS`, which the console filters by
+([ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md)); an unknown tag fails at import:
+
+| Tag | Jobs |
+|---|---|
+| `collect` | fetch from an outside source, once per enabled feed: `portal`, `year_pages`, `rss`, `who_don`, `federal_register`, `gazette`, `nobel`, `historian_sync` |
+| `process` | turn collected material into candidates, priorities and tasks: `pageviews`, `process`, `enrich_tasks` |
+| `fact-check` | check citations and claims: `link_health`, `facts_sweep`, `second_source` |
+| `governance` | branch structure: `entity_relations` (what the NEW-BRANCH rule reads), `branches_review` |
+| `waves` | content waves: `gap_waves`, `gap_pointers` |
+| `maintenance` | set-up and upkeep: `seed_sources`, `seed_branch_entities`, `refresh_entities` |
+
+
 `not_idempotent`, when set, says why a second run straight after the first is not "again" (`link_health`: each run is
 a round toward a dead link; `second_source`: each run walks the next batch from its bookmark). The jobs themselves
 ignore it; the [operations console](operations-console.md) refuses to run such a job from its pages within its
@@ -102,6 +117,22 @@ Each error is cut to 2,000 characters and the whole error field to 20,000. Error
 through `ingest.policy.mask_secrets`, so API keys never reach the database or the log
 ([keys](sources-and-terms.md#keeping-keys-out-of-logs-errors-and-fixtures)). A job that writes canonical rows
 runs as `ctx.actor`, which is `job:<name>`.
+
+**Every run keeps its log** ([ingest/runlog.py](../../ingest/runlog.py), [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md)).
+`run_one` wraps the job in `runlog.capture(run)`: for the run's duration a `logging.Handler` on the root logger keeps
+every record at INFO and above from the running thread (the root's level is lowered to INFO for that time only, and
+other threads' records are ignored), and the runner adds its own lines: "<job> started", whatever the job prints
+through `ctx.log`, each `ctx.error` (as ERROR), the traceback of a failure, and "<job> finished: <status> in N s;
+counts {…}" (WARNING when partial, ERROR when failed). The fetcher logs one line per request without its query
+string ("GET https://host/path?… → 200 (120 ms, 5120 bytes)"), retries and refusals as warnings. Each line is
+`[time (UTC, ms), level, logger, message]`, and goes through `runlog.mask`: `mask_secrets`, then bearer tokens,
+`password=`/`secret=`-style values and a URL's `user:password@`. `httpx` and `httpcore` records below WARNING are
+dropped (they print full URLs). A message is cut at 4,000 characters; a run keeps at most `MAX_LINES` (2,000) lines
+and `MAX_BYTES` (200 KB): the first lines up to the cap less a tail reserve, then the last 200, with a line saying
+how many were left out between them, so a long run's start and end both survive. The log is a **RunLog** row (one
+per FetchRun, its own table so run lists never read it), written when the run is recorded and every 10 seconds
+while it runs when the job is outside a transaction; a failure to write it never fails the run. `run_due` deletes
+logs older than `KEEP_DAYS` (30) once a pass. The console's run page shows it.
 
 ### Every job, in run order
 
@@ -180,7 +211,9 @@ requests it allows:
 - **Bot walls.** A response that looks like a CAPTCHA or challenge page is marked `blocked`, and its host (and the
   final host after redirects) is refused for the rest of the run.
 
-The Fetcher counts its requests (`fetcher.requests`), which the runner adds to the run's counts.
+The Fetcher counts its requests (`fetcher.requests`), which the runner adds to the run's counts, and logs each
+(logger `ingest.http`, INFO; 4xx and 5xx, retries and refusals as WARNING or ERROR), with the query string shown as
+`?…`, so the run's log says what was fetched without a key.
 
 ## Storing what was fetched
 
@@ -607,7 +640,9 @@ Hand-made responses (`cassette.response`) cover what live services won't reliabl
 | A threshold or weight (64, the daily cap, 0.5, 2.0, the priority and routing weights, the signal counts) | Change the constant in `ingest/process.py`, `ingest/routing.py` or the setting, say why in the commit, and update this chapter and [ADR 0022](../adr/0022-ingestion-tuning.md) (the threshold is re-derived by its method). `test_priority_formula` restates the formula and `FirstRunTests` replays the first run's misroutes, so run them. |
 | A wrong mapping | A guard in `seed_branch_entities` if the mistake has a pattern, else a line in `routing.CORRECTIONS`; then `run_job seed_branch_entities --opt branches=<slug>`. |
 | What can be a branch, or how a parent is chosen | `ingest/branchable.py`; `FirstRunTests.test_new_branch_proposals` pins the first run's 17 signals. A change in what NEW-BRANCH proposes bumps `governance/thresholds.py` `RULES_VERSION`. |
-| A new job | A function in `ingest/job_defs.py` with `@job(name, interval=…)`, placed where it should run in the order. A feed job also needs a `Feed` row with `config.job` (add it to `ingest/seed.py` `FEEDS`). Add it to the table above and to ADR 0012. |
+| A new job | A function in `ingest/job_defs.py` with `@job(name, interval=…, tags=…)` and a docstring whose first sentence says what it does, placed where it should run in the order. A feed job also needs a `Feed` row with `config.job` (add it to `ingest/seed.py` `FEEDS`). Add it to the tables above and to ADR 0012. |
+| A new tag | `ingest/jobs.py` `TAGS` (with what it means), the tag table above, [the console's chapter](operations-console.md) and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md). |
+| What a run's log keeps | `ingest/runlog.py`: `LEVEL`, `MAX_LINES`, `MAX_BYTES`, `TAIL_LINES`, `KEEP_DAYS`, the masks; `tests/test_opsconsole.py` `RunLogTests`. |
 | A new source | Read its terms first ([adding a source](sources-and-terms.md#adding-a-source)), then a reader in `sources_news.py` or `sources_wiki.py` using `NewsWriter` or `upsert_candidate`, and a recorded cassette and test. |
 | A new Wikidata property or kind class | `ingest/wikidata.py` `PROPS` or `KIND_CLASSES`; `refresh_entities` re-derives kinds on its next run. |
 | A new field on an ingest model | A migration (these tables aren't canonical, so no `audit_table()`), and `docs/data-model.md`. |

@@ -1,7 +1,7 @@
 {% extends "opsconsole/base.html" %}
-{% block title %}Refused: {{ label }}{% endblock %}
+{% block title %}Not done: {{ label }}{% endblock %}
 {% block content %}
-<h1>Not done: {{ label }}</h1>
+<div class="head"><div><h1>Not done: {{ label }}</h1></div></div>
 <div class="banner bad">{{ message }}</div>
-<p class="note">Nothing was changed. <a href="{% url 'opsconsole:overview' %}">Overview</a> · <a href="{% url 'opsconsole:actions' %}">all actions</a></p>
+<p class="muted">Nothing was changed. <a href="javascript:history.back()">Go back</a> · <a href="{% url 'opsconsole:dashboard' %}">Dashboard</a> · <a href="{% url 'opsconsole:actions' %}">Action log</a></p>
 {% endblock %}

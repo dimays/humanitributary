@@ -17,11 +17,18 @@
   until it is resumed. `run_named` (`manage.py run_job`) still runs it: naming a job is the owner's explicit choice.
 - `Job.not_idempotent` says why a job is not safe to run twice back to back (ADR 0028): the console refuses to run
   such a job again within its interval.
+- `Job.tags` sorts jobs for the console (ADR 0031): a fixed set, `TAGS`, each job naming one or more; an unknown tag
+  fails at import. `Job.doc` is the first sentence of the job's docstring, the console's one-line description.
+- Every run's log (INFO and above, secrets masked, capped) is captured while it runs and kept as a `RunLog`
+  (ingest/runlog.py): the job's `logging` calls, the fetcher's requests, `ctx.log` and `ctx.error` lines, the
+  traceback of a failure, the start and the finish.
 
 No LLM calls anywhere in jobs (AGENTS.md rule 3).
 """
 
 import json
+import logging
+import re
 import traceback
 from collections import Counter
 from dataclasses import dataclass, field
@@ -31,12 +38,27 @@ from typing import Callable
 from django.db import connection
 from django.utils import timezone
 
+from . import runlog
 from .http import Fetcher
 from .policy import mask_secrets
 from .models import Feed, FetchRun, JobState
 
+logger = logging.getLogger(__name__)
+
 LOCK_KEY = 7_302_118_015  # pg advisory lock id for the job runner (any constant; only this module uses it)
 SCHEDULER_LOCK_KEY = 7_302_118_016  # held by the one `run_jobs --loop` worker for its lifetime
+
+
+# The jobs' tags (ADR 0031): what kind of work a job does, for the console's filters. Fixed and documented here and
+# in docs/guide/operations-console.md; the console adds "paused" to a paused job. A new tag is a change to this list.
+TAGS = {
+    "collect": "fetches material from an outside source (a feed job runs once per enabled feed)",
+    "process": "turns collected material into candidates, priorities and agent tasks",
+    "fact-check": "checks citations and claims, and queues verify_claim tasks",
+    "governance": "branch structure: the metrics, the rules and their proposals",
+    "waves": "content waves: gaps in each branch's windows and fill_gap tasks",
+    "maintenance": "set-up and upkeep: seeding sources and branches, refreshing cached facts",
+}
 
 
 @dataclass
@@ -47,6 +69,7 @@ class Job:
     feed: bool = False
     doc: str = ""
     not_idempotent: str = ""  # why a second run straight after the first is not "again" (empty: it is)
+    tags: tuple[str, ...] = ()
 
 
 REGISTRY: dict[str, Job] = {}
@@ -54,9 +77,21 @@ BETWEEN_JOBS: list[Callable] = []  # hooks `loop()` calls between jobs, each `fn
 PAUSED = "paused_jobs"  # the JobState naming paused jobs: {"jobs": {name: {"by", "at", "reason"}}}
 
 
-def job(name: str, *, interval: int, feed: bool = False, not_idempotent: str = ""):
+def first_sentence(doc: str) -> str:
+    """A docstring's first sentence, on one line: the job's description."""
+    text = " ".join((doc or "").split())
+    m = re.match(r"(.+?[.!?])(?=\s+[A-Z(`\"]|$)", text)
+    return m.group(1) if m else text
+
+
+def job(name: str, *, interval: int, feed: bool = False, not_idempotent: str = "", tags: tuple[str, ...] | str = ()):
+    tags = (tags,) if isinstance(tags, str) else tuple(tags)
+    unknown = [t for t in tags if t not in TAGS]
+    if unknown:
+        raise ValueError(f"job {name}: unknown tag(s) {', '.join(unknown)}; known: {', '.join(TAGS)}")
+
     def wrap(fn):
-        REGISTRY[name] = Job(name, fn, interval, feed, (fn.__doc__ or "").strip().split("\n")[0], not_idempotent)
+        REGISTRY[name] = Job(name, fn, interval, feed, first_sentence(fn.__doc__ or ""), not_idempotent, tags)
         return fn
     return wrap
 
@@ -71,6 +106,7 @@ class Context:
     counts: Counter = field(default_factory=Counter)
     errors: list = field(default_factory=list)
     log: Callable = print
+    capture: "runlog.Capture | None" = None  # the run's log (run_one sets it)
 
     @property
     def actor(self) -> str:
@@ -86,6 +122,8 @@ class Context:
     def error(self, msg: str):
         self.errors.append(mask_secrets(msg)[:2000])
         self.counts["errors"] += 1
+        if self.capture is not None:
+            self.capture.add("ERROR", msg, logger=f"job.{self.job}")
 
 
 def try_lock(key: int = LOCK_KEY) -> bool:
@@ -146,23 +184,36 @@ def is_due(j: Job, now, feed: Feed | None = None, *, paused: dict | None = None)
 def run_one(j: Job, *, feed: Feed | None = None, options: dict | None = None, fetcher: Fetcher | None = None, log=print) -> FetchRun:
     now = timezone.now()
     run = FetchRun.objects.create(job=j.name, feed=feed, started_at=now)
-    own_fetcher = fetcher is None
-    fetcher = fetcher or Fetcher()
-    ctx = Context(job=j.name, run=run, fetcher=fetcher, feed=feed, options=options or {}, log=log)
-    try:
-        j.fn(ctx)
-        run.status = FetchRun.Status.PARTIAL if ctx.errors else FetchRun.Status.OK
-    except Exception as e:  # a failing job is recorded and never stops the next one
-        ctx.error(f"{type(e).__name__}: {e}\n{traceback.format_exc()[-3000:]}")
-        run.status = FetchRun.Status.FAILED
-    finally:
-        if own_fetcher:
-            ctx.counts["requests"] += fetcher.requests
-            fetcher.close()
+    label = j.name + (f" [{feed.name}]" if feed else "")
+    with runlog.capture(run) as cap:
+        cap.add("INFO", f"{label} started" + (f" with {json.dumps(options, sort_keys=True, default=str)}" if options else ""), logger="ingest.jobs")
+
+        def ctx_log(msg):  # what the job prints: into its log, and to the runner's output as before
+            cap.add("INFO", msg, logger=f"job.{j.name}")
+            log(msg)
+
+        own_fetcher = fetcher is None
+        fetcher = fetcher or Fetcher()
+        ctx = Context(job=j.name, run=run, fetcher=fetcher, feed=feed, options=options or {}, log=ctx_log, capture=cap)
+        try:
+            j.fn(ctx)
+            run.status = FetchRun.Status.PARTIAL if ctx.errors else FetchRun.Status.OK
+        except Exception as e:  # a failing job is recorded and never stops the next one
+            ctx.error(f"{type(e).__name__}: {e}\n{traceback.format_exc()[-3000:]}")
+            run.status = FetchRun.Status.FAILED
+        finally:
+            if own_fetcher:
+                ctx.counts["requests"] += fetcher.requests
+                fetcher.close()
     run.finished_at = timezone.now()
     run.counts = dict(sorted(ctx.counts.items()))
     run.error = mask_secrets("\n".join(ctx.errors))[:20000]
     run.save()
+    took = (run.finished_at - now).total_seconds()
+    cap.add("ERROR" if run.status == FetchRun.Status.FAILED else "WARNING" if run.status == FetchRun.Status.PARTIAL else "INFO",
+            f"{label} finished: {run.status} in {took:.1f} s" + (f"; {len(ctx.errors)} error(s)" if ctx.errors else "")
+            + (f"; counts {json.dumps(run.counts)}" if run.counts else ""), logger="ingest.jobs")
+    cap.save()
     if feed is not None:
         feed.last_run_at = now
         feed.next_run_at = now + timedelta(minutes=feed.interval_minutes or j.interval)
@@ -171,7 +222,7 @@ def run_one(j: Job, *, feed: Feed | None = None, options: dict | None = None, fe
         from infra.alerts import after_failure
 
         after_failure(run, log=log)
-    log(mask_secrets(f"{j.name}{' [' + feed.name + ']' if feed else ''}: {run.status} {json.dumps(run.counts)} ({(run.finished_at - now).total_seconds():.1f}s)"))
+    log(mask_secrets(f"{label}: {run.status} {json.dumps(run.counts)} ({took:.1f}s)"))
     return run
 
 
@@ -197,6 +248,10 @@ def run_due(*, only: list[str] | None = None, log=print, fetcher_factory=Fetcher
 
     try:
         close_interrupted()
+        try:
+            runlog.prune()
+        except Exception as e:  # noqa: BLE001 — old logs can wait for the next pass
+            logger.warning("pruning run logs failed: %s", type(e).__name__)
         paused = paused_jobs()
         for j in REGISTRY.values():
             if only and j.name not in only:

@@ -47,8 +47,8 @@ The defaults are in `config/settings.py`. A daily cap counts the tasks that the 
    ```
 
    Make sure that the `web` dyno and the `worker` dyno are `up`.
-5. Open the overview page of the console, `https://data.humanitributary.com/ops/`.
-   If you changed a cap, make sure that the intake table shows the new cap.
+5. Open the Work page of the console, `https://data.humanitributary.com/ops/work/`.
+   If you changed a cap, make sure that the card of the task kind shows the new cap.
 6. Commit the ADR with procedure [11](11-deploy-a-code-change.md).
    Make sure that CI passes.
 

@@ -1,5 +1,5 @@
-"""Small formatting helpers for the operations console's templates: durations, ages, inline SVG sparklines and
-readable before/after diffs. No libraries: the SVG is a few rectangles."""
+"""Small formatting helpers for the operations console's templates: state badges, durations, ages, schedules, the
+ten-run history strip and readable before/after diffs. No libraries: the strip is a few links."""
 
 import difflib
 import json
@@ -13,13 +13,69 @@ from django.utils.safestring import mark_safe
 
 register = template.Library()
 
-STATUS_CLASS = {"ok": "ok", "partial": "warn", "failed": "bad", "running": "info", "queued": "info", "claimed": "info",
-                "done": "ok", "cancelled": "muted"}
+STATUS_CLASS = {"ok": "ok", "partial": "warn", "failed": "bad", "running": "info", "queued": "muted", "claimed": "info",
+                "done": "ok", "cancelled": "muted", "pending": "muted", "stale": "warn"}
+STATE_LABEL = {"scheduled": "Scheduled", "pending": "Pending", "running": "Running", "completed": "Completed", "failed": "Failed",
+               "cancelled": "Cancelled", "paused": "Paused", "stuck": "Stuck", "waiting": "Waiting", "in_progress": "In progress",
+               "done": "Done"}
+# A task's or an action's status in the console's state words.
+TASK_STATE = {"queued": "waiting", "claimed": "in_progress", "done": "completed", "failed": "failed", "cancelled": "cancelled"}
+ACTION_STATE = {"pending": "pending", "running": "running", "done": "completed", "failed": "failed", "cancelled": "cancelled"}
 
 
 @register.filter
 def status_class(status) -> str:
     return STATUS_CLASS.get(status or "", "muted")
+
+
+@register.simple_tag
+def badge(state, label=None, title=""):
+    """A state badge: a colored dot and the state's word (Completed, Failed, Running, Scheduled, Paused …)."""
+    state = state or "scheduled"
+    return format_html('<span class="badge s-{}"{}><i></i>{}</span>', state,
+                       format_html(' title="{}"', title) if title else "", label or STATE_LABEL.get(state, str(state).capitalize()))
+
+
+@register.filter
+def task_state(task) -> str:
+    """A task's state: stuck when its lease ran out."""
+    if task.status == "claimed" and task.lease_until and task.lease_until < timezone.now():
+        return "stuck"
+    return TASK_STATE.get(task.status, task.status)
+
+
+@register.filter
+def action_state(status) -> str:
+    return ACTION_STATE.get(status, status)
+
+
+@register.filter
+def level_class(level) -> str:
+    return {"DEBUG": "debug", "INFO": "info", "WARNING": "warn", "ERROR": "error", "CRITICAL": "error"}.get(str(level).upper(), "info")
+
+
+@register.filter
+def logtime(iso) -> str:
+    """A log line's ISO time as HH:MM:SS.mmm (UTC)."""
+    s = str(iso or "")
+    return s[11:23] if len(s) >= 23 else s
+
+
+@register.simple_tag
+def history_strip(runs, n=10):
+    """The job's last runs as small squares, oldest first, each its state's color and a link to the run; empty slots
+    when it has run fewer than `n` times."""
+    from django.urls import reverse
+
+    cells = []
+    for r in runs[-n:]:
+        tip = f"{timezone.localtime(r['started']):%b %d %H:%M} · {STATE_LABEL.get(r['state'], r['state'])}" + \
+            (f" · {seconds(r['seconds'])}" if r.get("seconds") is not None else "") + (f" · {r['feed']}" if r.get("feed") else "") + \
+            (" · with errors" if r.get("status") == "partial" else "")
+        cells.append(format_html('<a class="cell s-{}{}" href="{}" title="{}" aria-label="{}"></a>', r["state"],
+                                 " partial" if r.get("status") == "partial" else "", reverse("opsconsole:run", args=[r["id"]]), tip, tip))
+    cells = ['<span class="cell empty"></span>'] * (n - len(cells)) + cells
+    return mark_safe('<span class="strip">' + "".join(str(c) for c in cells) + "</span>")
 
 
 @register.filter
@@ -37,7 +93,7 @@ def seconds(s) -> str:
 
 @register.filter
 def span(td) -> str:
-    """A timedelta (or seconds) as a short age: "45 s", "12 m", "3 h", "2 d"."""
+    """A timedelta (or seconds) as a short age: "45 s", "12 min", "3 h", "2 d"."""
     if td is None or td == "":
         return "–"
     s = td.total_seconds() if isinstance(td, timedelta) else float(td)
@@ -45,12 +101,20 @@ def span(td) -> str:
     if s < 90:
         out = f"{int(s)} s"
     elif s < 5400:
-        out = f"{int(s // 60)} m"
+        out = f"{int(s // 60)} min"
     elif s < 172800:
         out = f"{s / 3600:.0f} h"
     else:
         out = f"{s / 86400:.0f} d"
     return f"in {out}" if neg else out
+
+
+@register.filter
+def every(m) -> str:
+    """An interval in minutes in words: "every 15 minutes", "every hour", "every day"."""
+    from opsconsole.queries import every as words
+
+    return words(m)
 
 
 @register.filter
@@ -68,11 +132,25 @@ def minutes(m) -> str:
 
 @register.filter
 def ago(dt) -> str:
-    """A datetime as "12 m ago" / "in 3 h"."""
+    """A datetime as "12 min ago" / "in 3 h"."""
     if not dt:
         return "–"
     d = timezone.now() - dt
     return span(d) if d.total_seconds() < 0 else f"{span(d)} ago"
+
+
+@register.filter
+def words(key) -> str:
+    """A key as words: "single_source_events" → "single source events"."""
+    return str(key).replace("_", " ")
+
+
+@register.filter
+def masked(text) -> str:
+    """Secrets out of text shown on a page (configured keys, key-like parameters, tokens, passwords)."""
+    from ingest.runlog import mask
+
+    return mask(text or "")
 
 
 @register.filter
@@ -88,34 +166,6 @@ def pretty(value) -> str:
 @register.filter
 def get(d, key):
     return (d or {}).get(key)
-
-
-@register.simple_tag
-def sparkline(runs, width=240, height=28):
-    """Inline SVG: one bar per run, its height the run's duration against the longest shown, colored by status (a
-    failed run is a full-height bar, so failures stand out however short they were)."""
-    if not runs:
-        return mark_safe('<span class="muted">no runs</span>')
-    n = len(runs)
-    peak = max(r["seconds"] for r in runs) or 1.0
-    bw = width / max(n, 1)
-    bars = []
-    for i, r in enumerate(runs):
-        h = height if r["status"] == "failed" else max(2.0, height * r["seconds"] / peak)
-        bars.append(format_html('<rect x="{}" y="{}" width="{}" height="{}" class="b-{}"><title>{} {} {}</title></rect>',
-                                f"{i * bw:.1f}", f"{height - h:.1f}", f"{max(bw - 1, 1):.1f}", f"{h:.1f}", status_class(r["status"]),
-                                timezone.localtime(r["started"]).strftime("%b %d %H:%M"), r["status"], seconds(r["seconds"])))
-    failed = sum(r["status"] == "failed" for r in runs)
-    label = f"{n} runs, {failed} failed, longest {seconds(peak)}"
-    return format_html('<svg class="spark" viewBox="0 0 {} {}" width="{}" height="{}" role="img" aria-label="{}">{}</svg>',
-                       width, height, width, height, label, mark_safe("".join(bars)))
-
-
-@register.simple_tag
-def bar(n, peak, width=120):
-    """A plain horizontal bar for a daily count."""
-    w = 0 if not peak else max(1.0, width * n / peak) if n else 0
-    return format_html('<svg class="hbar" width="{}" height="10" aria-hidden="true"><rect width="{}" height="10"></rect></svg>', width, f"{w:.1f}")
 
 
 def _short(v) -> str:
@@ -176,7 +226,7 @@ def act(context, kind, label, css="", **fields):
     hidden = "".join(format_html('<input type="hidden" name="{}" value="{}">', k, v) for k, v in fields.items() if v not in (None, ""))
     return format_html(
         '<form class="act" method="post" action="{}"><input type="hidden" name="csrfmiddlewaretoken" value="{}">'
-        '<input type="hidden" name="key" value="{}">{}<button type="submit" class="act {}">{}</button></form>',
+        '<input type="hidden" name="key" value="{}">{}<button type="submit" class="btn {}">{}</button></form>',
         reverse("opsconsole:act", args=[kind]), get_token(request), uuid.uuid4().hex, mark_safe(hidden), css, label)
 
 
