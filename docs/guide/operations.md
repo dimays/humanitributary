@@ -274,10 +274,14 @@ pg:backups:restore <id> DATABASE_URL`, which replaces the database, schema and d
 
 ## Is it healthy?
 
-Read these, in this order.
+Read these, in this order. Most of it is also on one screen each in the [operations console](operations-console.md)
+(`/ops/` on the data host, for staff; the admin's header links to it): job runs and failures, the queue, intake
+against the daily caps, Revisions, releases and the content programs. It is read-only; the commands below are still
+how you act.
 
 | Where | What it tells you |
 |---|---|
+| `/ops/` (the operations console) | Health, one row per job (last run, failures in a row, next due), queue depth per kind, today's intake, alerts; more pages for runs, tasks, changes, releases and the content programs. Staff only. |
 | `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs; on staging, the app's URL + `/healthz`) | JSON from `infra/health.py`: the database, both stores and `storage_backend` (`local` when hosted means the dyno's throwaway disk), the latest release's version, each job's last run, last run that finished ok or partial, last status and consecutive failures, and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
 | `make storage-status` | The storage backend, whether each bucket answers, and the `latest` pointer: its version, why it was written and by whom. |
 | `make digest` (`manage.py digest`) | Open tasks by kind, the top `write_event` stories, `write_event` by branch, `verify_claim` reasons, new-branch signals, the fact base's and branch governance's sections, candidates by status, and every job's runs in the last 24 hours with the last three failed or partial errors. "No runs in the last 24 hours" means the schedule isn't running. `--sources` adds every feed and lookup adapter, on or off, with its publisher's policy, tier and disabled reason, plus the sources considered and skipped. |

@@ -81,6 +81,7 @@ Table and field names are as they appear in the code.
 | **NEVER_FETCH** | The hosts in `ingest/policy.py` that no job ever requests, whatever their Publisher row says. | [Sources and terms](sources-and-terms.md) |
 | **New-branch signal** | A candidate of kind new_branch_signal: an entity that keeps appearing in stories with no branch to route to. NEW-BRANCH proposes a branch for it only if it can be one (`ingest/branchable.py`). | [Ingestion](ingestion.md#new-branch-signals) |
 | **Object storage** | Where every file that isn't a row lives: the `raw` store (fetched documents by hash) and the `releases` store, through `infra/storage.py`. MinIO locally, S3 or R2 in production, a directory with `STORAGE_BACKEND=local`. Write-once, except the release pointer. | [Publishing](publishing.md#releases) |
+| **Operations console** | The staff-only, read-only pages under `/ops/` (`opsconsole/`): health, job runs, the queue, Revisions, releases and the content programs on one screen each. | [The operations console](operations-console.md) |
 | **PaleoPin** | Where a present-day coordinate lay at a given age of the Earth, for the page's globe. | [Content model](content-model.md) |
 | **Payload** | A task's JSON with everything the agent needs that isn't in its target. | [Work queue and agents](work-queue-and-agents.md) |
 | **Precision** | How finely a date is known, from billion_years to day, derived from its text. | [Content model](content-model.md) |

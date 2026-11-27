@@ -1,0 +1,40 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Revision {{ r.pk }}{% endblock %}
+{% block content %}
+<h1>Revision #{{ r.pk }} <span class="muted">{{ r.action }} {{ r.table_name }} #{{ r.row_pk }}</span>{% if label %} · {{ label }}{% endif %}</h1>
+<p class="note"><a href="{% url 'opsconsole:changes' %}">← changes</a></p>
+
+<div class="grid">
+  <div class="card"><div class="k">When</div><div class="v">{{ r.at|date:"Y-m-d H:i:s" }}</div><div class="s">{{ r.at|ago }} · transaction {{ r.txid }}</div></div>
+  <div class="card"><div class="k">Who</div><div class="v">{{ r.actor }}</div><div class="s">{{ r.actor_kind }}</div></div>
+  <div class="card"><div class="k">Task</div><div class="v">{% if r.task_id %}<a href="{% url 'opsconsole:task' r.task_id %}">#{{ r.task_id }}</a>{% else %}–{% endif %}</div></div>
+  <div class="card" style="grid-column: span 2"><div class="k">Reason</div><div class="s" style="color: var(--text)">{{ r.reason|default:"–" }}</div></div>
+</div>
+
+<h2>{% if r.action == 'update' %}What changed{% elif r.action == 'insert' %}The new row{% else %}The deleted row{% endif %}</h2>
+<div class="scroll"><table class="diff">
+<tr><th>Column</th>{% if r.action != 'insert' %}<th>Before</th>{% endif %}{% if r.action != 'delete' %}<th>After</th>{% endif %}</tr>
+{% for d in diffs %}
+<tr><td class="mono">{{ d.field }}</td>
+  {% if d.html %}<td colspan="2">{{ d.html }}</td>
+  {% else %}{% if r.action != 'insert' %}<td>{{ d.before }}</td>{% endif %}{% if r.action != 'delete' %}<td>{{ d.after }}</td>{% endif %}{% endif %}
+</tr>
+{% empty %}<tr><td colspan="3" class="muted">No columns recorded.</td></tr>
+{% endfor %}
+</table></div>
+{% if r.action == 'update' %}<p class="note">Long text shows as one column: removed words <del>struck</del>, added words <ins>marked</ins>.</p>{% endif %}
+
+<h2>This row's history <span class="muted small">{% if r.table_name == 'timeline_entry' or r.table_name == 'timeline_branch' or r.table_name == 'timeline_event' %}the entry and its branch or event row share the key{% endif %}</span></h2>
+<table>
+<tr><th>#</th><th>At</th><th>Actor</th><th>Action</th><th>Table</th><th>Changed</th><th>Reason</th></tr>
+{% for h in history %}<tr{% if h.pk == r.pk %} class="warn"{% endif %}><td class="mono"><a href="{% url 'opsconsole:revision' h.pk %}">{{ h.pk }}</a></td><td class="nowrap small">{{ h.at|date:"Y-m-d H:i" }}</td><td class="small">{{ h.actor }}</td><td>{{ h.action }}</td><td class="small">{{ h.table_name }}</td><td class="small">{{ h.changed|join:", "|truncatechars:60 }}</td><td class="small">{{ h.reason|truncatechars:80 }}</td></tr>{% endfor %}
+</table>
+
+{% if same_change_count > 1 %}
+<h2>Changed in the same transaction <span class="muted small">{{ same_change_count }} rows</span></h2>
+<table>
+<tr><th>#</th><th>Action</th><th>Table</th><th>Row</th><th>Changed</th></tr>
+{% for h in same_change %}<tr{% if h.pk == r.pk %} class="warn"{% endif %}><td class="mono"><a href="{% url 'opsconsole:revision' h.pk %}">{{ h.pk }}</a></td><td>{{ h.action }}</td><td class="small">{{ h.table_name }}</td><td class="mono">{{ h.row_pk }}</td><td class="small">{{ h.changed|join:", "|truncatechars:60 }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+{% endblock %}

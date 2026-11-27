@@ -1,0 +1,5 @@
+{% if page.paginator.num_pages > 1 %}<div class="pager">
+{% if page.has_previous %}<a href="?{% if qs %}{{ qs }}&{% endif %}page=1">« first</a><a href="?{% if qs %}{{ qs }}&{% endif %}page={{ page.previous_page_number }}">‹ newer</a>{% endif %}
+page {{ page.number }} of {{ page.paginator.num_pages }}
+{% if page.has_next %}<a href="?{% if qs %}{{ qs }}&{% endif %}page={{ page.next_page_number }}">older ›</a><a href="?{% if qs %}{{ qs }}&{% endif %}page={{ page.paginator.num_pages }}">last »</a>{% endif %}
+</div>{% endif %}

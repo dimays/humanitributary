@@ -1,0 +1,38 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Task {{ t.pk }}{% endblock %}
+{% block content %}
+<h1>Task #{{ t.pk }} <span class="muted">{{ t.kind }}</span> <span class="tag {{ t.status|status_class }}">{{ t.status }}</span></h1>
+<p class="note"><a href="{% url 'opsconsole:tasks' %}?kind={{ t.kind }}">← {{ t.kind }} tasks</a> · <a href="{% url 'admin:work_agenttask_change' t.pk %}">in the admin</a></p>
+
+<div class="grid">
+  <div class="card"><div class="k">Created</div><div class="v">{{ t.created_at|ago }}</div><div class="s">{{ t.created_at|date:"Y-m-d H:i" }} by {{ t.created_by }}</div></div>
+  <div class="card"><div class="k">Priority · attempts</div><div class="v">{{ t.priority }} · {{ t.attempts }}/{{ t.max_attempts }}</div>{% if t.not_before %}<div class="s">not before {{ t.not_before|date:"Y-m-d H:i" }}</div>{% endif %}</div>
+  <div class="card"><div class="k">Lease</div><div class="v">{{ t.claimed_by|default:"–" }}</div>
+    <div class="s">{% if t.claimed_at %}claimed {{ t.claimed_at|ago }}{% endif %}{% if t.lease_until %} · until {{ t.lease_until|date:"Y-m-d H:i" }} ({{ t.lease_until|ago }}){% if t.status == 'claimed' and t.lease_until < now %} <b>expired</b>{% endif %}{% endif %}</div></div>
+  <div class="card"><div class="k">Completed</div><div class="v">{{ t.completed_at|ago }}</div>
+    <div class="s">{% if t.completed_at and t.claimed_at %}{{ t.claimed_at|timesince:t.completed_at }} after the claim{% endif %}</div></div>
+  <div class="card"><div class="k">Target</div><div class="v small">
+    {% if t.target_entry %}entry {{ t.target_entry.slug }}{% endif %}
+    {% if t.target_candidate_id %}candidate #{{ t.target_candidate_id }}{% endif %}
+    {% if t.target_claim_id %}claim #{{ t.target_claim_id }}{% endif %}
+    {% if t.target_proposal_id %}proposal #{{ t.target_proposal_id }}{% endif %}
+    {% if t.target_ref %}<span class="mono">{{ t.target_ref }}</span>{% endif %}</div>
+    <div class="s mono">{{ t.dedupe_key }}</div></div>
+</div>
+
+<h2>Result</h2>
+{% if t.result is not None %}<pre>{{ t.result|pretty }}</pre>{% else %}<p class="muted">No result yet.</p>{% endif %}
+{% if error %}<h3>Error</h3><div class="err">{{ error }}</div>{% endif %}
+
+<h2>Payload</h2>
+<details><summary>Show the payload ({{ t.payload|length }} keys)</summary><pre>{{ t.payload|pretty }}</pre></details>
+
+<h2>Changes it made <span class="muted small">{{ revision_count }} Revision{{ revision_count|pluralize }}</span></h2>
+{% if revisions %}
+<table>
+<tr><th>#</th><th>At</th><th>Actor</th><th>Action</th><th>Table</th><th>Row</th><th>Changed</th></tr>
+{% for r in revisions %}<tr><td class="mono"><a href="{% url 'opsconsole:revision' r.pk %}">{{ r.pk }}</a></td><td class="nowrap">{{ r.at|date:"Y-m-d H:i" }}</td><td>{{ r.actor }}</td><td>{{ r.action }}</td><td>{{ r.table_name }}</td><td class="mono">{{ r.row_pk }}</td><td class="small">{{ r.changed|join:", " }}</td></tr>{% endfor %}
+</table>
+{% if revision_count > 50 %}<p class="note"><a href="{% url 'opsconsole:changes' %}?task={{ t.pk }}">All {{ revision_count }} →</a></p>{% endif %}
+{% else %}<p class="muted">None.</p>{% endif %}
+{% endblock %}

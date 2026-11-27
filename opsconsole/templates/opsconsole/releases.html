@@ -1,0 +1,26 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Releases{% endblock %}
+{% block content %}
+<h1>Releases</h1>
+{% if pointer %}
+<p class="note">Readers get <b>{{ pointer.version }}</b> (<span class="mono">releases/latest.json</span>, written {{ pointer.updated_at }} by {{ pointer.updated_by }}, reason {{ pointer.reason }}{% if pointer.previous %}, before it {{ pointer.previous }}{% endif %}).</p>
+{% else %}<p class="note"><span class="tag warn">no pointer</span> Nothing is live, or the releases store can't be read.</p>{% endif %}
+
+<div class="scroll"><table>
+<tr><th>Version</th><th>Created</th><th>By</th><th class="n">Branches</th><th class="n">Events</th><th class="n">Citations</th><th class="n">Single source</th><th>Since previous</th><th>Content hash</th><th></th></tr>
+{% for r in page %}
+<tr class="{% if r.live %}warn{% endif %}">
+  <td class="nowrap"><b>{{ r.version }}</b>{% if r.live %} <span class="tag ok">live</span>{% endif %}</td>
+  <td class="nowrap small">{{ r.created_at|date:"Y-m-d H:i" }}</td>
+  <td class="small">{{ r.created_by }}</td>
+  <td class="n">{{ r.counts|get:"branches" }}</td><td class="n">{{ r.counts|get:"events" }}</td><td class="n">{{ r.counts|get:"citations" }}</td><td class="n">{{ r.counts|get:"single_source_events" }}</td>
+  <td class="small nowrap">{% if r.changes %}<span class="tag ok">+{{ r.changes.added }}</span> <span class="tag info">~{{ r.changes.changed }}</span> <span class="tag {% if r.changes.retracted %}bad{% else %}muted{% endif %}">−{{ r.changes.retracted }}</span>{% if r.previous %}<div class="muted">vs {{ r.previous }}</div>{% endif %}{% else %}<span class="muted">no manifest</span>{% endif %}</td>
+  <td class="mono" title="{{ r.content_hash }}">{{ r.content_hash|slice:":12" }}…</td>
+  <td class="nowrap"><a href="{% url 'opsconsole:release_changes' r.version %}">change report</a></td>
+</tr>
+{% empty %}<tr><td colspan="10" class="muted">No releases yet: <span class="mono">manage.py publish</span>.</td></tr>
+{% endfor %}
+</table></div>
+{% include "opsconsole/_pager.html" %}
+<p class="note">Green +added, blue ~changed, red −retracted entries, from each release's manifest (its change report's totals against the release readers had before it).</p>
+{% endblock %}

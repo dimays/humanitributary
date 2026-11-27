@@ -24,8 +24,9 @@ guide-index` rewrites it):
 9. [Revisions](revisions.md): How every change to canonical content is recorded with who made it, why and for which task, how the database refuses changes that skip that, and how to read the log.
 10. [Publishing](publishing.md): How published content leaves Postgres as a versioned static snapshot, the gates a release must pass, how the page is built from it, and the round trip (DB → snapshot → DB) that proves nothing is lost; the legacy files are frozen since the cutover.
 11. [Operations](operations.md): How to set the platform up on a laptop, run its jobs on a schedule, tell whether it is healthy, what is and isn't backed up, and what to do when something goes wrong.
-12. [How this guide stays true](this-guide.md): How the guide, the ADRs and the gate keep the docs in step with the code, and what blocks a commit or a pull request when they drift.
-13. [Glossary](glossary.md): Every term the guide uses, in a sentence or two, with the chapter that explains it.
+12. [The operations console](operations-console.md): The staff-only pages under /ops/ that show, on one screen each, whether the platform is healthy, what the jobs and agents did, what changed in the content, which release is live and how the content programs are going; read-only today, with audited interventions planned.
+13. [How this guide stays true](this-guide.md): How the guide, the ADRs and the gate keep the docs in step with the code, and what blocks a commit or a pull request when they drift.
+14. [Glossary](glossary.md): Every term the guide uses, in a sentence or two, with the chapter that explains it.
 <!-- chapters:end -->
 
 ## The rule

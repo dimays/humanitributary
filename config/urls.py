@@ -1,5 +1,5 @@
 """The web surface: the public page (the latest release, from the releases store: infra/site.py, ADR 0024), the admin (the
-owner's review screen), the agents' API and the health check. The page never touches the database (ADR 0001)."""
+owner's review screen), the staff's read-only operations console (/ops/, ADR 0028), the agents' API and the health check. The page never touches the database (ADR 0001)."""
 
 from django.conf import settings
 from django.contrib import admin
@@ -14,6 +14,7 @@ admin.site.index_title = "Canonical content, evidence, ingest and the agent queu
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("ops/", include("opsconsole.urls")),
     path("api/agent/", include("agentapi.urls")),
     path("healthz", healthz),
     path("", site.home),

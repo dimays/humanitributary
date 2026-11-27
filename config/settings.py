@@ -45,6 +45,9 @@ INSTALLED_APPS = [
     # The platform around the content: object storage, health and alerts; the agents' HTTP door to the queue.
     "infra",
     "agentapi",
+    # Staff's read-only operations console at /ops/ (docs/adr/0028-operations-console.md): no models; before the admin,
+    # so its admin/base_site.html (the header's link to it) wins.
+    "opsconsole",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -198,6 +201,10 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # The agent API (agentapi/, docs/adr/0017-agent-api.md): requests per token per minute.
 AGENT_API_RATE_PER_MINUTE = int(os.getenv("AGENT_API_RATE_PER_MINUTE", "120"))
+
+# The operations console (/ops/, opsconsole/): when set, only these hosts serve it and every other host answers 404, so
+# the public page's domain has no /ops/ (comma-separated, e.g. data.humanitributary.com). Empty: any allowed host.
+OPS_HOSTS = [h.strip() for h in os.getenv("OPS_HOSTS", "").split(",") if h.strip()]
 
 # Tests never touch the object store or the network: the runner swaps both storages for temporary directories.
 TEST_RUNNER = "tests.runner.Runner"

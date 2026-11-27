@@ -1,0 +1,50 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Content programs{% endblock %}
+{% block content %}
+<h1>Content programs</h1>
+
+<h2>Content waves <span class="muted small">active: {{ waves.active }} · {{ waves.per_day }} new fill_gap tasks a day at most{% if waves.last_run.at %} · last gap_waves run {{ waves.last_run.at|slice:":16" }}{% endif %}</span></h2>
+{% if not waves.last_run %}<p class="note">No gap_waves run yet: gaps and coverage appear after the first one.</p>{% endif %}
+<div class="scroll"><table>
+<tr><th>Wave</th><th class="n">Coverage</th><th class="n">Gaps found</th><th class="n">Queued</th><th class="n">Claimed</th><th class="n">Held (cap / branch)</th><th class="n">Done: written</th><th class="n">Done: nothing notable</th><th class="n">Failed</th><th class="n">Cancelled</th><th class="n">Tried recently</th></tr>
+{% for w in waves.rows %}
+<tr class="{% if w.active %}warn{% endif %}">
+  <td class="nowrap"><b>{{ w.name }}</b> {{ w.span }}{% if w.active %} <span class="tag info">active</span>{% endif %}<div class="muted small">{{ w.window }}-year windows</div></td>
+  <td class="n">{% if w.share is not None %}{{ w.share|pct }}<div class="muted small">of {{ w.pairs }}</div>{% else %}–{% endif %}</td>
+  <td class="n">{{ w.gaps }}{% if w.by_kind %}<div class="muted small">{{ w.by_kind.empty|default:0 }} empty / {{ w.by_kind.sparse|default:0 }} sparse</div>{% endif %}</td>
+  <td class="n"><a href="{% url 'opsconsole:tasks' %}?kind=fill_gap&status=queued">{{ w.queued }}</a></td><td class="n">{{ w.claimed }}</td>
+  <td class="n">{{ w.held_cap }} / {{ w.held_branch }}</td>
+  <td class="n">{{ w.done_written }}</td><td class="n">{{ w.done_nothing }}</td><td class="n">{{ w.failed }}</td><td class="n">{{ w.cancelled }}</td><td class="n">{{ w.recent }}</td>
+</tr>
+{% endfor %}
+</table></div>
+{% if waves.history %}<p class="note">Wave moves: {% for h in waves.history %}{{ h.from }} → {{ h.to }} {{ h.at|slice:":10" }} by {{ h.by }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+
+<h2>Current events <span class="muted small">candidates → stories → write_event tasks → events</span></h2>
+<div class="grid">
+  <div class="card"><div class="k">Open candidates</div><div class="v">{% for c in pipeline.candidates %}{% if c.status == 'queued' %}{{ c.events }}{% endif %}{% endfor %} queued</div><div class="s">{{ pipeline.open_clusters }} open stories (clusters)</div></div>
+  <div class="card"><div class="k">Stories over the threshold ({{ pipeline.threshold|floatformat:0 }})</div><div class="v">{{ pipeline.intake.over_threshold|default:"–" }}</div><div class="s">of {{ pipeline.intake.clusters|default:"–" }} in the last process run{% if pipeline.intake.held_by_cap %} · {{ pipeline.intake.held_by_cap }} held by the cap{% endif %}</div></div>
+  <div class="card"><div class="k">write_event tasks</div><div class="v">{{ pipeline.tasks.queued|default:0 }} queued · {{ pipeline.tasks.claimed|default:0 }} claimed</div><div class="s">{{ pipeline.tasks.failed|default:0 }} failed · {{ pipeline.tasks.cancelled|default:0 }} cancelled</div></div>
+  <div class="card"><div class="k">Decided</div><div class="v">{{ pipeline.tasks.done_written|default:0 }} written</div><div class="s">{{ pipeline.tasks.done_rejected|default:0 }} rejected · {{ pipeline.tasks.done_duplicate|default:0 }} duplicate</div></div>
+</div>
+<h3>Candidates by status</h3>
+<table style="max-width: 640px">
+<tr><th>Status</th><th class="n">New events</th><th class="n">Updates</th><th class="n">New-branch signals</th></tr>
+{% for c in pipeline.candidates %}<tr><td>{{ c.status }}</td><td class="n">{{ c.events }}</td><td class="n">{{ c.updates }}</td><td class="n">{{ c.signals }}</td></tr>{% endfor %}
+</table>
+
+<h2>Fact base <span class="muted small">record claims on published entries; the shares <span class="mono">facts report</span> gives</span></h2>
+<div class="grid">
+  {% for s in facts.rows %}<div class="card"><div class="k">{{ s.status }}</div><div class="v">{{ s.share|pct }}</div><div class="s">{{ s.n }} of {{ facts.total }}</div></div>{% endfor %}
+  <div class="card"><div class="k">Rechecks</div><div class="v">{{ facts.due_now }} due now</div><div class="s">{{ facts.due_30 }} more within 30 days</div></div>
+</div>
+
+<h2>Branch proposals <span class="muted small">{{ proposals.total }} open (proposed, or accepted and waiting for <span class="mono">branches apply</span>)</span></h2>
+{% if proposals.rows %}
+<p class="note">{% for b in proposals.by %}{{ b.kind }} {{ b.status }}: {{ b.n }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+<div class="scroll"><table>
+<tr><th>#</th><th>Kind</th><th>Branch</th><th>Rule</th><th>Status</th><th>Summary</th><th>Created</th></tr>
+{% for p in proposals.rows %}<tr><td class="mono"><a href="{% url 'admin:governance_branchproposal_change' p.pk %}">{{ p.pk }}</a></td><td>{{ p.kind }}</td><td>{{ p.branch.slug|default:"(new)" }}</td><td class="mono small">{{ p.rule_id }}</td><td><span class="tag {% if p.status == 'accepted' %}info{% else %}muted{% endif %}">{{ p.status }}</span></td><td class="small">{{ p.summary|truncatechars:120 }}</td><td class="nowrap small">{{ p.created_at|date:"Y-m-d" }}</td></tr>{% endfor %}
+</table></div>
+{% else %}<p class="muted">No open proposals.</p>{% endif %}
+{% endblock %}
