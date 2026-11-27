@@ -116,8 +116,12 @@ def failure_streaks() -> dict[tuple[str, int | None], int]:
 
 def jobs(now) -> list[dict]:
     """One row per registered job, in run order: its last run (the newest across its feeds, for a feed job), status,
-    duration, counts, failures in a row (the worst feed's), and when it is next due. Four queries."""
+    duration, counts, failures in a row (the worst feed's), when it is next due, and whether it is paused (by whom,
+    why). Five queries."""
+    from ingest.jobs import paused_jobs
+
     reg = _registry()
+    paused = paused_jobs()
     last = {}
     for r in (FetchRun.objects.exclude(status="running").select_related("feed").defer("feed__cursor", "feed__config")
               .order_by("job", "feed_id", "-started_at", "-id").distinct("job", "feed_id")):
@@ -155,9 +159,24 @@ def jobs(now) -> list[dict]:
             "counts": counts_summary(run.counts) if run else "",
             "error": first_line(run.error) if run and run.status in ("failed", "partial") else "",
             "failures": worst, "worst_feed": feeds[name]["names"].get(worst_feed) if worst_feed else None,
-            "alerting": worst >= alert_after, "next_due": next_due, "overdue": bool(next_due and next_due < now - timedelta(minutes=30)),
+            "alerting": worst >= alert_after, "next_due": next_due,
+            "overdue": name not in paused and bool(next_due and next_due < now - timedelta(minutes=30)),
+            "paused": paused.get(name), "not_idempotent": j.not_idempotent,
         })
     return rows
+
+
+def worker_holds_lock() -> bool:
+    from ingest.jobs import SCHEDULER_LOCK_KEY
+
+    return _lock_held(SCHEDULER_LOCK_KEY)
+
+
+def open_actions(limit: int = 10) -> list:
+    """Console actions pending or running, oldest first (one query)."""
+    from .models import OpsAction
+
+    return list(OpsAction.objects.filter(status__in=["pending", "running"]).defer("check_output", "output", "result").order_by("created_at", "id")[:limit])
 
 
 def alerts(job_rows: list[dict]) -> dict:

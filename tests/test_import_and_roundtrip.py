@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from unittest import skipUnless
+from unittest import mock, skipUnless
 
 from django.conf import settings
 from django.db import transaction
@@ -189,6 +189,86 @@ class RoundTripTests(TestCase):
         self.assertEqual(without_derived(json.loads(body)), small())
         self.assertEqual(storage.read_pointer()["version"], r1.version)
         self.assertEqual(r1.counts["events"], 4)
+        self.assertEqual(Release.objects.count(), 1)
+
+    def _site_copy(self) -> Path:
+        from publish.release import PAGE_INPUTS
+
+        site = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, site, True)
+        for name in PAGE_INPUTS:
+            if (settings.SITE_DIR / name).exists():
+                shutil.copy(settings.SITE_DIR / name, site / name)
+        return site
+
+    def test_a_page_only_change_makes_a_release(self):
+        """A release's identity is its content and its page's inputs: a template change publishes without --force,
+        and the change report says "page changed; content unchanged"."""
+        from infra import storage
+        from publish import release as rel
+        from publish.changes import page_summary
+
+        import_content(small())
+        site = self._site_copy()
+        with override_settings(SITE_DIR=site):
+            r1, _ = publish(actor="job:test", skip_gates=("build",))
+            self.assertEqual(r1.page_hash, rel.page_hash())
+            self.assertFalse(publish(actor="job:test", skip_gates=("build",))[1], "nothing changed: no release")
+            self.assertEqual(rel.preview(skip_gates=("build",))["unchanged_since"], r1.version)
+            (site / "template.html").write_text((site / "template.html").read_text() + "\n<!-- a page-only change -->\n")
+            self.assertIsNone(rel.preview(skip_gates=("build",))["unchanged_since"])
+            r2, created = publish(actor="job:test", skip_gates=("build",))
+        self.assertTrue(created)
+        self.assertEqual(r2.content_hash, r1.content_hash)
+        self.assertNotEqual(r2.page_hash, r1.page_hash)
+        rep = json.loads(storage.read(storage.RELEASES, storage.release_key(r2.version, "changes.json")))
+        self.assertEqual(rep["total"], {"added": 0, "changed": 0, "retracted": 0})
+        self.assertEqual(rep["page"], {"from": r1.page_hash, "to": r2.page_hash, "changed": True})
+        self.assertEqual(page_summary(rep), "page changed; content unchanged")
+        self.assertIn(b"page changed; content unchanged", storage.read(storage.RELEASES, storage.release_key(r2.version, "changes.md")))
+        self.assertEqual(json.loads(storage.read(storage.RELEASES, storage.release_key(r2.version, "manifest.json")))["page_hash"], r2.page_hash)
+        self.assertEqual(storage.read_pointer()["version"], r2.version)
+
+    def test_page_hash_reads_only_the_page_inputs(self):
+        from publish.release import page_hash
+
+        site = self._site_copy()
+        before = page_hash(site)
+        self.assertEqual(before, page_hash(site), "the same files give the same hash")
+        (site / "unrelated.txt").write_text("not an input")
+        self.assertEqual(before, page_hash(site))
+        (site / "canonical.mjs").write_text((site / "canonical.mjs").read_text() + "\n// changed\n")
+        self.assertNotEqual(before, page_hash(site))
+
+    def test_a_release_without_a_page_hash_is_followed_by_one_with(self):
+        """Releases made before the page hash was recorded: the next publish makes one and says so."""
+        from infra import storage
+        from publish.changes import page_summary
+
+        import_content(small())
+        r1, _ = publish(actor="job:test", skip_gates=("build",))
+        Release.objects.filter(pk=r1.pk).update(page_hash="")
+        r2, created = publish(actor="job:test", skip_gates=("build",))
+        self.assertTrue(created)
+        rep = json.loads(storage.read(storage.RELEASES, storage.release_key(r2.version, "changes.json")))
+        self.assertEqual(page_summary(rep), f"page inputs not recorded for {r1.version}; content unchanged")
+        self.assertFalse(publish(actor="job:test", skip_gates=("build",))[1])
+
+    def test_the_determinism_gate_still_holds_a_page_only_release(self):
+        from publish import gates
+        from publish import release as rel
+
+        import_content(small())
+        site = self._site_copy()
+        with override_settings(SITE_DIR=site):
+            publish(actor="job:test", skip_gates=("build",))
+            (site / "template.html").write_text("<!-- another page -->" + (site / "template.html").read_text())
+            content = build_content()
+            other = json.loads(dumps(content))
+            other["events"][0]["text"] += " (differs)"
+            with mock.patch.object(rel, "build_content", side_effect=[content, content, other]), self.assertRaises(gates.PublishRefused) as e:
+                publish(actor="job:test", skip_gates=("build",))
+        self.assertIn("deterministic", e.exception.problems)
         self.assertEqual(Release.objects.count(), 1)
 
     def test_the_legacy_archive_is_frozen(self):

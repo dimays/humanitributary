@@ -40,12 +40,16 @@ through the service layer.
 
 | Command | What it does |
 |---|---|
-| `manage.py run_jobs` | Runs every job that is due, once, in registry order. `--only a,b` limits it; `--list` prints each job, its interval and when it is next due. `make jobs` runs it. |
+| `manage.py run_jobs` | Runs every job that is due, once, in registry order, skipping paused jobs. `--only a,b` limits it; `--list` prints each job, its interval and when it is next due (or `paused`, by whom and why). `make jobs` runs it. |
 | `manage.py run_jobs --loop [--tick N]` | The worker process (Procfile `worker`): runs what is due every `WORKER_TICK_SECONDS` (60), or every `--tick` seconds, until stopped. `make worker` runs it alone; `make up` runs it beside `web`. |
-| `manage.py run_job <name> [--feed F] [--opt k=v …]` | Runs one job now, due or not. A feed job runs for every enabled feed, or for the one named by `--feed` (an id or exact name, even a disabled one; the Fetcher still applies the source policy). `--opt` values are parsed as JSON when they can be. |
+| `manage.py run_job <name> [--feed F] [--opt k=v …]` | Runs one job now, due or not, paused or not (naming it is the owner's explicit choice). A feed job runs for every enabled feed, or for the one named by `--feed` (an id or exact name, even a disabled one; the Fetcher still applies the source policy). `--opt` values are parsed as JSON when they can be. |
 
-A **job** is a function `fn(ctx)` registered with `@job(name, interval=…, feed=…)`. Importing
+A **job** is a function `fn(ctx)` registered with `@job(name, interval=…, feed=…, not_idempotent=…)`. Importing
 `ingest/job_defs.py` registers them all, and the order of that file is the order `run_due` runs them.
+`not_idempotent`, when set, says why a second run straight after the first is not "again" (`link_health`: each run is
+a round toward a dead link; `second_source`: each run walks the next batch from its bookmark). The jobs themselves
+ignore it; the [operations console](operations-console.md) refuses to run such a job from its pages within its
+interval of the last run ([ADR 0028](../adr/0028-operations-console.md)).
 
 **When a job is due.**
 
@@ -53,6 +57,10 @@ A **job** is a function `fn(ctx)` registered with `@job(name, interval=…, feed
   `next_run_at` is empty or has passed. After the run, `next_run_at` becomes now plus the feed's
   `interval_minutes` (the job's own interval is only a fallback).
 - **Any other job** runs when its interval has passed since the start of its last finished `FetchRun`.
+- **A paused job** is never due. `jobs.set_paused(name, paused, by=…, reason=…)` (the console's pause and resume)
+  keeps the paused jobs in the `JobState` row "paused_jobs" (`{"jobs": {name: {"by", "at", "reason"}}}`), and
+  `run_due` reads it once per pass (`paused_jobs()`, which never creates the row). A run in progress finishes;
+  `run_named` still runs a paused job.
 
 **One runner at a time.** `run_due` and `run_named` take a Postgres advisory lock (`pg_try_advisory_lock` on
 `ingest/jobs.py` `LOCK_KEY`). A second runner finds it taken, prints "another run_jobs holds the lock; exiting" and
@@ -64,7 +72,11 @@ running.
 (`SCHEDULER_LOCK_KEY`), for its whole life, so only one worker schedules at a time. A second worker finds it taken,
 logs "another worker holds the scheduler lock; standing by" and tries again each tick, so a deploy that briefly runs
 two workers never schedules twice. Each tick calls `run_due()` under the usual runner lock, which also keeps a
-launchd `run_jobs` and the worker from overlapping. SIGTERM (Heroku's shutdown, honcho's Ctrl-C) and SIGINT set a
+launchd `run_jobs` and the worker from overlapping. The worker passes `run_due` its `between` callback,
+`jobs.between_jobs`: before each due job, and once at the end of the pass (so also on a tick with nothing due), it
+calls every hook in `jobs.BETWEEN_JOBS`, each in its own `try`, under both locks. The console registers one
+(`opsconsole.worker.pick_up`, from `opsconsole/apps.py`): it runs the actions staff queued from `/ops/`, so they never
+overlap a job. A one-shot `run_jobs` calls no hooks. SIGTERM (Heroku's shutdown, honcho's Ctrl-C) and SIGINT set a
 stop flag that `run_due` checks before each job (its `stopping` callback): the job that is running finishes, and the
 ones not yet started wait for the next run. A job cut off by SIGKILL is closed as failed by the next runner
 ([ADR 0019](../adr/0019-processes-and-release-gates.md)).

@@ -11,7 +11,12 @@
 - `loop()` is the worker process (Procfile `worker`: `run_jobs --loop`): it holds a second advisory lock, the
   scheduler lock, for its whole life, so only one worker schedules at a time (a second waits as a standby), and runs
   `run_due()` every WORKER_TICK_SECONDS. SIGTERM (Heroku's shutdown, honcho's Ctrl-C) lets the job that is running
-  finish, then stops before the next one.
+  finish, then stops before the next one. Between jobs (and once a tick when nothing is due) it calls the hooks in
+  `BETWEEN_JOBS`: the operations console's queued actions run there, under both locks (opsconsole/worker.py).
+- A job can be paused (`set_paused`, from the console): the JobState "paused_jobs" names it, and `run_due` skips it
+  until it is resumed. `run_named` (`manage.py run_job`) still runs it: naming a job is the owner's explicit choice.
+- `Job.not_idempotent` says why a job is not safe to run twice back to back (ADR 0028): the console refuses to run
+  such a job again within its interval.
 
 No LLM calls anywhere in jobs (AGENTS.md rule 3).
 """
@@ -28,7 +33,7 @@ from django.utils import timezone
 
 from .http import Fetcher
 from .policy import mask_secrets
-from .models import Feed, FetchRun
+from .models import Feed, FetchRun, JobState
 
 LOCK_KEY = 7_302_118_015  # pg advisory lock id for the job runner (any constant; only this module uses it)
 SCHEDULER_LOCK_KEY = 7_302_118_016  # held by the one `run_jobs --loop` worker for its lifetime
@@ -41,14 +46,17 @@ class Job:
     interval: int  # minutes
     feed: bool = False
     doc: str = ""
+    not_idempotent: str = ""  # why a second run straight after the first is not "again" (empty: it is)
 
 
 REGISTRY: dict[str, Job] = {}
+BETWEEN_JOBS: list[Callable] = []  # hooks `loop()` calls between jobs, each `fn(log=…)` (opsconsole registers one)
+PAUSED = "paused_jobs"  # the JobState naming paused jobs: {"jobs": {name: {"by", "at", "reason"}}}
 
 
-def job(name: str, *, interval: int, feed: bool = False):
+def job(name: str, *, interval: int, feed: bool = False, not_idempotent: str = ""):
     def wrap(fn):
-        REGISTRY[name] = Job(name, fn, interval, feed, (fn.__doc__ or "").strip().split("\n")[0])
+        REGISTRY[name] = Job(name, fn, interval, feed, (fn.__doc__ or "").strip().split("\n")[0], not_idempotent)
         return fn
     return wrap
 
@@ -101,7 +109,34 @@ def feeds_for(name: str, *, enabled_only=True):
     return qs.filter(enabled=True) if enabled_only else qs
 
 
-def is_due(j: Job, now, feed: Feed | None = None) -> bool:
+def paused_jobs() -> dict[str, dict]:
+    """The paused jobs: {name: {"by", "at", "reason"}}. Reads the JobState without creating it."""
+    st = JobState.objects.filter(name=PAUSED).values_list("state", flat=True).first() or {}
+    return dict(st.get("jobs") or {})
+
+
+def set_paused(name: str, paused: bool, *, by: str, reason: str) -> dict[str, dict]:
+    """Pause or resume a job (the console's action; the caller records who and why). → the paused jobs after."""
+    from django.db import transaction
+
+    _load_registry()
+    if name not in REGISTRY:
+        raise KeyError(f"no job {name!r}")
+    with transaction.atomic():
+        st, _ = JobState.objects.select_for_update().get_or_create(name=PAUSED, defaults={"state": {"jobs": {}}})
+        jobs = dict(st.state.get("jobs") or {})
+        if paused:
+            jobs[name] = {"by": by, "at": timezone.now().isoformat(timespec="seconds"), "reason": reason}
+        else:
+            jobs.pop(name, None)
+        st.state = {**st.state, "jobs": jobs}
+        st.save(update_fields=["state", "updated_at"])
+    return jobs
+
+
+def is_due(j: Job, now, feed: Feed | None = None, *, paused: dict | None = None) -> bool:
+    if j.name in (paused_jobs() if paused is None else paused):
+        return False
     if j.feed:
         return feed is not None and feed.enabled and (feed.next_run_at is None or feed.next_run_at <= now)
     last = FetchRun.objects.filter(job=j.name, feed__isnull=True).exclude(status=FetchRun.Status.RUNNING).order_by("-started_at").first()
@@ -145,16 +180,24 @@ def close_interrupted():
     return FetchRun.objects.filter(status=FetchRun.Status.RUNNING).update(status=FetchRun.Status.FAILED, finished_at=timezone.now(), error="interrupted (the runner exited before finishing)")
 
 
-def run_due(*, only: list[str] | None = None, log=print, fetcher_factory=Fetcher, now=None, stopping: Callable[[], bool] = lambda: False) -> list[FetchRun] | None:
-    """Run every due job once, in registry order. None when another runner holds the lock. `stopping()` is asked
-    before each job: once it says True, the jobs not yet started wait for the next run."""
+def run_due(*, only: list[str] | None = None, log=print, fetcher_factory=Fetcher, now=None, stopping: Callable[[], bool] = lambda: False,
+            between: Callable | None = None) -> list[FetchRun] | None:
+    """Run every due job once, in registry order, skipping paused ones. None when another runner holds the lock.
+    `stopping()` is asked before each job: once it says True, the jobs not yet started wait for the next run.
+    `between(log=…)`, when given (the worker's hooks), runs before each due job and once at the end, under the lock."""
     _load_registry()
     if not try_lock():
         log("another run_jobs holds the lock; exiting")
         return None
     runs = []
+
+    def gap():
+        if between is not None and not stopping():
+            between(log=log)
+
     try:
         close_interrupted()
+        paused = paused_jobs()
         for j in REGISTRY.values():
             if only and j.name not in only:
                 continue
@@ -163,16 +206,28 @@ def run_due(*, only: list[str] | None = None, log=print, fetcher_factory=Fetcher
                 for feed in feeds_for(j.name).order_by("name"):
                     if stopping():
                         return runs
-                    if is_due(j, now_, feed):
+                    if is_due(j, now_, feed, paused=paused):
+                        gap()
                         runs.append(run_one(j, feed=feed, fetcher=fetcher_factory() if fetcher_factory is not Fetcher else None, log=log))
             else:
                 if stopping():
                     return runs
-                if is_due(j, now_):
+                if is_due(j, now_, paused=paused):
+                    gap()
                     runs.append(run_one(j, fetcher=fetcher_factory() if fetcher_factory is not Fetcher else None, log=log))
+        gap()
     finally:
         unlock()
     return runs
+
+
+def between_jobs(*, log=print):
+    """Run the BETWEEN_JOBS hooks (the worker's), each in its own try: a failing hook never stops the jobs."""
+    for fn in BETWEEN_JOBS:
+        try:
+            fn(log=log)
+        except Exception as e:  # noqa: BLE001
+            log(mask_secrets(f"between-jobs hook {getattr(fn, '__qualname__', fn)} failed: {type(e).__name__}: {e}"))
 
 
 class Stop:
@@ -217,7 +272,7 @@ def loop(*, tick: int | None = None, log=print, stop: Stop | None = None, max_ti
                 if not holding:
                     log("another worker holds the scheduler lock; standing by")
             if holding:
-                runs = run_due(log=log, stopping=stop, only=only)
+                runs = run_due(log=log, stopping=stop, only=only, between=between_jobs)
                 if runs:
                     log(f"tick: {len(runs)} run(s), {sum(r.status == 'failed' for r in runs)} failed")
             ticks += 1
@@ -238,7 +293,7 @@ def loop(*, tick: int | None = None, log=print, stop: Stop | None = None, max_ti
 
 
 def run_named(name: str, *, feed: str | None = None, options: dict | None = None, log=print, fetcher=None) -> list[FetchRun] | None:
-    """Run one job now, due or not (every enabled feed of a feed job, or the one named)."""
+    """Run one job now, due or not, paused or not (every enabled feed of a feed job, or the one named)."""
     _load_registry()
     if name not in REGISTRY:
         raise KeyError(f"no job {name!r}; known: {', '.join(REGISTRY)}")

@@ -4,6 +4,11 @@ Leases: `next_task(claim=True)` takes the best available task under `SELECT … 
 asking at once get different tasks, and holds it until `lease_until`. A task whose lease ran out is available again
 (its next claim counts another attempt); past `max_attempts` it fails instead of being offered. Only the agent holding
 a claim may complete, fail, release or extend it, and only while no one else has taken it over.
+
+Operators (the console, ADR 0028) have their own versions, each naming who acts and why, appended to the task's
+`error` as `human:<username>: …`: `release_stuck` and `extend_for` (checked against the holder the operator saw, so
+a lease that changed hands in the meantime is refused), `requeue` (failed or cancelled tasks back to the queue, their
+attempts reset) and `cancel` (queued tasks, or claimed ones whose lease ran out), at most MAX_BATCH at once.
 """
 
 from datetime import timedelta
@@ -110,6 +115,107 @@ def extend(task_id: int, *, agent: str, minutes: int | None = None) -> AgentTask
         task.lease_until = timezone.now() + timedelta(minutes=minutes or settings.TASK_LEASE_MINUTES)
         task.save(update_fields=["lease_until"])
         return task
+
+
+# ── operators' versions (the console) ──
+
+MAX_BATCH = 50
+REQUEUEABLE = (S.FAILED, S.CANCELLED)
+
+
+def _note(task: AgentTask, by: str, text: str):
+    task.error = (task.error + "\n" if task.error else "") + f"{by}: {text}"
+
+
+def _stuck(task_id: int, holder: str) -> AgentTask:
+    task = AgentTask.objects.select_for_update().filter(pk=task_id).first()
+    if task is None:
+        raise TaskError(f"no task #{task_id}")
+    if task.status != S.CLAIMED or task.claimed_by != holder:
+        raise TaskError(f"task #{task_id} is {task.status}" + (f", claimed by {task.claimed_by}" if task.claimed_by else "")
+                        + f": no longer the lease held by {holder} that the page showed")
+    return task
+
+
+def release_stuck(task_id: int, *, holder: str, by: str, reason: str) -> AgentTask:
+    """An operator frees a lease `holder` still has (a crashed or stuck agent): back to the queue. The attempt stays
+    counted (the agent did try), unlike an agent's own `release`."""
+    with transaction.atomic():
+        task = _stuck(task_id, holder)
+        _note(task, by, f"released the lease held by {holder}: {reason}")
+        task.status, task.claimed_by, task.lease_until = S.QUEUED, "", None
+        task.save(update_fields=["status", "claimed_by", "lease_until", "error"])
+        return task
+
+
+def extend_for(task_id: int, *, holder: str, by: str, minutes: int, reason: str) -> AgentTask:
+    """An operator gives `holder` more time: the lease runs `minutes` from now (or from its end, if later)."""
+    if not 1 <= minutes <= 24 * 60:
+        raise TaskError("extend by 1 to 1440 minutes")
+    with transaction.atomic():
+        task = _stuck(task_id, holder)
+        start = max(timezone.now(), task.lease_until or timezone.now())
+        task.lease_until = start + timedelta(minutes=minutes)
+        _note(task, by, f"extended {holder}'s lease by {minutes} min to {task.lease_until:%Y-%m-%d %H:%M} UTC: {reason}")
+        task.save(update_fields=["lease_until", "error"])
+        return task
+
+
+def _batch(ids) -> list[int]:
+    ids = sorted({int(i) for i in ids})
+    if not ids:
+        raise TaskError("no tasks selected")
+    if len(ids) > MAX_BATCH:
+        raise TaskError(f"{len(ids)} tasks selected; at most {MAX_BATCH} at once")
+    return ids
+
+
+def requeue(ids, *, by: str, reason: str) -> dict:
+    """Failed or cancelled tasks back to the queue with their attempts reset. Others are skipped. → {"done": [ids],
+    "skipped": {id: why}}"""
+    ids = _batch(ids)
+    out = {"done": [], "skipped": {}}
+    with transaction.atomic():
+        tasks = {t.pk: t for t in AgentTask.objects.select_for_update().filter(pk__in=ids)}
+        opened = set()
+        for i in ids:
+            t = tasks.get(i)
+            if t is None or t.status not in REQUEUEABLE:
+                out["skipped"][i] = "gone" if t is None else f"is {t.status}"
+                continue
+            if t.dedupe_key and (t.kind, t.dedupe_key) in opened:
+                out["skipped"][i] = "another selected task has its dedupe key"
+                continue
+            if t.dedupe_key and AgentTask.objects.filter(kind=t.kind, dedupe_key=t.dedupe_key, status__in=[S.QUEUED, S.CLAIMED]).exclude(pk=t.pk).exists():
+                out["skipped"][i] = "another open task has its dedupe key"
+                continue
+            _note(t, by, f"requeued (was {t.status}, {t.attempts} attempts): {reason}")
+            t.status, t.attempts, t.claimed_by, t.lease_until, t.completed_at = S.QUEUED, 0, "", None, None
+            t.save(update_fields=["status", "attempts", "claimed_by", "lease_until", "completed_at", "error"])
+            opened.add((t.kind, t.dedupe_key))
+            out["done"].append(i)
+    return out
+
+
+def cancel(ids, *, by: str, reason: str) -> dict:
+    """Queued tasks, or claimed ones whose lease has run out, cancelled (a live lease is the agent's: release it
+    first). → {"done": [ids], "skipped": {id: why}}"""
+    ids = _batch(ids)
+    now = timezone.now()
+    out = {"done": [], "skipped": {}}
+    with transaction.atomic():
+        tasks = {t.pk: t for t in AgentTask.objects.select_for_update().filter(pk__in=ids)}
+        for i in ids:
+            t = tasks.get(i)
+            live = t is not None and t.status == S.CLAIMED and t.lease_until and t.lease_until >= now
+            if t is None or live or t.status not in (S.QUEUED, S.CLAIMED):
+                out["skipped"][i] = "gone" if t is None else ("its lease is live" if live else f"is {t.status}")
+                continue
+            _note(t, by, f"cancelled (was {t.status}): {reason}")
+            t.status, t.claimed_by, t.lease_until, t.completed_at = S.CANCELLED, "", None, now
+            t.save(update_fields=["status", "claimed_by", "lease_until", "completed_at", "error"])
+            out["done"].append(i)
+    return out
 
 
 def as_json(task: AgentTask) -> dict:

@@ -1,0 +1,44 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Action {{ a.pk }}{% endblock %}
+{% block content %}
+<h1>Action #{{ a.pk }}: {{ label }} <span class="tag {{ a.status|status_class }}">{{ a.status }}</span></h1>
+<p class="note"><a href="{% url 'opsconsole:actions' %}">← all actions</a>{% if a.open %} · this page reloads every few seconds until it finishes{% endif %}</p>
+
+{% if a.status == 'pending' %}<div class="banner info">Waiting for the worker: it runs queued actions between jobs.
+  {% if worker_lock is False %}<b>No worker holds the scheduler lock right now</b> (<span class="mono">make up</span> locally, the <span class="mono">worker</span> dyno hosted), so it waits until one starts.{% endif %}
+  {% if can_act %}<div class="acts"><form class="act" method="post" action="{% url 'opsconsole:action_cancel' a.pk %}">{% csrf_token %}<button type="submit" class="act danger">Withdraw it</button></form></div>{% endif %}</div>
+{% elif a.status == 'running' %}<div class="banner info">Running since {{ a.started_at|date:"H:i:s" }} UTC ({{ a.started_at|ago }}).</div>
+{% elif a.status == 'done' %}<div class="banner ok">Done {{ a.finished_at|date:"Y-m-d H:i:s" }} UTC{% if a.kind == 'publish' and a.result.created %}: release <a href="{% url 'opsconsole:release_changes' a.result.version %}">{{ a.result.version }}</a> is live{% elif a.kind == 'rollback' %}: latest → {{ a.result.version }}{% endif %}{% if a.result.summary %} ({{ a.result.summary }}){% endif %}.</div>
+{% elif a.status == 'failed' %}<div class="banner bad">{{ error|linebreaksbr }}</div>
+{% elif a.status == 'cancelled' %}<div class="banner warn">{{ error }}</div>{% endif %}
+
+<div class="grid">
+  <div class="card"><div class="k">Requested</div><div class="v">{{ a.created_at|ago }}</div><div class="s">{{ a.created_at|date:"Y-m-d H:i:s" }} UTC by {{ a.requested_by }}</div></div>
+  <div class="card"><div class="k">Target</div><div class="v mono">{{ a.target }}</div><div class="s">runs in the {{ a.runs_in }}</div></div>
+  <div class="card"><div class="k">Started · finished</div><div class="v small">{{ a.started_at|date:"H:i:s"|default:"–" }} · {{ a.finished_at|date:"H:i:s"|default:"–" }}</div>
+    <div class="s">{% if a.finished_at and a.started_at %}took {{ a|took }}{% endif %}</div></div>
+  <div class="card"><div class="k">Idempotency key</div><div class="v mono small">{{ a.idempotency_key|slice:":16" }}…</div><div class="s">a second submit shows this row</div></div>
+</div>
+
+<h2>Reason</h2><p>{{ a.reason }}</p>
+
+{% if a.kind == 'run_job' or a.kind == 'retry_run' %}{% if a.result.runs %}
+<h2>Runs</h2>
+<table><tr><th>Run</th><th>Status</th><th>Counts</th></tr>
+{% for r in a.result.runs %}<tr><td class="mono"><a href="{% url 'opsconsole:runs' %}?job={{ a.params.job }}">#{{ r.id }}</a></td><td><span class="tag {{ r.status|status_class }}">{{ r.status }}</span></td><td class="small mono">{{ r.counts }}</td></tr>{% endfor %}
+</table>
+<p class="note">Content it wrote: {{ a.result.revisions }} Revision{{ a.result.revisions|pluralize }} by the job{% if a.result.revisions %} (<a href="{% url 'opsconsole:changes' %}?actor_kind=job">in Changes</a>){% endif %}.</p>
+{% endif %}{% endif %}
+
+{% if publish_plan %}
+<h2>Publish this</h2>
+<p class="note">Every gate passed. This is the confirmation: what the release will carry is the change report below.</p>
+<div class="confirm">{% with plan=publish_plan token=publish_token kind="publish" runs_in="worker" %}{% include "opsconsole/_plan.html" %}{% include "opsconsole/_confirm_form.html" %}{% endwith %}</div>
+{% elif publish_refused %}<div class="banner warn">Publish from this check: {{ publish_refused }}</div>{% endif %}
+
+{% if a.output %}<h2>{% if a.kind == 'publish_check' %}The change report{% else %}Output{% endif %}</h2><pre>{{ a.output }}</pre>{% endif %}
+{% if a.result %}<h2>Result</h2><details{% if a.kind != 'publish_check' %} open{% endif %}><summary>Show the result</summary><pre>{{ a.result|pretty }}</pre></details>{% endif %}
+{% if a.check_output %}<h2>What the confirmation showed</h2><pre>{{ a.check_output }}</pre>{% endif %}
+<h2>Parameters</h2><pre>{{ a.params|pretty }}</pre>
+{% if check_action %}<p class="note">From check <a href="{% url 'opsconsole:action' check_action.pk %}">#{{ check_action.pk }}</a>.</p>{% endif %}
+{% endblock %}

@@ -28,13 +28,17 @@ class Command(BaseCommand):
         jobs._load_registry()
         if list:
             now = timezone.now()
+            paused = jobs.paused_jobs()
             for j in jobs.REGISTRY.values():
+                if j.name in paused:
+                    self.stdout.write(f"{j.name:22} {j.interval:>6}m  {'paused':27} by {paused[j.name].get('by')}: {paused[j.name].get('reason', '')[:60]}")
+                    continue
                 if j.feed:
                     for f in jobs.feeds_for(j.name, enabled_only=False).order_by("name"):
-                        due = "due" if jobs.is_due(j, now, f) else (f"next {f.next_run_at:%Y-%m-%d %H:%M}" if f.next_run_at else (f.config or {}).get("disabled_reason", "disabled")[:40])
+                        due = "due" if jobs.is_due(j, now, f, paused=paused) else (f"next {f.next_run_at:%Y-%m-%d %H:%M}" if f.next_run_at else (f.config or {}).get("disabled_reason", "disabled")[:40])
                         self.stdout.write(f"{j.name:22} {f.interval_minutes:>6}m  {'on ' if f.enabled else 'off'}  {due:22} {f.name}")
                 else:
-                    self.stdout.write(f"{j.name:22} {j.interval:>6}m  on   {'due' if jobs.is_due(j, now) else 'not due':22} {j.doc}")
+                    self.stdout.write(f"{j.name:22} {j.interval:>6}m  on   {'due' if jobs.is_due(j, now, paused=paused) else 'not due':22} {j.doc}")
             return
         if loop:
             jobs.loop(tick=tick, log=lambda m: self.stdout.write(m) or self.stdout.flush(), only=[s for s in only.split(",") if s] or None)

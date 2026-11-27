@@ -8,6 +8,10 @@ store and point `latest` at it (docs/adr/0001, 0016, 0019).
     releases/<version>/timeline.html   the page built from the snapshot (site/build.mjs --from-json)
     releases/latest.json               the pointer: which version readers get. The only object that is ever rewritten.
 
+A release's identity is its content hash and its page hash (`page_hash()`: the files the build reads to make the page
+from a snapshot), so a change to the template or the build publishes like a content change, and its change report
+says "page changed; content unchanged".
+
 Nothing under releases/<version>/ is overwritten. Rollback is repointing (`publish --rollback <version>`); a new
 publish never reuses a version, even one whose files a failed run left behind. `pull_release()` mirrors a release
 into var/releases/<version>/ (and var/releases/latest) for the local site build.
@@ -32,6 +36,22 @@ from .export import build_content
 from .models import Release
 
 FILES = ("content.json", "manifest.json", "changes.json", "changes.md", "timeline.html")
+# What `node site/build.mjs --from-json` reads besides the snapshot, relative to SITE_DIR: the build and the modules it
+# imports, the template it fills, and the globe data it inlines. Change one and the page changes with the same content.
+PAGE_INPUTS = ("build.mjs", "canonical.mjs", "restructure.mjs", "template.html", "globe-assets.json")
+
+
+def page_hash(site_dir: Path | None = None) -> str:
+    """sha256 over the page's inputs, each as its name, a NUL, its bytes and a NUL (a missing optional file as its
+    name and "-"), in PAGE_INPUTS order: the same files give the same hash on any machine."""
+    site_dir = Path(site_dir or settings.SITE_DIR)
+    h = hashlib.sha256()
+    for name in PAGE_INPUTS:
+        f = site_dir / name
+        h.update(name.encode() + b"\0")
+        h.update(f.read_bytes() if f.exists() else b"-")
+        h.update(b"\0")
+    return h.hexdigest()
 
 
 def counts(content: dict) -> dict:
@@ -92,21 +112,38 @@ def _prepare(today: date, skip_gates: tuple[str, ...] = ()) -> dict:
     if problems:
         raise gates.PublishRefused(problems)
     live, live_key = live_release()
+    live_page = Release.objects.filter(version=live).values_list("page_hash", flat=True).first() if live else None
     return {"content": content, "body": body, "digest": hashlib.sha256(body).hexdigest(), "build": build, "live": live,
-            "previous": _content_at(live_key)}
+            "previous": _content_at(live_key), "page_hash": page_hash(), "live_page_hash": live_page or None}
+
+
+def _unchanged(last: Release | None, digest: str, page: str) -> bool:
+    return bool(last and last.content_hash == digest and last.page_hash == page)
+
+
+def preview(*, today: date | None = None, skip_gates: tuple[str, ...] = ()) -> dict:
+    """What `publish` would do now, writing nothing: the gates, the change report against the live release, the two
+    hashes, and whether a release would be made (`unchanged_since`: the newest release, when content and page are
+    both the same as its). The console shows this before a publish. Raises gates.PublishRefused."""
+    today = today or date.today()
+    p = _prepare(today, skip_gates)
+    last = Release.objects.order_by("-created_at", "-id").first()
+    report = changes.report(p["previous"], p["content"], from_version=p["live"], to_version="(unpublished)",
+                            page=(p["live_page_hash"], p["page_hash"]))
+    return {"report": report, "content_hash": p["digest"], "page_hash": p["page_hash"],
+            "unchanged_since": last.version if _unchanged(last, p["digest"], p["page_hash"]) else None}
 
 
 def check(*, today: date | None = None, skip_gates: tuple[str, ...] = ()) -> dict:
     """`publish --check`: every gate that needs no store, and the change report a release would carry, without
     writing anything. → the report (publish/changes.py). Raises gates.PublishRefused."""
-    today = today or date.today()
-    p = _prepare(today, skip_gates)
-    return changes.report(p["previous"], p["content"], from_version=p["live"], to_version="(unpublished)")
+    return preview(today=today, skip_gates=skip_gates)["report"]
 
 
 def publish(*, actor: str, notes: str = "", force: bool = False, today: date | None = None,
             check_only: bool = False, skip_gates: tuple[str, ...] = ()) -> tuple[Release | None, bool]:
-    """Returns (release, created). Unchanged content makes no new release unless forced. Raises
+    """Returns (release, created). Unchanged content and an unchanged page (the newest release's two hashes) make no
+    new release unless forced; a page-only change is a new release. Raises
     gates.PublishRefused when a gate fails (nothing is written). check_only runs the gates and writes nothing.
     `skip_gates` is for tests that exercise one gate at a time."""
     today = today or date.today()
@@ -116,16 +153,16 @@ def publish(*, actor: str, notes: str = "", force: bool = False, today: date | N
     content = build_content()
     digest = hashlib.sha256(dumps(content).encode()).hexdigest()
     last = Release.objects.order_by("-created_at", "-id").first()
-    if last and last.content_hash == digest and not force:
+    if _unchanged(last, digest, page_hash()) and not force:
         return last, False
     p = _prepare(today, skip_gates)
-    content, body, digest, build, live = p["content"], p["body"], p["digest"], p["build"], p["live"]
+    content, body, digest, build, live, page = p["content"], p["body"], p["digest"], p["build"], p["live"], p["page_hash"]
 
     version = _next_version(today)
-    report = changes.report(p["previous"], content, from_version=live, to_version=version)
+    report = changes.report(p["previous"], content, from_version=live, to_version=version, page=(p["live_page_hash"], page))
     high = Revision.objects.order_by("-id").values_list("id", flat=True).first() or 0
     created_at = timezone.now()
-    manifest = {"version": version, "content_hash": digest, "created_at": created_at.isoformat(timespec="seconds"), "counts": counts(content),
+    manifest = {"version": version, "content_hash": digest, "page_hash": page, "created_at": created_at.isoformat(timespec="seconds"), "counts": counts(content),
                 "revision_high_water": high, "site_name": settings.SITE_NAME, "notes": notes, "previous": live,
                 "changes": report["total"], "files": list(FILES)}
     files = {
@@ -144,7 +181,7 @@ def publish(*, actor: str, notes: str = "", force: bool = False, today: date | N
         raise gates.PublishRefused({"report": [f"changes.json for {version} is not in the store"]})
     with transaction.atomic():
         release = Release.objects.create(
-            version=version, created_by=actor, content_hash=digest, snapshot_path=storage.release_key(version, "content.json"),
+            version=version, created_by=actor, content_hash=digest, page_hash=page, snapshot_path=storage.release_key(version, "content.json"),
             counts=manifest["counts"], revision_high_water=high, notes=notes,
         )
     _point(release, actor=actor, reason="publish", previous=live)

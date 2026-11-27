@@ -23,20 +23,40 @@
     <div class="s">after {{ alerts.after }} failures in a row · {% if alerts.via %}{{ alerts.recipients }} recipient{{ alerts.recipients|pluralize }} via {{ alerts.via }} ({{ alerts.backend }}){% else %}no recipients: a log line only{% endif %}</div></div>
 </div>
 
+{% if open_actions %}
+<h2>Actions in progress</h2>
+<div class="scroll"><table>
+<tr><th>#</th><th>Action</th><th>Target</th><th>By</th><th>Status</th><th>Requested</th></tr>
+{% for a in open_actions %}<tr><td class="mono"><a href="{% url 'opsconsole:action' a.pk %}">{{ a.pk }}</a></td><td>{{ a.get_kind_display }}</td><td class="mono">{{ a.target }}</td><td>{{ a.requested_by }}</td>
+<td><span class="tag info">{{ a.status }}</span>{% if a.status == 'pending' and not health.worker_holds_lock %} <span class="tag warn">no worker running</span>{% endif %}</td><td>{{ a.created_at|ago }}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+
+{% if paused %}
+<h2>Paused jobs</h2>
+<div class="scroll"><table>
+<tr><th>Job</th><th>Paused by</th><th>When</th><th>Why</th><th></th></tr>
+{% for j in paused %}<tr class="warn"><td>{{ j.name }}</td><td>{{ j.paused.by }}</td><td class="nowrap">{{ j.paused.at|slice:":16" }}</td><td>{{ j.paused.reason }}</td>
+<td>{% act "resume_job" "Resume…" job=j.name %}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+
 <h2>Jobs</h2>
 <p class="note">One row per job in run order. A feed job's row is its newest run across its feeds; failures in a row are the worst feed's. Red: at the alert threshold; amber: failing or overdue.</p>
 <div class="scroll"><table>
-<tr><th>Job</th><th>Every</th><th>Last run</th><th>Status</th><th class="n">Took</th><th>Counts</th><th class="n">Fails in a row</th><th>Next due</th></tr>
+<tr><th>Job</th><th>Every</th><th>Last run</th><th>Status</th><th class="n">Took</th><th>Counts</th><th class="n">Fails in a row</th><th>Next due</th>{% if can_act %}<th>Act</th>{% endif %}</tr>
 {% for j in jobs %}
 <tr class="{% if j.alerting %}bad{% elif j.failures or j.overdue %}warn{% endif %}">
-  <td><a href="{% url 'opsconsole:runs' %}?job={{ j.name }}">{{ j.name }}</a>{% if j.feed %} <span class="muted small">{{ j.feeds_enabled }}/{{ j.feeds_total }} feeds on</span>{% endif %}<div class="muted small">{{ j.doc|truncatechars:80 }}</div></td>
+  <td><a href="{% url 'opsconsole:runs' %}?job={{ j.name }}">{{ j.name }}</a>{% if j.paused %} <span class="tag warn">paused</span>{% endif %}{% if j.feed %} <span class="muted small">{{ j.feeds_enabled }}/{{ j.feeds_total }} feeds on</span>{% endif %}<div class="muted small">{{ j.doc|truncatechars:80 }}</div></td>
   <td class="nowrap">{% if j.feed %}per feed{% else %}{{ j.interval|minutes }}{% endif %}</td>
   <td class="nowrap">{% if j.run %}{{ j.run.started_at|ago }}{% if j.run.feed %}<div class="muted small">{{ j.run.feed.name|truncatechars:28 }}</div>{% endif %}{% else %}<span class="muted">never</span>{% endif %}</td>
   <td>{% if j.status %}<span class="tag {{ j.status|status_class }}">{{ j.status }}</span>{% endif %}{% if j.error %}<div class="err">{{ j.error }}</div>{% endif %}</td>
   <td class="n">{{ j.duration|seconds }}</td>
   <td class="small">{{ j.counts }}</td>
   <td class="n">{% if j.failures %}<b>{{ j.failures }}</b>{% if j.worst_feed %}<div class="muted small">{{ j.worst_feed|truncatechars:24 }}</div>{% endif %}{% else %}0{% endif %}</td>
-  <td class="nowrap">{% if j.next_due %}{% if j.next_due <= now %}due now{% else %}{{ j.next_due|ago }}{% endif %}{% else %}<span class="muted">no feed on</span>{% endif %}{% if j.overdue %} <span class="tag warn">overdue</span>{% endif %}</td>
+  <td class="nowrap">{% if j.paused %}<span class="muted">paused</span>{% elif j.next_due %}{% if j.next_due <= now %}due now{% else %}{{ j.next_due|ago }}{% endif %}{% else %}<span class="muted">no feed on</span>{% endif %}{% if j.overdue %} <span class="tag warn">overdue</span>{% endif %}</td>
+  {% if can_act %}<td><div class="acts">{% if not j.paused %}{% act "run_job" "Run now…" job=j.name %}{% act "pause_job" "Pause…" job=j.name %}{% else %}{% act "resume_job" "Resume…" job=j.name %}{% endif %}</div>
+    {% if j.not_idempotent %}<div class="muted small">not idempotent: at most once per interval from here</div>{% endif %}</td>{% endif %}
 </tr>
 {% endfor %}
 </table></div>

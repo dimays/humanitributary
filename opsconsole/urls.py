@@ -1,4 +1,4 @@
-"""/ops/: the operations console (staff only, read-only; docs/adr/0028-operations-console.md)."""
+"""/ops/: the operations console (staff only; actions need ops_operator; docs/adr/0028-operations-console.md)."""
 
 from django.urls import path
 
@@ -16,4 +16,9 @@ urlpatterns = [
     path("releases/", views.releases, name="releases"),
     path("releases/<str:version>/changes/", views.release_changes, name="release_changes"),
     path("programs/", views.programs, name="programs"),
+    path("actions/", views.action_list, name="actions"),
+    path("actions/<int:pk>/", views.action_detail, name="action"),
+    path("actions/<int:pk>/cancel/", views.action_cancel, name="action_cancel"),
+    path("act/<str:kind>/", views.act, name="act"),
+    path("act/<str:kind>/confirm/", views.confirm, name="confirm"),
 ]
