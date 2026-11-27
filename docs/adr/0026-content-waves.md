@@ -1,6 +1,6 @@
 # 0026 — Content waves: gaps found window by window, newest history first, queued as fill_gap tasks under a daily cap
 
-**Status:** proposed (November 2026); refines [0011](0011-branch-governance.md); refines [0017](0017-agent-api.md)
+**Status:** proposed (November 2026); refines [0011](0011-branch-governance.md); refines [0017](0017-agent-api.md); amended by [0027](0027-caps-after-round-3.md)
 
 ## Context
 

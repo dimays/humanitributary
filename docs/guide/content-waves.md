@@ -104,8 +104,8 @@ A gap is skipped when:
 |---|---|---|
 | An open task | `<wave>.open` | A queued or claimed `fill_gap` with the same key. A queued one gets its payload and priority refreshed (keeping `pointers`). |
 | Recently attempted | `<wave>.recent_<outcome>` | The window's last task ended less than `retry_after_days` ago: 180 days after `nothing_notable`, 60 after events were written (they wait in review, and the window counts as a gap until one is published), 30 after a failure, none after a cancellation. |
-| The branch is busy | `<wave>.held_branch` | The branch already has `max_open_per_branch` (1) open `fill_gap` task. One at a time lets each agent see the last one's events, and spreads the day's tasks across branches. |
-| The daily cap | `<wave>.held_cap` | `settings.FILL_GAP_TASKS_PER_DAY` (20, env `FILL_GAP_TASKS_PER_DAY`; `--opt per_day=` for one run) new tasks a local day, counted like `write_event`'s cap. |
+| The branch is busy | `<wave>.held_branch` | The branch already has `max_open_per_branch` (2; env `FILL_GAP_MAX_OPEN_PER_BRANCH`) open `fill_gap` task. One at a time lets each agent see the last one's events, and spreads the day's tasks across branches. |
+| The daily cap | `<wave>.held_cap` | `settings.FILL_GAP_TASKS_PER_DAY` (40, env `FILL_GAP_TASKS_PER_DAY`; `--opt per_day=` for one run) new tasks a local day, counted like `write_event`'s cap. |
 
 A gap is a window on a branch, and its key is the task's dedupe key:
 `gap:<branch>:<from>:<to>`. A queued task whose window is no longer a gap
@@ -208,7 +208,8 @@ recently.
 |---|---|
 | A wave's span or window | `DEFAULT_WAVES` (or `CONTENT_WAVES`). Windows change, so their keys change: queued tasks of the old windows are cancelled on the next run, and suppression starts over for the new ones. Bump `VERSION`, amend ADR 0026, update the table above. |
 | A threshold | `DEFAULTS` (or `GAP_RULES`), the table rows here, and ADR 0026 when it changes what gets queued. `tests/test_waves.py` pins the fixture's gaps. |
-| The daily cap | `FILL_GAP_TASKS_PER_DAY` in the environment; the default is in `config/settings.py`. |
+| The daily cap | `FILL_GAP_TASKS_PER_DAY` in the environment; the default (40) is in `config/settings.py`. |
+| Open tasks per branch | `FILL_GAP_MAX_OPEN_PER_BRANCH` in the environment (default 2, via `GAP_RULES` in `config/settings.py`). |
 | The priority bands | `priority()`, and the kinds table in [work queue and agents](work-queue-and-agents.md#the-kinds-of-task). Keep them under the other kinds' scales in mind: a token with every scope claims the highest priority first. |
 | A payload key or the result | `payload()` or `agentapi/schemas.py` / `agentapi/apply.py` `fill_gap`, and the skill, in the same pull request. |
 | A new pointer source | `governance/pointers.py`; its terms read first (rule 13, ADR 0013). |

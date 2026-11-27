@@ -1,6 +1,6 @@
 # 0022 — Ingestion tuned on its first run: a threshold from the data, a daily cap, routing by role, branches only where Wikidata says so
 
-**Status:** proposed (November 2026); amends [0012](0012-ingestion.md); amends [0011](0011-branch-governance.md)
+**Status:** proposed (November 2026); amends [0012](0012-ingestion.md); amends [0011](0011-branch-governance.md); amended by [0027](0027-caps-after-round-3.md)
 
 ## Context
 

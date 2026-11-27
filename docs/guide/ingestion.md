@@ -459,7 +459,7 @@ All the parts are stored in each candidate's `details.priority_parts`, so a prio
 
 ### write_event tasks
 
-A cluster becomes a `write_event` task when its priority is at least `WRITE_EVENT_THRESHOLD` (64, or
+A cluster becomes a `write_event` task when its priority is at least `WRITE_EVENT_THRESHOLD` (70, env `WRITE_EVENT_THRESHOLD`, or
 `--opt threshold=`) and at least one member comes from the portal or a year page (Wikipedia backs it). Clusters are
 taken highest first, up to `MAX_TASK_UPDATES` (150) a run. The task's dedupe key is `cluster:<key>` and its
 priority the rounded cluster priority, so re-running never duplicates it. While the task is still queued, its
@@ -468,7 +468,8 @@ payload and priority are refreshed (keeping any `suggested_sources` that `enrich
 - **The threshold's method.** About the top 12.5% of clusters should qualify (the middle of 10–15%): 64 is the
   priority of the cluster at the 12.5th percentile from the top of the first real run's 682 clusters (64.86),
   rounded down, which lets 95 (13.9%) through. Re-derive it the same way when the formula or routing changes
-  ([ADR 0022](../adr/0022-ingestion-tuning.md)).
+  ([ADR 0022](../adr/0022-ingestion-tuning.md)). After round 3, where about 45% of write_event tasks were rejected as
+  routine or undecided, the owner raised it to 70 ([ADR 0027](../adr/0027-caps-after-round-3.md)).
 - **The daily cap.** At most `settings.WRITE_EVENT_TASKS_PER_DAY` (20; env `WRITE_EVENT_TASKS_PER_DAY`, or
   `--opt per_day=`) new tasks per local day, counting the tasks this job created since midnight whatever their
   state. A qualifying cluster without an open task waits when the day's cap is used (`tasks_held_by_daily_cap`),

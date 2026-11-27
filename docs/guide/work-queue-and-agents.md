@@ -277,7 +277,7 @@ their slugs in `result.entries`. No skill covers it yet.
 ### fill_gap
 
 Built by `governance/waves.py` `payload()` for each gap in a branch's window
-of a content wave, at most `FILL_GAP_TASKS_PER_DAY` (20) new a day and one
+of a content wave, at most `FILL_GAP_TASKS_PER_DAY` (40) new a day and two
 open per branch. How gaps, waves and priorities are computed, and every
 payload key, is in [content waves](content-waves.md#the-payload). In short:
 `wave`, `window` (`from`, `to`, `label`), `gap` (`kind`, counts, `run`),

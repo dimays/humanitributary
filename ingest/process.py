@@ -49,7 +49,8 @@ TIER_WEIGHT = {1: 1.0, 2: 0.8, 3: 0.6, 4: 0.3, None: 0.5}
 # middle of the 10–15% the owner asked for): on the first real run (844 candidates, 682 clusters, routed as now)
 # the cluster at the 12.5th percentile from the top scored 64.86; rounded down, 64 lets 95 clusters (13.9%) through.
 # Re-derive it the same way when the formula changes (docs/adr/0022-ingestion-tuning.md).
-WRITE_EVENT_THRESHOLD = 64.0
+# Raised to 70 by the owner after round 3 (docs/adr/0027-caps-after-round-3.md); set WRITE_EVENT_THRESHOLD to change it.
+WRITE_EVENT_THRESHOLD = float(getattr(settings, "WRITE_EVENT_THRESHOLD", 70.0))
 MAX_TASK_UPDATES = 150
 DUP_THRESHOLD = 0.5
 WINDOW_DAYS = 60

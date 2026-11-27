@@ -164,7 +164,13 @@ WRITE_EVENT_TASKS_PER_DAY = int(os.getenv("WRITE_EVENT_TASKS_PER_DAY", "20"))
 # At most this many new fill_gap tasks a day from the `gap_waves` job (governance/waves.py, docs/adr/0026-content-waves.md),
 # best first; the rest wait. The waves themselves (CONTENT_WAVES) and the gap thresholds (GAP_RULES) default in
 # governance/waves.py; a deployment may set either here.
-FILL_GAP_TASKS_PER_DAY = int(os.getenv("FILL_GAP_TASKS_PER_DAY", "20"))
+FILL_GAP_TASKS_PER_DAY = int(os.getenv("FILL_GAP_TASKS_PER_DAY", "40"))
+# Overrides for governance/waves.py GAP_RULES. Two open fill_gap tasks per branch (was one): round 3 showed gap
+# tasks are the highest-value work and ran out mid-round (docs/adr/0027-caps-after-round-3.md).
+GAP_RULES = {"max_open_per_branch": int(os.getenv("FILL_GAP_MAX_OPEN_PER_BRANCH", "2"))}
+# A story becomes a write_event task at this priority (ingest/process.py). 64 let through too many routine stories:
+# about 45% of round 3's write_event tasks were rejected, so the owner raised it to 70 (docs/adr/0027-caps-after-round-3.md).
+WRITE_EVENT_THRESHOLD = float(os.getenv("WRITE_EVENT_THRESHOLD", "70"))
 
 # Ingestion (ingest/, docs/adr/0012-ingestion.md). The User-Agent names the bot and a generic contact, never a
 # person: the project's repository by default (Wikimedia asks for a contact).
