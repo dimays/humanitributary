@@ -3,6 +3,7 @@ readable before/after diffs. No libraries: the SVG is a few rectangles."""
 
 import difflib
 import json
+import uuid
 from datetime import timedelta
 
 from django import template
@@ -159,3 +160,29 @@ def field_diffs(rev) -> list[dict]:
 @register.filter
 def diffs(rev):
     return field_diffs(rev)
+
+
+@register.simple_tag(takes_context=True)
+def act(context, kind, label, css="", **fields):
+    """A one-button POST form that starts an action (step 1: the confirmation page). Rendered only for operators
+    (`can_act`); everyone else gets nothing. Carries the CSRF token and a fresh key (used by actions that skip the
+    confirmation, so a double click acts once)."""
+    from django.middleware.csrf import get_token
+    from django.urls import reverse
+
+    if not context.get("can_act"):
+        return ""
+    request = context["request"]
+    hidden = "".join(format_html('<input type="hidden" name="{}" value="{}">', k, v) for k, v in fields.items() if v not in (None, ""))
+    return format_html(
+        '<form class="act" method="post" action="{}"><input type="hidden" name="csrfmiddlewaretoken" value="{}">'
+        '<input type="hidden" name="key" value="{}">{}<button type="submit" class="act {}">{}</button></form>',
+        reverse("opsconsole:act", args=[kind]), get_token(request), uuid.uuid4().hex, mark_safe(hidden), css, label)
+
+
+@register.filter
+def took(action) -> str:
+    """How long an action (or anything with started_at and finished_at) ran: "3.2 s", "4 m 10 s", or "–"."""
+    if not getattr(action, "started_at", None) or not getattr(action, "finished_at", None):
+        return "–"
+    return seconds((action.finished_at - action.started_at).total_seconds())

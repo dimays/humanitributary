@@ -1,0 +1,28 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Actions{% endblock %}
+{% block content %}
+<h1>Actions</h1>
+<p class="note">Every intervention made from the console: who, what, why, what the confirmation showed and what happened (the OpsAction audit rows; read-only in the admin too).
+{% if not can_act %} You can read them; acting needs the <span class="mono">opsconsole.ops_operator</span> permission.{% endif %}</p>
+<form class="filters" method="get">
+  <label>Kind <select name="kind"><option value="">any</option>{% for k, l in kinds %}<option value="{{ k }}"{% if f.kind == k %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+  <label>Status <select name="status"><option value="">any</option>{% for s in statuses %}<option{% if f.status == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>By <input name="by" value="{{ f.by }}" placeholder="human:owner"></label>
+  <button type="submit">Filter</button> <a href="{% url 'opsconsole:actions' %}">clear</a>
+</form>
+<div class="scroll"><table>
+<tr><th>#</th><th>Requested</th><th>Action</th><th>Target</th><th>By</th><th>Reason</th><th>Where</th><th>Status</th><th class="n">Took</th></tr>
+{% for a in page %}
+<tr class="{% if a.status == 'failed' %}bad{% elif a.status == 'pending' or a.status == 'running' %}warn{% endif %}">
+  <td class="mono"><a href="{% url 'opsconsole:action' a.pk %}">{{ a.pk }}</a></td>
+  <td class="nowrap small">{{ a.created_at|date:"Y-m-d H:i:s" }}<div class="muted">{{ a.created_at|ago }}</div></td>
+  <td>{{ a.get_kind_display }}</td><td class="mono small">{{ a.target }}</td><td class="small">{{ a.requested_by }}</td>
+  <td class="small">{{ a.reason|truncatechars:80 }}</td><td class="small">{{ a.runs_in }}</td>
+  <td><span class="tag {{ a.status|status_class }}">{{ a.status }}</span>{% if a.error %}<div class="err">{{ a.error|truncatechars:90 }}</div>{% endif %}</td>
+  <td class="n">{{ a|took }}</td>
+</tr>
+{% empty %}<tr><td colspan="9" class="muted">No actions yet.</td></tr>
+{% endfor %}
+</table></div>
+{% include "opsconsole/_pager.html" %}
+{% endblock %}

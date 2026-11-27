@@ -1,0 +1,7 @@
+{% extends "opsconsole/base.html" %}
+{% block title %}Refused: {{ label }}{% endblock %}
+{% block content %}
+<h1>Not done: {{ label }}</h1>
+<div class="banner bad">{{ message }}</div>
+<p class="note">Nothing was changed. <a href="{% url 'opsconsole:overview' %}">Overview</a> · <a href="{% url 'opsconsole:actions' %}">all actions</a></p>
+{% endblock %}

@@ -59,6 +59,21 @@ svg.spark { vertical-align: middle; } svg.hbar rect { fill: var(--bar); }
 ins { background: var(--ins); text-decoration: none; } del { background: var(--del); }
 .diff td { font-size: 12px; white-space: pre-wrap; word-break: break-word; max-width: 560px; }
 .note { color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
+form.act { display: inline; margin: 0; }
+button.act, .confirm button { font: inherit; font-size: 12px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--head); color: var(--accent); cursor: pointer; white-space: nowrap; }
+button.act.danger, .confirm button.danger { color: var(--bad); }
+.acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.confirm { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; max-width: 980px; }
+.confirm dl { display: grid; grid-template-columns: minmax(140px, max-content) 1fr; gap: 4px 14px; margin: 0 0 10px; }
+.confirm dt { color: var(--muted); } .confirm dd { margin: 0; }
+.confirm label { display: block; margin: 10px 0 4px; font-weight: 600; }
+.confirm textarea, .confirm input[type=text] { width: 100%; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--text); }
+.confirm .go { margin-top: 12px; display: flex; gap: 10px; align-items: center; }
+.confirm .go button { font-size: 14px; padding: 5px 16px; color: var(--text); }
+.confirm .go button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.banner { padding: 8px 12px; border-radius: 6px; margin: 0 0 12px; }
+.banner.warn { background: var(--warn-bg); color: var(--warn); } .banner.bad { background: var(--bad-bg); color: var(--bad); }
+.banner.ok { background: var(--ok-bg); color: var(--ok); } .banner.info { background: var(--info-bg); color: var(--info); }
 </style>
 </head>
 <body>
@@ -71,9 +86,10 @@ ins { background: var(--ins); text-decoration: none; } del { background: var(--d
     <a href="{% url 'opsconsole:changes' %}" class="{% if section == 'changes' %}on{% endif %}">Changes</a>
     <a href="{% url 'opsconsole:releases' %}" class="{% if section == 'releases' %}on{% endif %}">Releases</a>
     <a href="{% url 'opsconsole:programs' %}" class="{% if section == 'programs' %}on{% endif %}">Content programs</a>
+    <a href="{% url 'opsconsole:actions' %}" class="{% if section == 'actions' %}on{% endif %}">Actions</a>
     <a href="{% url 'admin:index' %}">Admin</a>
   </nav>
-  <span class="right">Read-only · {{ now|date:"Y-m-d H:i" }} UTC ·
+  <span class="right">{% if can_act %}Operator ({{ request.user.get_username }}){% else %}Read-only{% endif %} · {{ now|date:"Y-m-d H:i" }} UTC ·
     <a href="{{ refresh_toggle }}">{% if refresh %}auto-refresh on ({{ refresh }} s): stop{% else %}auto-refresh every 60 s{% endif %}</a></span>
 </header>
 <main>

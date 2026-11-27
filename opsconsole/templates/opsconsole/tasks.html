@@ -12,8 +12,11 @@
 </form>
 
 <h2>Tasks <span class="muted small">{{ page.paginator.count }} match</span></h2>
+{% if can_act and filtered %}<div class="acts note">For the tasks matching these filters (the next page shows exactly which, at most 50):
+  {% act "requeue_tasks" "Requeue the failed or cancelled ones…" kind=f.kind status=f.status agent=f.agent q=f.q %}
+  {% act "cancel_tasks" "Cancel the queued or expired ones…" "danger" kind=f.kind status=f.status agent=f.agent q=f.q %}</div>{% endif %}
 <div class="scroll"><table>
-<tr><th>#</th><th>Kind</th><th>Status</th><th class="n">Priority</th><th class="n">Age</th><th>Lease</th><th class="n">Tries</th><th>Key</th><th>Result</th></tr>
+<tr><th>#</th><th>Kind</th><th>Status</th><th class="n">Priority</th><th class="n">Age</th><th>Lease</th><th class="n">Tries</th><th>Key</th><th>Result</th>{% if can_act %}<th>Act</th>{% endif %}</tr>
 {% for t in page %}
 <tr class="{% if t.stale %}warn{% elif t.status == 'failed' %}bad{% endif %}">
   <td class="mono"><a href="{% url 'opsconsole:task' t.pk %}">{{ t.pk }}</a></td>
@@ -25,8 +28,12 @@
   <td class="n">{{ t.attempts }}/{{ t.max_attempts }}</td>
   <td class="mono small">{{ t.dedupe_key|truncatechars:40 }}{% if t.target_ref %}<div class="muted">{{ t.target_ref|truncatechars:40 }}</div>{% endif %}</td>
   <td class="small">{{ t.summary }}{% if t.error %}<div class="err">{{ t.error|truncatechars:100 }}</div>{% endif %}</td>
+  {% if can_act %}<td><div class="acts">
+    {% if t.status == 'claimed' %}{% act "release_lease" "Release…" task=t.pk holder=t.claimed_by %}{% act "extend_lease" "Extend…" task=t.pk holder=t.claimed_by %}{% endif %}
+    {% if t.status == 'failed' or t.status == 'cancelled' %}{% act "requeue_tasks" "Requeue…" task=t.pk %}{% endif %}
+    {% if t.status == 'queued' or t.stale %}{% act "cancel_tasks" "Cancel…" "danger" task=t.pk %}{% endif %}</div></td>{% endif %}
 </tr>
-{% empty %}<tr><td colspan="9" class="muted">No tasks match.</td></tr>
+{% empty %}<tr><td colspan="10" class="muted">No tasks match.</td></tr>
 {% endfor %}
 </table></div>
 {% include "opsconsole/_pager.html" %}

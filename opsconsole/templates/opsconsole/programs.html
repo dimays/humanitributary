@@ -5,6 +5,7 @@
 
 <h2>Content waves <span class="muted small">active: {{ waves.active }} · {{ waves.per_day }} new fill_gap tasks a day at most{% if waves.last_run.at %} · last gap_waves run {{ waves.last_run.at|slice:":16" }}{% endif %}</span></h2>
 {% if not waves.last_run %}<p class="note">No gap_waves run yet: gaps and coverage appear after the first one.</p>{% endif %}
+{% if can_act %}<div class="acts">{% act "advance_wave" "Advance to the next wave…" %}</div>{% endif %}
 <div class="scroll"><table>
 <tr><th>Wave</th><th class="n">Coverage</th><th class="n">Gaps found</th><th class="n">Queued</th><th class="n">Claimed</th><th class="n">Held (cap / branch)</th><th class="n">Done: written</th><th class="n">Done: nothing notable</th><th class="n">Failed</th><th class="n">Cancelled</th><th class="n">Tried recently</th></tr>
 {% for w in waves.rows %}

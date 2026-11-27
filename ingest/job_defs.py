@@ -133,7 +133,9 @@ def enrich_tasks(ctx):
     second_source.run_enrich_tasks(ctx)
 
 
-@job("link_health", interval=DAY)
+@job("link_health", interval=DAY, not_idempotent=(
+    "each run is a round: three failed rounds in a row make a citation dead (ingest/linkhealth.py), so back-to-back "
+    "runs can turn a host's bad hour into dead links, and every run appends LinkCheck rows"))
 def link_health(ctx):
     """Re-check cited URLs; stale claims and verify_claim tasks for dead or changed ones."""
     linkhealth.run(ctx)
@@ -162,7 +164,9 @@ def branches_review(ctx):
     ctx.counts["findings"] = len(out.get("findings", []))
 
 
-@job("second_source", interval=DAY)
+@job("second_source", interval=DAY, not_idempotent=(
+    "it walks claims from a bookmark (JobState \"second_source\"): each run does the next batch, so a second run is "
+    "\"more\", not \"again\""))
 def second_source_(ctx):
     """Suggested second sources for claims only Wikipedia supports (verify_claim tasks)."""
     second_source.run_second_source(ctx)

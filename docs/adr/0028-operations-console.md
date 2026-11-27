@@ -1,6 +1,6 @@
 # 0028 — An operations console for staff: read-only pages now, audited interventions planned
 
-**Status:** proposed (November 2026). Phase 1, the read-only console, is built; phase 2, the interventions below, is a plan for the owner to accept before any of it is built
+**Status:** accepted (November 2026). Phase 1, the read-only console, is built; phase 2, the interventions below, was accepted by the owner and is built as the plan says, with the changes listed under "Phase 2 as built" at the end
 
 ## Context
 
@@ -44,7 +44,7 @@ fixes (re-run a job, free a stuck lease, roll back a release) without a shell.
   rather than through `governance.waves.state()`, which creates the row. Secrets in error text are masked again with
   `ingest.policy.mask_secrets` on display.
 
-### Phase 2 (proposed): interventions in the UI
+### Phase 2: interventions in the UI
 
 A short list of operator actions, each mapped to code that already exists or to a small, named addition.
 
@@ -109,3 +109,36 @@ Non-idempotent jobs are not offered for "re-run now" or "retry"; they wait for t
   `ops_operator` permission and a worker job; it is a separate pull request once the owner accepts this part.
 - Revisit `OPS_HOSTS` at launch (set it to the data host), and the absence of indexes if a page's query grows slow
   on production's row counts.
+
+## Phase 2 as built (November 2026)
+
+The plan above holds, with these differences, each decided when it was built:
+
+- **The permission is on the model.** `opsconsole.ops_operator` is in `OpsAction`'s `Meta.permissions` (migration
+  `opsconsole/migrations/0001_opsaction.py`) rather than on a model-less content type, since the app now has a model. Staff
+  without it see no buttons and get a 403 on every action URL; superusers have it implicitly.
+- **The worker picks actions up between jobs, not as a registry job.** A registry job `ops_actions` would have
+  written a FetchRun every tick and waited behind every due job. Instead `ingest.jobs.loop()` passes `run_due` a
+  `between` callback that runs the hooks in `ingest.jobs.BETWEEN_JOBS` before each due job and once a pass;
+  `opsconsole` registers `opsconsole.worker.pick_up` there. Same locks as planned: only the worker holding the
+  scheduler lock runs them, under the runner's lock.
+- **Non-idempotent jobs have a cooldown instead of no button.** `link_health` and `second_source` carry
+  `not_idempotent` (the reason, in `ingest/job_defs.py`), and the console refuses to run them again within their
+  interval (a day) of their last run, saying why and when they may run; outside it they can be run or retried.
+  Feed jobs are refused per feed within an hour of that feed's last run, as planned.
+- **Publish --check runs in the worker too**, as an action of its own (`publish_check`) that needs no confirmation
+  (it writes nothing); its finished page is the publish confirmation. A publish then checks that the content and
+  the page still hash as checked, and refuses otherwise, so what was confirmed is what is released. A check is good
+  for 30 minutes and for one publish.
+- **Pausing is one flag for every job**, `JobState` "paused_jobs" read by `run_due` (and `run_jobs --list`), feed
+  jobs included; `Feed.enabled` stays the admin's switch for one feed. `run_job` still runs a paused job.
+- **Requeue resets attempts** (a failed task is usually out of them), and acts on at most 50 tasks: a filtered batch
+  shows its count and takes the first 50 by priority and age, exactly the ids the confirmation listed. Cancel never
+  takes a task whose lease is live. Releasing a stuck lease keeps the attempt counted.
+- **Confirmation tokens** are signed (Django's signing, 30 minutes) and carry the plan, the user and the
+  idempotency key, so the second step cannot change what the first one showed. A pending worker action can be
+  withdrawn before the worker takes it.
+- **Page-only releases.** A page-only change now makes a release without `--force` ([0029](0029-release-identity-includes-the-page.md)),
+  so the console's "force" box is for the rare change the page hash cannot see.
+
+How it works in full: `docs/guide/operations-console.md`, "Actions".

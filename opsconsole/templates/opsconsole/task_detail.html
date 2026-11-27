@@ -3,6 +3,11 @@
 {% block content %}
 <h1>Task #{{ t.pk }} <span class="muted">{{ t.kind }}</span> <span class="tag {{ t.status|status_class }}">{{ t.status }}</span></h1>
 <p class="note"><a href="{% url 'opsconsole:tasks' %}?kind={{ t.kind }}">← {{ t.kind }} tasks</a> · <a href="{% url 'admin:work_agenttask_change' t.pk %}">in the admin</a></p>
+{% if can_act %}<div class="acts">
+  {% if t.status == 'claimed' %}{% act "release_lease" "Release the lease…" task=t.pk holder=t.claimed_by %}{% act "extend_lease" "Extend the lease…" task=t.pk holder=t.claimed_by %}{% endif %}
+  {% if t.status == 'failed' or t.status == 'cancelled' %}{% act "requeue_tasks" "Requeue…" task=t.pk %}{% endif %}
+  {% if t.status == 'queued' or stale %}{% act "cancel_tasks" "Cancel…" "danger" task=t.pk %}{% endif %}
+</div>{% endif %}
 
 <div class="grid">
   <div class="card"><div class="k">Created</div><div class="v">{{ t.created_at|ago }}</div><div class="s">{{ t.created_at|date:"Y-m-d H:i" }} by {{ t.created_by }}</div></div>

@@ -105,6 +105,12 @@ standing by" and tries again each tick, so a deploy that briefly runs two worker
 and launchd can run at the same time: whichever holds the runner's lock runs the due jobs, and the other exits or
 waits for its next tick.
 
+Between jobs, and once a tick when nothing is due, the worker also runs the actions staff queued from the
+[operations console](operations-console.md) (a job run, `publish --check`, a publish, a rollback): they wait as
+`pending` OpsAction rows until a worker holding the scheduler lock picks them up, so with no worker running
+(staging's `worker` at 0, or no `make up` locally) they wait, and the console says so. A job paused from the console
+(`JobState` "paused_jobs") is skipped by every runner until it is resumed; `run_jobs --list` shows it as paused.
+
 SIGTERM (Heroku's shutdown, Ctrl-C under honcho) lets the job that is running finish, then stops before the next
 one and logs "worker stopped". A job cut off by SIGKILL is closed as failed on the next run. The worker's output
 goes to its terminal (honcho prefixes each line with the process's name), not to `var/logs/`.
@@ -276,12 +282,13 @@ pg:backups:restore <id> DATABASE_URL`, which replaces the database, schema and d
 
 Read these, in this order. Most of it is also on one screen each in the [operations console](operations-console.md)
 (`/ops/` on the data host, for staff; the admin's header links to it): job runs and failures, the queue, intake
-against the daily caps, Revisions, releases and the content programs. It is read-only; the commands below are still
-how you act.
+against the daily caps, Revisions, releases and the content programs. Staff with the `ops_operator` permission can
+also act from it (run or retry a job, pause one, free a lease, requeue or cancel tasks, advance the wave, publish,
+roll back), each confirmed, with a reason, and recorded as an OpsAction; the commands below do the same from a shell.
 
 | Where | What it tells you |
 |---|---|
-| `/ops/` (the operations console) | Health, one row per job (last run, failures in a row, next due), queue depth per kind, today's intake, alerts; more pages for runs, tasks, changes, releases and the content programs. Staff only. |
+| `/ops/` (the operations console) | Health, one row per job (last run, failures in a row, next due, paused), queue depth per kind, today's intake, alerts, actions in progress; more pages for runs, tasks, changes, releases, the content programs and every action taken. Staff only; acting needs `ops_operator`. |
 | `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs; on staging, the app's URL + `/healthz`) | JSON from `infra/health.py`: the database, both stores and `storage_backend` (`local` when hosted means the dyno's throwaway disk), the latest release's version, each job's last run, last run that finished ok or partial, last status and consecutive failures, and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
 | `make storage-status` | The storage backend, whether each bucket answers, and the `latest` pointer: its version, why it was written and by whom. |
 | `make digest` (`manage.py digest`) | Open tasks by kind, the top `write_event` stories, `write_event` by branch, `verify_claim` reasons, new-branch signals, the fact base's and branch governance's sections, candidates by status, and every job's runs in the last 24 hours with the last three failed or partial errors. "No runs in the last 24 hours" means the schedule isn't running. `--sources` adds every feed and lookup adapter, on or off, with its publisher's policy, tier and disabled reason, plus the sources considered and skipped. |
@@ -353,7 +360,9 @@ skip them.
    `var/logs/run-jobs-<date>.log` (launchd) or the worker's terminal has what the run printed.
 2. **Reproduce it.** `uv run python manage.py run_job <name>` runs it now, due or not; for a feed job add
    `--feed "<feed name>"` to run one feed. It takes the same lock, so if the worker or a launchd tick is running
-   jobs it exits with "another run_jobs holds the lock". Options go in with `--opt key=value`.
+   jobs it exits with "another run_jobs holds the lock". Options go in with `--opt key=value`. From the console, a
+   failed run's "Retry…" does the same in the worker (not for `link_health` or `second_source` within a day of their
+   last run: they are not idempotent back to back), and "Pause…" stops the schedule running it while you look.
 3. **Read the cause.**
 
    | The error says | Usually |
@@ -398,17 +407,19 @@ What `publish/release.py` writes, in the `releases` store:
 
 - `releases/<version>/content.json`: the snapshot. `<version>` is `YYYY.MM.DD.N`, where N counts that day's
   Release rows, skipping any number whose files a failed run left in the store.
-- `releases/<version>/manifest.json`: the version, sha256 `content_hash`, creation time, counts,
-  `revision_high_water` (the last Revision included) and the release readers had before (`previous`).
+- `releases/<version>/manifest.json`: the version, sha256 `content_hash`, `page_hash` (the built page's inputs),
+  creation time, counts, `revision_high_water` (the last Revision included) and the release readers had before
+  (`previous`).
 - `releases/<version>/changes.json` and `changes.md`: the change report against that previous release.
 - `releases/<version>/timeline.html`: the page the build gate built.
 - `releases/latest.json`: the pointer, with the version, its hash and snapshot key, when and by whom it was
   written, why (`publish` or `rollback`) and the version before. It is the only object that is ever rewritten.
-- A `Release` row with the same hash, the snapshot's key and the counts.
+- A `Release` row with the same two hashes, the snapshot's key and the counts.
 
 Nothing under `releases/<version>/` is changed after it is written (`infra/storage.py` raises `Immutable` on
-different bytes). `publish` makes a new release only when the content's hash differs from the newest Release row's
-(or with `--force`), and only when every gate passes.
+different bytes). `publish` makes a new release only when the content's hash or the page's inputs' hash differs
+from the newest Release row's (or with `--force`), and only when every gate passes; a change to `site/template.html`
+or the build alone publishes as "page changed; content unchanged" ([publishing](publishing.md)).
 
 To serve an earlier release:
 
@@ -420,13 +431,15 @@ make build                                             # make release-pull, then
 `--rollback` refuses a version with no Release row, or whose snapshot is missing from the store or doesn't match
 the row's hash; otherwise it rewrites `releases/latest.json` (reason `rollback`, actor `job:publish` unless
 `--actor` says otherwise). `make release-pull` (`manage.py storage pull-release`) mirrors the pointer's version into
-`var/releases/<version>/` and repoints `var/releases/latest`; `make build` runs it first.
+`var/releases/<version>/` and repoints `var/releases/latest`; `make build` runs it first. The console's Releases
+page does the same ("Roll back to this…", run by the worker as `human:<you>`), after showing the pointer now and the
+release it would point at, its snapshot's hash checked.
 
 This changes what readers get, not the database. The next `make publish` compares the database's content with the
 newest Release row, not with the pointer.
 
-- If the content hasn't changed since that newest release, `publish` prints "Unchanged since <version>" and
-  leaves the pointer where you put it.
+- If neither the content nor the page has changed since that newest release, `publish` prints "Unchanged since
+  <version> (content and page)" and leaves the pointer where you put it.
 - If it has, `publish` runs the gates, writes a new version (its change report against the release you rolled back
   to) and points `latest` at it.
 

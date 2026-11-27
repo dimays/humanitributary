@@ -1,0 +1,13 @@
+<form method="post" action="{% url 'opsconsole:confirm' kind %}">{% csrf_token %}
+  <input type="hidden" name="token" value="{{ token }}">
+  {% if "notes" in plan.fields %}<label for="notes">Release notes <span class="muted small">(optional; in the manifest)</span></label>
+  <input type="text" id="notes" name="notes" value="{{ notes }}" maxlength="500">{% endif %}
+  {% if "force" in plan.fields %}<label class="small" style="font-weight:normal"><input type="checkbox" name="force" value="1"{% if force %} checked{% endif %}>
+    Force: page-only change. Make a release even if the content and the page's inputs hash the same as the newest release's
+    (a page-only change already makes one; this is for a change the page hash cannot see).</label>{% endif %}
+  <label for="reason">Reason <span class="muted small">(required; recorded with the action{% if kind == 'publish' or kind == 'rollback' %} and the release pointer's actor{% endif %})</span></label>
+  <textarea id="reason" name="reason" rows="2" required maxlength="2000">{{ reason }}</textarea>
+  <div class="go"><button type="submit" class="primary">{{ plan.summary }}</button>
+    <a href="{% url 'opsconsole:overview' %}">Cancel</a>
+    <span class="muted small">{% if runs_in == 'worker' %}queued for the worker; the next page follows it{% else %}done now, in one transaction{% endif %} · as {{ plan.by }}</span></div>
+</form>

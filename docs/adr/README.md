@@ -48,7 +48,8 @@ things work now; an ADR says why, and what was given up.
 | [0025](0025-edit-files-add-entries-and-junk-actors.md) | Edit files add branches, events and connections; the splitter rejects junk actors and keeps the old ones for the owner | proposed |
 | [0026](0026-content-waves.md) | Content waves: gaps found window by window, newest history first, queued as fill_gap tasks under a daily cap | proposed |
 | [0027](0027-caps-after-round-3.md) | Caps after round 3: more history gaps, fewer routine news stories | accepted |
-| [0028](0028-operations-console.md) | An operations console for staff: read-only pages now, audited interventions planned | proposed |
+| [0028](0028-operations-console.md) | An operations console for staff: read-only pages now, audited interventions planned | accepted |
+| [0029](0029-release-identity-includes-the-page.md) | A release's identity includes the page's inputs, so a page-only change publishes | accepted |
 <!-- index:end -->
 
 ## Template

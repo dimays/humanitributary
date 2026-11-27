@@ -108,7 +108,7 @@ Working state, not canonical (ADR 0012). The jobs that fill these tables are lis
 | `Candidate` | A proposed timeline item from one or more documents: kind (new_event, update, new_branch_signal), title, date guess and precision, entities, documents, branch scores, possible duplicate event and its trigram similarity, cluster key, priority, status (queued, claimed, accepted, rejected, merged), the entry it became, a stable `source_key` and `details` (what the job read, routing hits, priority parts). |
 | `LinkCheck` | One link-health re-check of a citation: method (api, head, get), HTTP status, final URL, content hash, outcome (ok, changed, redirected, dead, error, blocked, skipped), ETag / Last-Modified, archive URL. The citation keeps the latest; this keeps the history. |
 | `SuggestedSource` | A lookup adapter's hit for a claim or a candidate (adapter, URL, title, ≤ 25-word snippet, score): a suggestion for an agent, never evidence; status suggested / accepted / rejected. |
-| `JobState` | A job's bookmark between runs (the second-source walk, the terms verdicts applied, the active content wave and the last `gap_waves` run). |
+| `JobState` | A job's bookmark between runs (the second-source walk, the terms verdicts applied, the active content wave and the last `gap_waves` run), and the paused jobs ("paused_jobs"). |
 
 ## work
 
@@ -133,7 +133,13 @@ Working state, not canonical (ADR 0012). The jobs that fill these tables are lis
 
 | Table | What it's for |
 |---|---|
-| `Release` | One `manage.py publish`: version (`YYYY.MM.DD.N`), who, the content's sha256, the snapshot's key in the `releases` object store (`releases/<version>/content.json`), counts (with `single_source_events`), and the last Revision it includes. Which release readers get is `releases/latest.json` in the store, not a row (ADR 0019). |
+| `Release` | One `manage.py publish`: version (`YYYY.MM.DD.N`), who, the content's sha256 and the page hash (the page's inputs, ADR 0029; with it the release's identity), the snapshot's key in the `releases` object store (`releases/<version>/content.json`), counts (with `single_source_events`), and the last Revision it includes. Which release readers get is `releases/latest.json` in the store, not a row (ADR 0019). |
+
+## opsconsole
+
+| Table | What it's for |
+|---|---|
+| `OpsAction` | One action taken from the operations console (ADR 0028): kind, target, parameters, reason (required), who (`human:<username>`), a unique idempotency key, where it runs (the request or the worker), status (pending → running → done / failed / cancelled), what the confirmation showed, output, result, error and times. Working state's audit: none of these actions writes a canonical row. Carries the `ops_operator` permission. |
 
 ## The snapshot
 

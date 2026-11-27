@@ -2,6 +2,8 @@
 release readers had before it, grouped by branch (docs/adr/0019-processes-and-release-gates.md).
 
 Deterministic: the same two snapshots give the same report, byte for byte (no timestamps, sorted keys and ids).
+The report also says whether the page changed: `page` holds the two releases' page hashes (publish/release.py
+`page_hash`), so a page-only release reads "page changed; content unchanged".
 """
 
 import json
@@ -25,7 +27,20 @@ def _label(kind: str, x: dict) -> str:
     return x.get("name") if kind == "branch" else x.get("title", "")
 
 
-def report(prev: dict | None, new: dict, *, from_version: str | None, to_version: str) -> dict:
+def page_summary(rep: dict) -> str:
+    """One line on the page and the content: "page changed; content unchanged", "page unchanged" …"""
+    p = rep.get("page") or {}
+    if not rep.get("from"):
+        return "the first release"
+    content = "content changed" if any(rep["total"].values()) else "content unchanged"
+    if not p:
+        return content
+    if p.get("changed"):
+        return f"page changed; {content}" if p.get("from") else f"page inputs not recorded for {rep['from'] or 'the previous release'}; {content}"
+    return f"page unchanged; {content}"
+
+
+def report(prev: dict | None, new: dict, *, from_version: str | None, to_version: str, page: tuple[str | None, str] | None = None) -> dict:
     a, b = _index(prev), _index(new)
     by_branch = defaultdict(lambda: {"added": [], "changed": [], "retracted": []})
     for i, (kind, x) in b.items():
@@ -48,7 +63,11 @@ def report(prev: dict | None, new: dict, *, from_version: str | None, to_version
         g = by_branch[branch]
         groups[branch] = {k: sorted(v, key=lambda r: r["id"]) for k, v in g.items() if v}
     total = {k: sum(len(g.get(k, [])) for g in groups.values()) for k in ("added", "changed", "retracted")}
-    return {"from": from_version, "to": to_version, "total": total, "by_branch": groups}
+    out = {"from": from_version, "to": to_version, "total": total, "by_branch": groups}
+    if page is not None:
+        old, new_page = page
+        out["page"] = {"from": old or None, "to": new_page, "changed": (old or None) != new_page}
+    return out
 
 
 def to_json(rep: dict) -> bytes:
@@ -59,6 +78,9 @@ def to_markdown(rep: dict, *, limit: int = 12) -> bytes:
     t = rep["total"]
     lines = [f"# Release {rep['to']}", "",
              f"Since {rep['from'] or 'nothing (the first release)'}: {t['added']} added, {t['changed']} changed, {t['retracted']} retracted.", ""]
+    if rep.get("page"):
+        p = rep["page"]
+        lines += [f"Page: {page_summary(rep)} (page inputs {(p['from'] or 'unrecorded')[:12]} → {p['to'][:12]}).", ""]
     for branch, g in rep["by_branch"].items():
         counts = ", ".join(f"{len(g[k])} {k}" for k in ("added", "changed", "retracted") if g.get(k))
         lines.append(f"## {branch} ({counts})")

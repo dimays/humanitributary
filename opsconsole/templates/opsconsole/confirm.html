@@ -1,0 +1,12 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Confirm: {{ label }}{% endblock %}
+{% block content %}
+<h1>Confirm: {{ plan.summary }}</h1>
+<p class="note">Nothing has happened yet. This is exactly what the action will do; it is recorded as an OpsAction with your reason.</p>
+{% if error %}<div class="banner bad">{{ error }}</div>{% endif %}
+<div class="confirm">
+  {% include "opsconsole/_plan.html" %}
+  {% if plan.check and kind == 'publish' %}<details open><summary>The change report <span class="mono">publish --check</span> showed</summary><pre>{{ plan.check }}</pre></details>{% endif %}
+  {% include "opsconsole/_confirm_form.html" %}
+</div>
+{% endblock %}

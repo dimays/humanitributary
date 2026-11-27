@@ -70,12 +70,13 @@ queued ──claim──▶ claimed ──complete──▶ done
   ▲                 │
   └─lease runs out──┘  (offered again; past max_attempts → failed)
 
-queued ──a job withdraws it──▶ cancelled
+queued ──a job withdraws it, or an operator cancels it──▶ cancelled
+failed, cancelled ──an operator requeues it (attempts reset)──▶ queued
 ```
 
-`cancelled` is set only by jobs: branch governance cancels the queued task of
-a proposal it withdraws (`governance/review.py`). Nothing in `work/` cancels a
-task.
+`cancelled` is set by jobs (branch governance cancels the queued task of a
+proposal it withdraws, `governance/review.py`; `gap_waves` withdraws a gap that
+filled) and by operators from the console (below). Agents never cancel.
 
 ## Claiming a task: leases and SKIP LOCKED
 
@@ -122,6 +123,24 @@ still finish, as long as nobody has claimed the task since.
 | `fail(id, agent, error, retry=True)` | `POST tasks/<id>/fail` | `tasks fail <id> --error "…" [--no-retry]` | Appends `<agent>: <error>` to `error` and clears the lease. Back to `queued` if `retry` and `attempts < max_attempts`; else `failed`. The attempt stays counted. |
 | `release(id, agent)` | `POST tasks/<id>/release` | `tasks release <id>` | Back to `queued`, untouched, and the attempt is given back (`attempts − 1`). |
 | `extend(id, agent, minutes)` | `POST tasks/<id>/extend` | `tasks extend <id> [--minutes N]` | `lease_until` = now + `minutes` (default `TASK_LEASE_MINUTES`). Counted from now, not from the old lease end. |
+
+### Operators' versions
+
+The [operations console](operations-console.md) has its own four, for staff with
+the `ops_operator` permission ([ADR 0028](../adr/0028-operations-console.md)).
+Each takes who acts (`by`, `human:<username>`) and why, and appends
+`<by>: <what it did>: <reason>` to the task's `error`, so the task itself says
+what happened to it; the console also records an `OpsAction` row.
+
+| Function | Effect |
+|---|---|
+| `release_stuck(id, holder, by, reason)` | Back to `queued`, the lease cleared. `holder` is the agent the page showed: if the task is no longer `claimed` by it (finished, or taken over), it raises `TaskError` and nothing changes. Unlike an agent's `release`, the attempt stays counted (the agent did try). |
+| `extend_for(id, holder, by, minutes, reason)` | The lease runs `minutes` (1–1,440) from now, or from its current end if that is later; same holder check. |
+| `requeue(ids, by, reason)` | Failed or cancelled tasks back to `queued` with `attempts` 0 and no lease; others are skipped, and so is a task whose dedupe key another open task (or an earlier one in the same batch) holds. |
+| `cancel(ids, by, reason)` | Queued tasks, and claimed ones whose lease has run out, to `cancelled`; a live lease is skipped (release it first). |
+
+`requeue` and `cancel` take at most `MAX_BATCH` (50) ids, lock them
+(`select_for_update`) and return `{"done": [ids], "skipped": {id: why}}`.
 
 ## One open task per key
 

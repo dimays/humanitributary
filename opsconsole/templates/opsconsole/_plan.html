@@ -1,0 +1,8 @@
+{% load ops %}<dl>
+  {% for row in plan.rows %}<dt>{{ row.0 }}</dt><dd>{{ row.1 }}</dd>{% endfor %}
+</dl>
+{% for w in plan.warnings %}<div class="banner warn">{{ w }}</div>{% endfor %}
+{% if plan.table and plan.table.rows %}<div class="scroll"><table>
+<tr>{% for h in plan.table.head %}<th>{{ h }}</th>{% endfor %}</tr>
+{% for r in plan.table.rows %}<tr>{% for c in r %}<td class="small">{{ c }}</td>{% endfor %}</tr>{% endfor %}
+</table></div>{% endif %}

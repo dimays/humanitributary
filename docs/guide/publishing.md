@@ -177,7 +177,7 @@ rewritten is the pointer.
 | Key in the releases store | What |
 |---|---|
 | `releases/<version>/content.json` | The snapshot. |
-| `releases/<version>/manifest.json` | The version, hash, creation time, counts and high-water mark, with `SITE_NAME`, the notes, `previous` (the release readers had before), the change report's totals and the list of files. |
+| `releases/<version>/manifest.json` | The version, the content hash and the page hash (below), creation time, counts and high-water mark, with `SITE_NAME`, the notes, `previous` (the release readers had before), the change report's totals and the list of files. |
 | `releases/<version>/changes.json`, `changes.md` | The change report, for code and for people (below). |
 | `releases/<version>/timeline.html` | The page the build gate built from the snapshot, with the publish date as its "Data compiled" date. |
 | `releases/latest.json` | The pointer: `version`, `content_hash`, `snapshot` (the key), `updated_at`, `updated_by`, `reason` (`publish` or `rollback`) and `previous`. |
@@ -185,10 +185,12 @@ rewritten is the pointer.
 `publish/release.py` `publish(actor, notes, force, check_only)` does the work
 behind the command:
 
-1. Builds the content and its bytes with `dumps()`, and their sha256.
-2. If the newest `Release` has the same hash, stops: nothing new is written
-   and the command prints "Unchanged since <version>". `--force` makes a new
-   release anyway (the gates still run).
+1. Builds the content and its bytes with `dumps()`, and their sha256; and
+   the page hash, `page_hash()`.
+2. If the newest `Release` has the same content hash **and** the same page
+   hash, stops: nothing new is written and the command prints "Unchanged
+   since <version> (content and page)". `--force` makes a new release anyway
+   (the gates still run).
 3. Runs the gates (`_prepare()`: a second export for the `deterministic` gate,
    then `publish/gates.py` `check()`, below). If any finds a problem, raises
    `PublishRefused` with each gate's problems (the command prints up to 20 per
@@ -207,7 +209,36 @@ behind the command:
 `release.check()` (`publish --check`, `make roundtrip`) runs steps 1, 3 and 5
 whether or not the content changed, and writes nothing: it prints "Every
 release gate passes (deterministic, build, contested, report; nothing
-written). Against <live version>: N added, N changed, N retracted."
+written). Against <live version>: N added, N changed, N retracted; page
+changed; content changed" (the last part from `changes.page_summary`).
+`release.preview()` is the same run as a dict (the report, both hashes, and
+`unchanged_since`, the newest release when nothing would be made): the
+[operations console](operations-console.md) shows it before a publish.
+
+### A release's identity: the content and the page
+
+A release is identified by two hashes. `content_hash` is the snapshot's
+sha256. `page_hash` (`release.page_hash()`) is a sha256 over the files the
+build reads, besides the snapshot, to make the page: `PAGE_INPUTS`, which are
+`site/build.mjs`, the modules it imports (`site/canonical.mjs`,
+`site/restructure.mjs`), `site/template.html` and `site/globe-assets.json`
+(inlined into the page), each hashed as its name, a NUL, its bytes and a NUL,
+in that order (a missing optional file as its name and `-`). The published
+page (`timeline.html` in the release, and what the app serves at `/`) can
+change while the snapshot doesn't, so comparing content alone used to answer
+"Unchanged since …" to a template change, and it took `--force` to ship one.
+Now a page-only change publishes like any other ([ADR 0029](../adr/0029-release-identity-includes-the-page.md)):
+the release's change report has no added, changed or retracted entries and
+says "page changed; content unchanged". The built page itself can't be the
+hash: it carries the publish date ("Data compiled"), so it differs every day.
+
+The `deterministic` gate is unchanged: the snapshot is still exported twice
+and must give the same bytes, whatever changed. Releases made before the page
+hash was recorded have an empty one, so the first publish after it makes one
+new release, reported as "page inputs not recorded for <version>; content
+unchanged". A file that changes the page but isn't in `PAGE_INPUTS` (a new
+input to the build) is invisible to the hash: add it to the list, or publish
+that once with `--force`.
 
 ```bash
 uv run python manage.py publish [--notes "…"] [--actor job:publish] [--force]
@@ -220,6 +251,7 @@ uv run python manage.py publish --rollback <version> [--actor human:<you>]
 | `version` | `YYYY.MM.DD.N`, unique |
 | `created_at`, `created_by` | when, and `--actor` (default `job:publish`) |
 | `content_hash` | sha256 of the snapshot file's bytes |
+| `page_hash` | sha256 of the page's inputs (`PAGE_INPUTS`, above); empty on releases made before it was recorded |
 | `snapshot_path` | the snapshot's key in the releases store: `releases/<version>/content.json` |
 | `counts` | branches, events, citations, distinct URLs, locations, images, connections, origins, `single_source_events` |
 | `revision_high_water` | the newest Revision id when it was published: everything after it is "changed since this release" |
@@ -273,9 +305,13 @@ a branch is its own group):
 - **retracted**: ids only in the old one.
 
 Each row has the id, the kind and a label (a branch's name, an event's
-title), sorted by id. `changes.json` holds it all with `from`, `to` and the
-totals (`from` is null for the first release); `changes.md` is the same for
-people, with at most 12 rows of each kind per branch. The report has no
+title), sorted by id. `changes.json` holds it all with `from`, `to`, the
+totals (`from` is null for the first release) and `page`: the page hash of
+the release it compares with (`from`, null when not recorded), the new one
+(`to`) and whether they differ (`changed`). `changes.md` is the same for
+people, with at most 12 rows of each kind per branch and a "Page: …" line
+(`page_summary()`: "page changed; content unchanged", "page unchanged;
+content changed" …). The report has no
 timestamps and sorted keys, so the same two snapshots always give the same
 bytes.
 
@@ -298,9 +334,9 @@ hash doesn't match.
   `var/releases/latest` at it, without touching the store's pointer; `node
   site/build.mjs --from-json var/releases/<version>/content.json` builds it.
 - **What the next publish does.** `publish` compares with the newest
-  `Release` row, not with the pointer: while the content is unchanged it says
-  "Unchanged since <newest>" and leaves the pointer on the rolled-back
-  release. The next real change makes a new version, reports its changes
+  `Release` row, not with the pointer: while the content and the page are
+  unchanged it says "Unchanged since <newest> (content and page)" and leaves
+  the pointer on the rolled-back release. The next real change makes a new version, reports its changes
   against the rolled-back release (what readers had), and points `latest` at
   it.
 - **Fix the rows.** A rollback of the page doesn't change Postgres, so the bad
@@ -423,7 +459,7 @@ are any, or if they are equal but not byte for byte.
 | Test class | Checks |
 |---|---|
 | `ImportTests` | the first load creates everything; a re-load writes nothing; a changed field is one update and one Revision; removed and reordered citations; review state (rating, stance, status) survives a re-load; claim status counts independent publishers; openstax.org can't be cited |
-| `RoundTripTests` | DB → snapshot → DB is exact (above); the fixture comes back exact with only derived keys extra; `singleSource` marks events resting on one publisher (Wikipedia alone, or one other), not one with two, and a second publisher on an atomic part lifts it; the export is deterministic; unpublished entries and links to them stay out; conflicting evidence isn't shown; `publish` writes one release per content to the store and moves the pointer (build gate skipped); the archive is frozen and site/data/ is gone; the fixture and its snapshot build byte-identical pages (needs Node) |
+| `RoundTripTests` | DB → snapshot → DB is exact (above); the fixture comes back exact with only derived keys extra; `singleSource` marks events resting on one publisher (Wikipedia alone, or one other), not one with two, and a second publisher on an atomic part lifts it; the export is deterministic; unpublished entries and links to them stay out; conflicting evidence isn't shown; `publish` writes one release per content to the store and moves the pointer (build gate skipped); a page-only change (the template) makes a release whose report says "page changed; content unchanged", the page hash reads only `PAGE_INPUTS`, a release without a page hash is followed by one with, and the determinism gate still refuses a page-only release; the archive is frozen and site/data/ is gone; the fixture and its snapshot build byte-identical pages (needs Node) |
 | `FormatTests` | `KEYS` match `site/canonical.mjs`; numbers print as JavaScript does; `dumps` matches `JSON.stringify(…, null, 1)` |
 
 The release files, the pointer, the change report, rollback, the mirror, a
@@ -501,6 +537,10 @@ the list. There is no filter for it (the page has no filter controls).
   this database exported writes nothing (`test_db_to_snapshot_to_db_is_exact`).
 - **The archive.** Never. It is frozen (ADR 0021); content changes go into
   Postgres.
+- **A new input to the page's build** (a file `site/build.mjs` reads or
+  imports). Add it to `PAGE_INPUTS` in `publish/release.py`, or a change to
+  it alone won't make a release. Changing the list changes every release's
+  page hash, so the next publish makes one release.
 - **A new file in a release.** `FILES` and `publish()` in
   `publish/release.py` (the manifest lists `FILES`, and `pull_release()`
   mirrors them), and the key list in `infra/storage.py`'s docstring and

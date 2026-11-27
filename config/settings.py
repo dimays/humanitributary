@@ -45,8 +45,8 @@ INSTALLED_APPS = [
     # The platform around the content: object storage, health and alerts; the agents' HTTP door to the queue.
     "infra",
     "agentapi",
-    # Staff's read-only operations console at /ops/ (docs/adr/0028-operations-console.md): no models; before the admin,
-    # so its admin/base_site.html (the header's link to it) wins.
+    # Staff's operations console at /ops/ and the OpsAction audit of its actions (docs/adr/0028-operations-console.md);
+    # before the admin, so its admin/base_site.html (the header's link to it) wins.
     "opsconsole",
     "django.contrib.admin",
     "django.contrib.auth",

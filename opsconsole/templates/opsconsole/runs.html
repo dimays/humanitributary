@@ -28,7 +28,8 @@
   <td><a href="?job={{ r.job }}">{{ r.job }}</a>{% if r.feed %}<div class="muted small">{{ r.feed.name }}</div>{% endif %}</td>
   <td class="nowrap">{{ r.started_at|date:"Y-m-d H:i:s" }}<div class="muted small">{{ r.started_at|ago }}</div></td>
   <td class="n">{{ r.duration|seconds }}</td>
-  <td><span class="tag {{ r.status|status_class }}">{{ r.status }}</span>{% if r.http_status %} <span class="muted small">HTTP {{ r.http_status }}</span>{% endif %}</td>
+  <td><span class="tag {{ r.status|status_class }}">{{ r.status }}</span>{% if r.http_status %} <span class="muted small">HTTP {{ r.http_status }}</span>{% endif %}
+    {% if r.status == 'failed' %}<div class="acts">{% act "retry_run" "Retry…" run=r.pk %}</div>{% endif %}</td>
   <td>{% if r.counts %}<details><summary class="small">{{ r.counts|length }} counts</summary><pre>{{ r.counts|pretty }}</pre></details>{% endif %}</td>
   <td>{% if r.safe_error %}<details><summary class="small">{{ r.safe_error|truncatechars:90 }}</summary><div class="err">{{ r.safe_error }}</div></details>{% endif %}</td>
 </tr>
