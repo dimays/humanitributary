@@ -29,6 +29,31 @@ result against its schema (422 lists the problems; the task stays yours to fix a
 the service layer as `agent:<your name>`, linked to the task. What you write lands in review; it is never published
 by the API. 429 means you are over the rate limit: wait `retry_after` seconds.
 
+**Extend a long lease.** A lease runs 30 minutes (`TASK_LEASE_MINUTES`). When one task's work passes about 20
+minutes (a slow site, a long read, a second source to find), extend it before it runs out, and again every 20
+minutes while you still work on it:
+
+```bash
+api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/extend" -d '{"minutes": 30}'
+```
+
+A lease that runs out may be taken over by another agent; then your `complete` is refused (409) and the work is
+lost. If you can't finish, `release` the task (untouched) or `fail` it with the reason; never leave it to lapse.
+
+## Fetching: honest, one tab, never forced
+
+- **Never disguise the client.** Every page you fetch by script sends the project's honest User-Agent:
+  `curl -sS -A "$INGEST_USER_AGENT" <url>` (the same value as the app's `INGEST_USER_AGENT`). No spoofed browser
+  User-Agent, no header tricks, no proxies, mirrors or caches to get round a site that refuses automated reads.
+  The safety checks block such attempts, and they break the source policy (ADR 0013). If a site refuses, use
+  another reputable source, or hold or reject the work.
+- **Exactly one in-app browser tab per agent.** Open one tab, reuse it for every page you read, and close it when
+  you finish, also when you stop early, fail or release a task. Leftover tabs fill the pane's cap (about eight)
+  and starve the other agents. A cloud session has no in-app browser: there a `browser_only` page can't be read
+  at all (see the `run-round` skill).
+- **Paid and blocked wires are common in news.** Reuters (401), AFP (access denied) and CNN (451) often refuse.
+  Don't force them. Find another readable, independent, reputable source; record only pages you read (a page you could not read is no evidence either way).
+
 ## 1. Claim a task
 
 ```bash

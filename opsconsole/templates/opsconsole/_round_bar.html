@@ -1,0 +1,22 @@
+{% load ops %}{% with st=rounds.settings %}
+<div class="card" style="margin-bottom:18px">
+  <div class="roundbar">
+    <div><div class="what">Daily agent round · {{ st.routine }} · {% if st.paused %}paused{% elif st.next_at %}next at {{ st.next_at|date:"H:i" }} UTC <span class="muted">({{ st.next_at|ago }})</span>{% else %}{{ st.schedule_words }}{% endif %}</div>
+      <div class="small muted">{{ st.schedule_words|capfirst }}{% if st.skip_next %} · the next round is skipped ({{ st.skip_next.by }}: {{ st.skip_next.reason }}){% endif %}{% if st.carry_over %} · {{ st.carry_over.slugs|length }} held draft{{ st.carry_over.slugs|length|pluralize }} go to the next review{% endif %}</div></div>
+    <div>{% if st.paused %}{% badge "paused" "Paused" %}{% endif %}
+      {% if rounds.latest %}<a href="{% url 'opsconsole:round' rounds.latest.id %}">{% badge rounds.latest.state rounds.latest.label %}</a> <span class="small muted">last round {{ rounds.latest.started|ago }}</span>{% else %}<span class="small muted">no round recorded yet</span>{% endif %}</div>
+    <div>{% include "opsconsole/_round_strip.html" with history=rounds.history empty=rounds.pad %} <a class="small" href="{% url 'opsconsole:rounds' %}">All rounds →</a></div>
+    {% if can_act %}<div class="acts">
+      {% if st.paused %}{% act "resume_rounds" "Resume rounds" "sm" %}{% else %}{% act "pause_rounds" "Pause rounds" "sm" %}{% if not st.skip_next %}{% act "skip_round" "Skip the next" "sm quiet" %}{% endif %}{% endif %}
+      {% if rounds.held %}<span class="small muted">{{ rounds.held }} held draft{{ rounds.held|pluralize }}</span>{% act "review_held" "Send them to the next review" "sm quiet" %}{% endif %}
+    </div>{% endif %}
+  </div>
+  <details style="margin-top:12px"><summary class="small">Round size: {% for x in rounds.roles %}{{ x.agents }} {{ x.role }}{{ x.agents|pluralize }} × {{ x.each }}{% if not forloop.last %} · {% endif %}{% endfor %} · reviewers read {{ st.drafts_per_reviewer }} drafts each{% if st.size_set %} <span class="muted">(set by {{ st.size_set.by }})</span>{% endif %}</summary>
+    {% if can_act %}<form method="post" action="{% url 'opsconsole:act' 'round_size' %}">{% csrf_token %}
+      <div class="sizeform">{% for x in rounds.roles %}<div><b class="small">{{ x.role|capfirst }}s</b> <span class="small muted mono">{{ x.kind }}</span>
+        <label>Agents <input type="number" name="agents.{{ x.role }}" value="{{ x.agents }}" min="0" max="{{ max_agents }}" required></label>
+        <label>Tasks each <input type="number" name="tasks_per_agent.{{ x.role }}" value="{{ x.each }}" min="1" max="{{ max_tasks }}" required></label></div>{% endfor %}</div>
+      <div style="margin-top:10px"><button type="submit" class="btn sm">Set the round size…</button> <span class="small muted">The next page shows the change; confirm it with a reason.</span></div>
+    </form>{% else %}<p class="small muted">Operators can change it here.</p>{% endif %}
+  </details>
+</div>{% endwith %}

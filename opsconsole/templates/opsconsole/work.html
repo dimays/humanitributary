@@ -2,8 +2,10 @@
 {% block title %}Work{% endblock %}
 {% block content %}
 <div class="head">
-  <div><h1>Work</h1><div class="sub">The agents' queues, one card per kind of task. Jobs queue tasks; agents claim them over the API, under a lease.</div></div>
+  <div><h1>Work</h1><div class="sub">Claude agents do these tasks in rounds. Each round writes drafts, a reviewer checks them, and approved changes are published.</div></div>
 </div>
+{% include "opsconsole/_flow.html" %}
+{% include "opsconsole/_round_bar.html" %}
 <div class="grid g4">{% for k in queue %}
   <div class="card qcard">
     <h3><a href="{% url 'opsconsole:work_kind' k.kind %}">{{ k.kind }}</a></h3>
@@ -14,7 +16,10 @@
       <div class="{% if k.stuck %}warn{% else %}zero{% endif %}"><b>{{ k.stuck }}</b><span>stuck</span></div>
       <div class="{% if not k.done_today %}zero{% endif %}"><b>{{ k.done_today }}</b><span>done today</span></div>
     </div>
-    <div class="foot">{% if k.oldest_age %}<span>oldest waiting {{ k.oldest_age|span }}</span>{% endif %}
+    <div class="foot">{% with n=rounds.takes|get:k.kind %}{% if n is not None %}<span title="the round size times what waits">next round will take: {{ n }}</span>{% endif %}{% endwith %}
+      {% if k.oldest_age %}<span>oldest waiting {{ k.oldest_age|span }}</span>{% endif %}
+      <span title="done in the last seven days">{{ k.done_7d }} done in 7 days</span>
+      {% for j in k.fed_by %}<span>fed by <a href="{% url 'opsconsole:job' j %}">{{ j }}</a></span>{% endfor %}
       {% if k.cap %}<span title="{{ k.cap.setting }}">{{ k.cap.made }} / {{ k.cap.cap }} made today</span>{% endif %}
       {% if k.failed %}<a href="{% url 'opsconsole:work_kind' k.kind %}?tab=failed" style="color:var(--bad)">{{ k.failed }} failed</a>{% endif %}</div>
   </div>{% endfor %}

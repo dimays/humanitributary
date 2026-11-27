@@ -39,7 +39,8 @@ from django.views.decorators.http import require_POST, require_safe
 from ingest.models import Feed, FetchRun, RunLog
 from ingest.policy import mask_secrets
 from publish.models import Release
-from work.models import AgentTask
+from work import rounds as WR
+from work.models import AgentTask, Round
 
 from . import actions as acts
 from . import docs as D
@@ -183,6 +184,7 @@ def dashboard(request):
         "attention": attention, "upcoming": Q.upcoming(job_rows, now, limit=7), "queue": queue,
         "queue_active": [k for k in queue if k["active"]], "latest": latest, "today": Q.today(now),
         "open_actions": Q.open_actions(5), "recent_actions": Q.recent_actions(4),
+        "round": Q.rounds_overview(now, queue),
     }, section="dashboard", refresh=REFRESH_SECONDS)
 
 
@@ -317,7 +319,34 @@ def run_detail(request, pk):
 @console
 def work(request):
     now = timezone.now()
-    return _render(request, "work.html", {"queue": Q.queue(now), "stuck": Q.stuck_leases(now), "wave": Q.wave(now)}, section="work")
+    queue = Q.queue(now)
+    return _render(request, "work.html", {"queue": queue, "stuck": Q.stuck_leases(now), "wave": Q.wave(now),
+                                          "rounds": Q.rounds_overview(now, queue), "max_agents": WR.MAX_AGENTS_PER_ROLE,
+                                          "max_tasks": WR.MAX_TASKS_PER_AGENT, "flow_doc": "jobs-and-work"}, section="work")
+
+
+@console
+def rounds(request):
+    """Every agent round, newest first (ADR 0035)."""
+    page, qs_rest = _page(request, Round.objects.select_related("release").order_by("-started_at", "-id"), size=25)
+    return _render(request, "rounds.html", {"page": page, "qs": qs_rest, "cards": [Q.round_card(r) for r in page]}, section="work")
+
+
+@console
+def round_detail(request, pk):
+    """One round: its stages (plan → agents → review → apply → publish), the plan, each agent's counts (recorded, and
+    what the queue says), the verdicts, the edit file's ops and its actions, the release, and links to its drafts."""
+    from revisions.models import Revision
+
+    r = get_object_or_404(Round.objects.select_related("release"), pk=pk)
+    actions = list(r.actions.order_by("created_at", "id"))
+    txids = [(a.result or {}).get("txid") for a in actions if a.kind == OpsAction.Kind.EDITS_APPLY and a.status == "done"]
+    revs = Revision.objects.filter(txid__in=[t for t in txids if t]).count() if any(txids) else 0
+    return _render(request, "round_detail.html", {
+        "r": r, "card": Q.round_card(r), "stages": WR.stages(r, actions), "actions": actions, "agents": Q.round_agents(r),
+        "revisions": revs, "carry_over": (r.plan or {}).get("carry_over") or [], "mix": (r.plan or {}).get("mix") or {},
+        "verdict_keys": WR.VERDICTS,
+    }, section="work")
 
 
 @console

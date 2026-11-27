@@ -23,8 +23,8 @@ events and to examine sources. The owner examines what the agents write and deci
 | Object storage | Two S3 buckets: `raw` for fetched documents, `releases` for releases | AWS S3 |
 | The work queue | A list of tasks that need judgment. Each task is an `AgentTask` row. | `work/` |
 | The agent API | The HTTP interface that agents use to claim and complete tasks. Agents do not connect to the database. | `/api/agent/` on the `web` dyno |
-| Agents | Claude sessions that do the tasks. A skill tells each agent how to do one kind of task. | `.claude/skills/`; sessions that the owner starts |
-| Reviews and edit files | An independent reviewer examines the agent drafts and writes an edit file. The owner applies it. | `var/reviews/`; `manage.py apply_edits` |
+| Agents | Claude sessions that do the tasks. A skill tells each agent how to do one kind of task. | `.claude/skills/`; the daily cloud routine, or sessions that the owner starts |
+| Reviews and edit files | An independent reviewer examines the agent drafts and writes an edit file. The daily round applies it through the agent API, or the owner applies it. | `edits/check` and `edits/apply`; `manage.py apply_edits` |
 | Releases | A release is a set of files that holds the published content and the page. A release never changes. | The `releases` bucket; the `Release` table |
 | The public page | The page that readers see. The `web` dyno serves it from the latest release. | `/` on the `web` dyno |
 | The admin and the console | Web pages for the owner. The admin edits rows. The console shows the health of the system and the content that the agents make. It has a few actions. | `/admin/` and `/ops/` on the `web` dyno |
@@ -55,5 +55,5 @@ events and to examine sources. The owner examines what the agents write and deci
 - Each change to a canonical row makes a `Revision` row. A database trigger refuses all other writes.
 - Jobs are deterministic. The same input gives the same output.
 - Agents work only through the agent API. Agents do not have database credentials.
-- Nothing that an agent writes goes to readers. The owner approves each entry and publishes each release.
+- Nothing that an agent writes goes to readers before an independent reviewer approves it. The daily round publishes only if each release gate passes ([the daily round](daily-round.md)).
 - A release never changes after the system writes it. A rollback moves the pointer only.

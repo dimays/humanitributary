@@ -52,6 +52,8 @@ erDiagram
     AgentTask }o--o| Candidate : "target"
     AgentTask }o--o| BranchProposal : "target"
     Revision }o--o| AgentTask : "made for"
+    OpsAction }o--o| Round : "part of"
+    Round }o--o| Release : "published"
 ```
 
 The flow: **feeds** are fetched by deterministic jobs into **documents**;
@@ -117,6 +119,7 @@ Working state, not canonical (ADR 0012). The jobs that fill these tables are lis
 | Table | What it's for |
 |---|---|
 | `AgentTask` | The queue: kind (write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation, map_branch_entities, fill_gap), target (entry, claim, candidate, proposal or a free reference), payload, priority, status, `dedupe_key` (one open task per kind and key), the lease (`claimed_by`, `claimed_at`, `lease_until`, attempts of `max_attempts`), result, error, and who created it. |
+| `Round` | One agent round (ADR 0035): when it started and finished, its trigger (schedule or manual), status (running, reviewing, release_ready, published, held, finished, failed, skipped), who started it, the planned mix, the agents, tasks per kind, drafts, review verdicts, the edit file's op counts, the release it published, a summary, notes, a history of every change and an idempotency key. Not canonical; its edits and release calls are `OpsAction` rows linked to it. The round settings (paused, skip the next, the size, held drafts sent on) are the `JobState` row `agent_rounds`. |
 
 ## agentapi
 
@@ -141,7 +144,7 @@ Working state, not canonical (ADR 0012). The jobs that fill these tables are lis
 
 | Table | What it's for |
 |---|---|
-| `OpsAction` | One action taken from the operations console (ADR 0028): kind, target, parameters, reason (required), who (`human:<username>`), a unique idempotency key, where it runs (the request or the worker), status (pending → running → done / failed / cancelled), what the confirmation showed, output, result, error and times. Working state's audit: none of these actions writes a canonical row. Carries the `ops_operator` permission. |
+| `OpsAction` | One action taken from the operations console (ADR 0028), or one of a round's operations over the agent API (ADR 0035: an edit file checked or applied, a release checked or published): kind, target, parameters, reason (required), who (`human:<username>`, or `agent:<name>` for the API), a unique idempotency key, where it runs (the request, the worker, or `api`), the round it belongs to, status (pending → running → done / failed / cancelled), what the confirmation showed, output, result, error and times. Working state's audit: none of these actions writes a canonical row. Carries the `ops_operator` permission. |
 
 ## The snapshot
 

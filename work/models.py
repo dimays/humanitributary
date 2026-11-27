@@ -74,3 +74,66 @@ class AgentTask(models.Model):
 
     def __str__(self):
         return f"#{self.pk} {self.kind} [{self.status}]"
+
+
+class Round(models.Model):
+    """One agent round: a session of agents working the queue, an independent review, its edit file applied, and the
+    release that carried it (docs/adr/0035-automated-daily-rounds.md). The daily cloud routine (the `run-round`
+    skill) records each run here over the agent API (`POST rounds`, `PATCH rounds/<id>`); the console's Work page
+    shows them. Not canonical: a round is a record of work, like a task. What it changed is in the Revisions its edit
+    file wrote (the `edits_apply` OpsAction linked to it names their transaction) and in the release."""
+
+    class Trigger(models.TextChoices):
+        SCHEDULE = "schedule", "scheduled"
+        MANUAL = "manual", "started by hand"
+
+    class Status(models.TextChoices):
+        RUNNING = "running", "Running"              # agents at work
+        REVIEWING = "reviewing", "Reviewing"        # independent reviewers at work
+        RELEASE_READY = "release_ready", "Release ready"  # the edit file is applied and every release gate passes
+        PUBLISHED = "published", "Published"        # a release carries it (releases/publish sets this)
+        HELD = "held", "Held for review"            # finished without a release: something needs the owner
+        FINISHED = "finished", "Completed"          # finished; nothing to publish
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"              # an operator skipped this scheduled round
+
+    OPEN = (Status.RUNNING, Status.REVIEWING, Status.RELEASE_READY)
+    TERMINAL = (Status.PUBLISHED, Status.HELD, Status.FINISHED, Status.FAILED, Status.SKIPPED)
+
+    started_at = models.DateTimeField(db_index=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    trigger = models.CharField(max_length=10, choices=Trigger.choices)
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.RUNNING)
+    started_by = models.CharField(max_length=200, help_text='The round token\'s actor, "agent:<name>".')
+    plan = models.JSONField(default=dict, blank=True, help_text='The planned mix: {"mix": {kind: tasks}, "roles": {role: agents}, …}.')
+    agents = models.JSONField(default=list, blank=True, help_text='[{"name", "role", "kinds", "claimed", "completed", "failed", "released"}]')
+    tasks = models.JSONField(default=dict, blank=True, help_text='{kind: {"claimed", "completed", "failed", "released"}}')
+    drafts = models.JSONField(default=list, blank=True, help_text="The slugs the agents drafted (in review).")
+    verdicts = models.JSONField(default=dict, blank=True, help_text='{"approve", "approve_with_edits", "hold", "reject"}: the reviewers\' counts.')
+    edit_ops = models.JSONField(default=dict, blank=True, help_text="{op: count} applied by edits/apply.")
+    release = models.ForeignKey("publish.Release", null=True, blank=True, on_delete=models.SET_NULL, related_name="rounds")
+    summary = models.TextField(blank=True, help_text="The short summary the routine posts at the end.")
+    notes = models.TextField(blank=True)
+    history = models.JSONField(default=list, blank=True, help_text='Every change: [{"at", "by", "what", "status"}].')
+    idempotency_key = models.CharField(max_length=64, null=True, blank=True, unique=True, help_text="sha256 of the actor and the client's key.")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-started_at", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(trigger__in=["schedule", "manual"]), name="round_trigger_valid"),
+            models.CheckConstraint(condition=Q(status__in=["running", "reviewing", "release_ready", "published", "held", "finished", "failed", "skipped"]),
+                                   name="round_status_valid"),
+            models.CheckConstraint(condition=Q(started_by__regex=r"^(agent|human):"), name="round_by_agent_or_human"),
+        ]
+
+    def __str__(self):
+        return f"round #{self.pk} {self.started_at:%Y-%m-%d} [{self.status}]"
+
+    @property
+    def open(self) -> bool:
+        return self.status in self.OPEN
+
+    @property
+    def duration(self):
+        return (self.finished_at - self.started_at) if self.finished_at else None

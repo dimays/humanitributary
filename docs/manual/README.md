@@ -72,6 +72,8 @@ script. Write a comment that tells why.
 |---|---|
 | [system-overview.md](system-overview.md) | What the system does, its main parts, and how data moves through them |
 | [architecture.md](architecture.md) | The diagrams: context, components, data flow, deployment, and two sequences |
+| [daily-round.md](daily-round.md) | The daily agent round: its stages, its sequence diagram, its tokens and what the owner controls |
+| [jobs-and-work.md](jobs-and-work.md) | How the Jobs tab and the Work tab of the console fit together, with a diagram |
 | [jobs.md](jobs.md) | Each scheduled job: its schedule, what it reads and writes, and what to do when it fails |
 | [data-model.md](data-model.md) | The main tables, with a diagram of their relations |
 | [troubleshooting.md](troubleshooting.md) | Symptoms, their causes, and the actions that correct them |
@@ -81,7 +83,7 @@ script. Write a comment that tells why.
 
 | Number | Procedure |
 |---|---|
-| 01 | [Do an agent round](procedures/01-do-an-agent-round.md) |
+| 01 | [Run a round by hand](procedures/01-run-a-round-by-hand.md) |
 | 02 | [Review the agent drafts and apply an edit file](procedures/02-review-drafts-and-apply-an-edit-file.md) |
 | 03 | [Publish a release](procedures/03-publish-a-release.md) |
 | 04 | [Do a rollback](procedures/04-do-a-rollback.md) |
@@ -94,3 +96,5 @@ script. Write a comment that tells why.
 | 11 | [Deploy a code change](procedures/11-deploy-a-code-change.md) |
 | 12 | [Add a data source](procedures/12-add-a-data-source.md) |
 | 13 | [Make the preview card again](procedures/13-make-the-preview-card-again.md) |
+| 14 | [Control the daily round](procedures/14-control-the-daily-round.md) |
+| 15 | [Set up the daily round](procedures/15-set-up-the-daily-round.md) |

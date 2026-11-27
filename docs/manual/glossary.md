@@ -8,8 +8,8 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Admin | The Django admin at `/admin/`. The owner uses it to examine and edit rows. An edit in the admin writes as `human:<user name>`. |
 | Agent | A Claude session that does tasks from the queue through the agent API. Agents are the only part of the system that uses a language model. |
 | Agent API | The HTTP interface at `/api/agent/` on the `web` dyno. Agents claim, extend, complete, release and fail tasks through it. |
-| Agent draft | An entry that an agent wrote and that has the status `review`. It does not go to readers until the owner approves it. |
-| Agent round | One work period: agents do queued tasks, a reviewer examines the drafts, and the owner applies the edit file and publishes. |
+| Agent draft | An entry that an agent wrote and that has the status `review`. It does not go to readers until a reviewer or the owner approves it. |
+| Agent round | One work period: agents do queued tasks, a reviewer examines the drafts, the edit file goes in, and a release follows if each gate passes. The table `Round` records each one. Also "round". |
 | Agent token | A bearer token that gives an agent access to the agent API. The system keeps only its hash. It has scopes and a rate limit. |
 | Alert | One email that the system sends when a job fails three runs in a row. Without the mail config vars, it is a log line. |
 | Approve | To change the status of an entry from `review` to `published`. The `approve` operation of an edit file does this under the publication rule. |
@@ -42,12 +42,15 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Gap | A window of a content wave in which a branch has no published event, or far fewer events than its peers. |
 | Gate | `make check-pr`: the checks and the tests that a pull request must pass. CI runs the same command. |
 | Guide | The technical guide in `docs/guide/`. It is the developer reference for how the code operates. |
+| Held draft | A draft that a reviewer read and kept in review, with an edit and no approval. An operator can send it to the next review. |
 | Job | A scheduled, deterministic function in `ingest/job_defs.py`, with a name and an interval. |
 | Job run | One run of one job, recorded as a `FetchRun` row. |
+| Jobs tab | The console page of the jobs. The worker runs them on a schedule. They collect and prepare material and make tasks, without Claude. |
 | Lease | The time for which an agent holds a claimed task. After the lease time, another agent can take the task. |
 | Lock | A Postgres advisory lock. The runner lock lets one runner run jobs. The scheduler lock lets one worker schedule. |
 | New events | The console page that shows each content item from the fetch to the release, with its five steps. It also shows the numbers of the last 14 days. |
 | One-off dyno | A dyno that `heroku run` starts for one command. It stops when the command ends. |
+| Operation scope | A token scope that is not a task kind: `review`, `publish` or `round`. The scope `*` does not give it. |
 | OpsAction | The audit row of one console action: who, what, why, the status and the result. |
 | `ops_operator` | The permission that a staff user needs to do actions in the console. A superuser has it. |
 | Owner | The one person who maintains and operates the system. This manual is for the owner. |
@@ -73,6 +76,8 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | `revising()` | `revisions.revising(actor, reason, task)`, the only way to write a canonical row. It tells the trigger who writes and why. |
 | Revision | One changed canonical row: who, when, why, which task, and the row before and after. A trigger writes it. |
 | Rollback | A write of the pointer that names an earlier release. It deletes nothing and does not change the database. |
+| Round configuration | The configuration that an operator changes on the Work page: paused, skip the next, the round size and the held drafts to send on. |
+| Routine | The scheduled Claude Code cloud task that starts the daily round. It follows the skill `run-round`. |
 | Run card | The card that the console shows on a bar of the run graph or a square of a history strip. It shows the trigger, the runtime, the stages, the counts and the error of the run. |
 | Schema | The JSON Schema of the result of one task kind, in `agentapi/schemas.py`. `complete` refuses a result that does not match it. |
 | Scope | A task kind that a token can claim and complete. The scope `*` covers each kind that has a schema. |
@@ -96,4 +101,5 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Web dyno | The dyno that runs gunicorn and serves the page, the admin, the console, the agent API and `/healthz`. |
 | Wikidata | The open database of items with ids such as Q1490. Jobs use it to connect documents to branches. |
 | Window | One equal part of a content wave, for example 5 years in the wave W1. |
+| Work tab | The console page of the agent tasks and the rounds. Claude agents do the tasks in rounds. |
 | Worker | The dyno that runs `manage.py run_jobs --loop`: the jobs and the console actions that run in the worker. |

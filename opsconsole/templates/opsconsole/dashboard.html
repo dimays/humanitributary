@@ -78,6 +78,15 @@
   {% else %}<p class="empty-note">Every queue is empty.</p>{% endif %}
 </div>
 
+<div class="card" style="margin-top:18px">
+  <div class="card-head"><h2>Latest round</h2><a class="more" href="{% url 'opsconsole:rounds' %}">Rounds →</a></div>
+  {% if round.latest %}<div class="roundbar"><div><a href="{% url 'opsconsole:round' round.latest.id %}"><b>Round #{{ round.latest.id }}</b></a> {% badge round.latest.state round.latest.label %}
+      <div class="small muted">{{ round.latest.started|ago }} · {{ round.latest.trigger }} · {{ round.latest.drafts }} draft{{ round.latest.drafts|pluralize }} · {{ round.latest.ops }} op{{ round.latest.ops|pluralize }} applied{% if round.latest.release %} · release {{ round.latest.release }}{% endif %}</div></div>
+    <div>{% include "opsconsole/_round_strip.html" with history=round.history empty=round.pad %}</div>
+    <div class="small muted">{% if round.settings.paused %}{% badge "paused" "Rounds paused" %}{% elif round.settings.next_at %}next at {{ round.settings.next_at|date:"H:i" }} UTC ({{ round.settings.next_at|ago }}){% endif %}</div></div>
+  {% else %}<p class="empty-note">No round recorded yet. {{ round.settings.schedule_words|capfirst }}{% if round.settings.paused %}; paused{% endif %}.</p>{% endif %}
+</div>
+
 <div class="grid g3" style="margin-top:18px">
   <div class="card">
     <div class="card-head"><h2>Live release</h2><a class="more" href="{% url 'opsconsole:releases' %}">Releases →</a></div>

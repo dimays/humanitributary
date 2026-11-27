@@ -40,7 +40,7 @@ to the same bytes again, so export and load are exact inverses
 | Write content | `timeline.services` inside `revising()`: the agent API, the admin, `branches apply`, a shell | — | Postgres rows, with Revisions |
 | Publish entries | `manage.py facts publish <slug>` (the publishing rule) | an entry's claims | its status `published` |
 | Check a release | `make roundtrip` (`manage.py publish --check`) | `published` rows | nothing: prints the gates' result and the change report's totals |
-| Publish | `make publish` (`manage.py publish`) | `published` rows | `releases/<version>/` (snapshot, manifest, change report, built page) and the pointer `releases/latest.json` in the releases store, a `Release` row |
+| Publish | `make publish` (`manage.py publish`); the console's Publish; a round's `POST /api/agent/releases/publish` ([below](#publishing-from-a-round)) | `published` rows | `releases/<version>/` (snapshot, manifest, change report, built page) and the pointer `releases/latest.json` in the releases store, a `Release` row |
 | Mirror it | `make release-pull` (`manage.py storage pull-release [VERSION]`) | the store | `var/releases/<version>/`, the `var/releases/latest` link |
 | Build the page | `make build` (= `make build-release`: `make release-pull`, then `node site/build.mjs --from-json var/releases/latest/content.json`) | the mirrored snapshot | the page, timeline.html in `site/` |
 
@@ -317,6 +317,40 @@ people, with at most 12 rows of each kind per branch and a "Page: …" line
 content changed" …). The report has no
 timestamps and sorted keys, so the same two snapshots always give the same
 bytes.
+
+## Publishing from a round
+
+Since [ADR 0035](../adr/0035-automated-daily-rounds.md) the daily agent round
+publishes by itself when its independent review approved something and every
+gate passes: the owner's policy, so the routine needs no shell on the host.
+There are three doors to the same `release.publish()`: the command, the
+console's Publish (the worker, as `human:<username>`) and the agent API's
+`releases/publish` (as `agent:<name>`, with a token that has the `publish`
+scope).
+
+1. `POST releases/check` runs `release.preview()`: the gates and the change
+   report, writing nothing, recorded as a `publish_check` `OpsAction` by the
+   agent ([work queue and agents](work-queue-and-agents.md#a-rounds-operations)).
+   A failing gate is a 422 with each gate's problems; the routine then holds
+   the round for the owner and publishes nothing.
+2. `POST releases/publish` names that check, a reason and the round, with an
+   `Idempotency-Key`. It is refused while the check is older than 30 minutes,
+   already used, failed or found nothing changed, and while any publish or
+   rollback is open from the console or the API (the console's
+   one-at-a-time rule, `opsconsole.actions.exclusive_refusal`, taken with an
+   advisory lock while the `publish` row is made). The content and page must
+   still hash as checked; then `publish()` runs every gate again and writes
+   the release with `created_by` the agent and the reason (and the round) in
+   its notes; the pointer's `updated_by` is the agent too. A retry with the
+   same key returns the same release.
+
+What a round's release can carry is what any release carries: `published`
+entries. A draft its reviewers held stays `review` and a rejected one is
+`retracted`, so neither is ever in a snapshot. An edit file sent over the API
+may not add an entry straight to `published`, and a reviewer may not approve
+its own draft (`agentapi.operations.agent_rules`), so everything a round
+publishes was read by a second agent. Rolling back stays the owner's (the
+console or the command): the API has no rollback.
 
 ## Rolling back
 

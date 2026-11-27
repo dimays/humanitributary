@@ -1,7 +1,7 @@
 """/ops/: the operations console (staff only; actions need ops_operator; ADR 0028, redesigned by ADR 0031).
 
 Seven pages in the sidebar (Dashboard, New events, Jobs, Runs, Work, Releases, Docs; ADR 0033 added New events) and the pages they link to: a job, a run, a
-task, a Revision, a release, an action and the action log. The old addresses redirect to their new places.
+task, a Revision, a release, an action and the action log; under Work, the agent rounds and a round (ADR 0035). The old addresses redirect to their new places.
 """
 
 from django.urls import path
@@ -18,6 +18,8 @@ urlpatterns = [
     path("runs/", views.runs, name="runs"),
     path("runs/<int:pk>/", views.run_detail, name="run"),
     path("work/", views.work, name="work"),
+    path("work/rounds/", views.rounds, name="rounds"),
+    path("work/rounds/<int:pk>/", views.round_detail, name="round"),
     path("work/<str:kind>/", views.work_kind, name="work_kind"),
     path("tasks/<int:pk>/", views.task_detail, name="task"),
     path("changes/<int:pk>/", views.revision_detail, name="revision"),

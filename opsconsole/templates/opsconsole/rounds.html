@@ -1,0 +1,21 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Rounds{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'opsconsole:work' %}">Work</a> /</div>
+<div class="head"><div><h1>Agent rounds</h1><div class="sub">Each round: agents work the queue, an independent reviewer checks the drafts, the edit file is applied, and a release is published when every gate passes.</div></div></div>
+<div class="card flush"><div class="scroll"><table>
+<thead><tr><th>Round</th><th>Started</th><th>State</th><th>Planned</th><th class="n">Drafts</th><th>Verdicts</th><th class="n">Ops</th><th>Release</th><th class="n">Took</th></tr></thead>
+<tbody>{% for c in cards %}<tr>
+  <td class="nowrap"><a href="{% url 'opsconsole:round' c.id %}"><b>#{{ c.id }}</b></a> <span class="small muted">{{ c.trigger }}</span></td>
+  <td class="small nowrap">{{ c.started|date:"M j, H:i" }} UTC<div class="muted">{{ c.started|ago }}</div></td>
+  <td>{% badge c.state c.label %}</td>
+  <td class="small">{% for k, n in c.mix.items %}{{ k }} {{ n }}{% if not forloop.last %} · {% endif %}{% empty %}<span class="faint">–</span>{% endfor %}</td>
+  <td class="n">{{ c.drafts }}</td>
+  <td class="small">{% for k, n in c.verdicts.items %}{{ k|words }} {{ n }}{% if not forloop.last %} · {% endif %}{% empty %}<span class="faint">–</span>{% endfor %}</td>
+  <td class="n">{{ c.ops }}</td>
+  <td>{% if c.release %}<a href="{% url 'opsconsole:release' c.release %}">{{ c.release }}</a>{% else %}<span class="faint">–</span>{% endif %}</td>
+  <td class="n small">{{ c.seconds|seconds }}</td>
+</tr>{% empty %}<tr><td colspan="9" class="muted">No round recorded yet. The daily routine records each one (the run-round skill).</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "opsconsole/_pager.html" %}
+{% endblock %}

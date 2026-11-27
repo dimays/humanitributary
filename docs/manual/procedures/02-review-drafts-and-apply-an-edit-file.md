@@ -8,7 +8,7 @@ one transaction, or none of them.
 
 ## Before you start
 
-- You have the list of drafts from procedure [01](01-do-an-agent-round.md).
+- You have the list of drafts from procedure [01](01-run-a-round-by-hand.md).
 - You have a checkout of the repository. The folder `var/reviews/` in it is not in git.
 - The reviewer is a Claude session that did not write the drafts.
 
@@ -16,7 +16,7 @@ one transaction, or none of them.
 
 1. Make a token for the reviewer with procedure [09](09-replace-an-agent-token.md).
    Make sure that the token has a name that is different from the names of the writers.
-2. Start the reviewer session with the token, as in steps 5 to 8 of procedure [01](01-do-an-agent-round.md).
+2. Start the reviewer session with the token, as in steps 5 to 8 of procedure [01](01-run-a-round-by-hand.md).
    Make sure that the reviewer can read `GET /api/agent/entries/<slug>`.
 3. Give the reviewer the list of drafts. Tell it to read each cited page itself.
    Make sure that the reviewer knows that it must use GET requests only.
@@ -74,6 +74,10 @@ Then do procedure [03](03-publish-a-release.md).
 > **NOTE:** The code does not give a way to copy a file to a one-off dyno. The commands above send the file through
 > standard input. The file name stays the same, because each `Revision` reason starts with
 > `apply_edits <file name>`.
+
+> **NOTE:** The daily round does these steps through the agent API: `edits/check` and then `edits/apply`
+> ([the daily round](../daily-round.md)). There, a reviewer cannot approve its own draft, and `add_branch` and
+> `add_event` cannot add a published entry.
 
 > **NOTE:** An edit file is safe to apply two times. An unchanged edit writes nothing. An entry that an earlier run
 > added makes a problem, and the second run then keeps nothing.

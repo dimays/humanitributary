@@ -3,6 +3,9 @@
     manage.py agent_token create claude-writer --scope write_event --scope audit
     manage.py agent_token create claude-verifier --scope verify_claim
     manage.py agent_token create claude-all --scope '*'
+    manage.py agent_token create round-reviewer --scope review      # edits/check, edits/apply (ADR 0035)
+    manage.py agent_token create round-publisher --scope publish    # releases/check, releases/publish
+    manage.py agent_token create round-recorder --scope round       # POST rounds, PATCH rounds/<id>
     manage.py agent_token list
     manage.py agent_token revoke claude-writer
 
@@ -17,7 +20,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import IntegrityError
 
 from agentapi.auth import create_token, revoke
-from agentapi.models import AgentToken
+from agentapi.models import OPERATION_SCOPES, AgentToken
 from agentapi.schemas import RESULTS
 
 
@@ -28,7 +31,8 @@ class Command(BaseCommand):
         sub = parser.add_subparsers(dest="action", required=True)
         p = sub.add_parser("create")
         p.add_argument("name", help='The agent\'s name: it acts as "agent:<name>".')
-        p.add_argument("--scope", action="append", default=[], help=f"A task kind it may claim ({', '.join(sorted(RESULTS))}), or '*'. Repeatable.")
+        p.add_argument("--scope", action="append", default=[], help=f"A task kind it may claim ({', '.join(sorted(RESULTS))}), or '*'; or an operation scope "
+                       f"({', '.join(OPERATION_SCOPES)}), which '*' never includes. Repeatable.")
         p.add_argument("--by", default="", help='Who makes it (default human:<your login>).')
         sub.add_parser("list")
         p = sub.add_parser("revoke")
@@ -37,9 +41,10 @@ class Command(BaseCommand):
     def handle(self, *args, action, **o):
         if action == "create":
             scopes = o["scope"] or []
-            bad = [s for s in scopes if s != "*" and s not in RESULTS]
+            bad = [s for s in scopes if s != "*" and s not in RESULTS and s not in OPERATION_SCOPES]
             if bad or not scopes:
-                raise CommandError(f"--scope must be one or more of {', '.join(sorted(RESULTS))} or '*' (got {bad or 'none'})")
+                raise CommandError(f"--scope must be one or more of {', '.join(sorted(RESULTS))}, '*', or {', '.join(OPERATION_SCOPES)} "
+                                   f"(got {bad or 'none'})")
             by = o["by"] or f"human:{getpass.getuser()}"
             try:
                 row, token = create_token(o["name"], scopes, created_by=by)

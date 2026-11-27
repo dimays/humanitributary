@@ -10,7 +10,8 @@ when you make it.
 - You have the Heroku CLI, and it has access to the app `humanitributary-staging`.
 - You know the task kinds that the agent must do. The scopes are the kinds that have a result schema:
   `write_event`, `verify_claim`, `fill_gap`, `review_branch_proposal`, `map_branch_entities` and `audit`, or `*`
-  for all of them.
+  for all of them. The tokens of the daily round can also have `review`, `publish` or `round`. The scope `*` does
+  not give these three.
 
 ## Procedure
 
@@ -33,7 +34,7 @@ when you make it.
 4. Put the token in your password manager.
    Make sure that the token is not in a file, a chat or a log.
 5. Put the new token in the environment of the agent, as in step 7 of procedure
-   [01](01-do-an-agent-round.md).
+   [01](01-run-a-round-by-hand.md).
    Make sure that the old token is not in that environment.
 6. Ask the API who you are with the new token:
 

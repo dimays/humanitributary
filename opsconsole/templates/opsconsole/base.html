@@ -286,6 +286,33 @@ ins { background: var(--ins); text-decoration: none; } del { background: var(--d
 .prose .mermaid { margin: 0 0 16px; overflow-x: auto; cursor: zoom-in; } .prose .mermaid.full { cursor: zoom-out; } .prose .mermaid.full svg { max-width: none !important; }
 .card .prose h1 { font-size: 18px; } .card .prose h2 { font-size: 15px; margin-top: 20px; } .prose .mermaid svg { height: auto; }
 @media (max-width: 860px) { .docs { grid-template-columns: minmax(0, 1fr); gap: 18px; } .toc { position: static; max-height: none; } }
+
+/* Rounds (ADR 0035): the history strip with its hover cards, the stage timeline, the Jobs-and-Work flow. */
+.s-approved { background: var(--accent-bg); color: var(--accent); }
+.rstrip { display: inline-flex; gap: 3px; vertical-align: middle; }
+.rstrip .cell { position: relative; width: 14px; height: 22px; border-radius: 3px; background: var(--bar-gray); display: block; }
+.rstrip .cell.empty { background: transparent; border: 1px dashed var(--line); }
+.rstrip .s-completed { background: var(--bar-ok); } .rstrip .s-failed { background: var(--bar-bad); } .rstrip .s-running { background: var(--bar-info); }
+.rstrip .s-paused { background: var(--bar-warn); } .rstrip .s-approved { background: var(--accent); } .rstrip .s-cancelled { background: var(--bar-gray); }
+.rstrip a.cell:hover, .rstrip a.cell:focus { outline: 2px solid var(--accent); outline-offset: 1px; text-decoration: none; }
+.rstrip .pop { display: none; position: absolute; z-index: 20; left: 50%; top: 28px; transform: translateX(-50%); width: 280px; padding: 10px 12px;
+  border-radius: 9px; background: var(--panel); color: var(--text); border: 1px solid var(--line); box-shadow: var(--pop-shadow);
+  font-size: 12.5px; line-height: 1.45; font-weight: 400; white-space: normal; text-align: left; }
+.rstrip a.cell:hover .pop, .rstrip a.cell:focus .pop { display: block; }
+.rstrip .pop b { display: block; margin-bottom: 4px; } .rstrip .pop span { display: block; color: var(--muted); }
+.roundbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.roundbar .what { font-weight: 600; } .roundbar .acts { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; }
+.stages { list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; }
+.stages li { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; background: var(--panel); border-top: 4px solid var(--bar-gray); min-width: 0; }
+.stages li.done { border-top-color: var(--bar-ok); } .stages li.current { border-top-color: var(--bar-info); }
+.stages li.failed { border-top-color: var(--bar-bad); } .stages li.skipped { opacity: .6; }
+.stages b { display: block; } .stages .small { overflow-wrap: anywhere; }
+@media (max-width: 860px) { .stages { grid-template-columns: minmax(0, 1fr); } }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); margin: -10px 0 18px; }
+.flow .step { padding: 2px 9px; border-radius: 999px; background: var(--hover); border: 1px solid var(--line); color: var(--text); white-space: nowrap; }
+.flow .step.on { background: var(--accent-bg); border-color: transparent; color: var(--accent); }
+.sizeform { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+.sizeform label { font-size: 12.5px; color: var(--muted); display: block; } .sizeform input { width: 64px; }
 </style>
 {% block head %}{% endblock %}
 </head>

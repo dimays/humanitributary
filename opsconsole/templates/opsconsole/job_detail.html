@@ -10,6 +10,7 @@
 {% if j.paused %}<div class="banner warn">Paused by {{ j.paused.by }} {% if j.paused.at %}on {{ j.paused.at|slice:":16" }} UTC{% endif %}: {{ j.paused.reason }}. The scheduler skips it until it is resumed.</div>{% endif %}
 <div class="grid g2">
   <div class="card"><dl class="kv">
+    {% if j.creates %}<dt>Makes tasks</dt><dd>{% for k in j.creates %}<a href="{% url 'opsconsole:work_kind' k %}">{{ k }}</a>{% if not forloop.last %}, {% endif %}{% endfor %} <span class="muted">(agents do them in rounds: Work)</span></dd>{% endif %}
     <dt>Schedule</dt><dd>{{ j.schedule }}{% if j.schedule_note %} <span class="muted">({{ j.schedule_note }})</span>{% endif %}</dd>
     <dt>Next run</dt><dd>{% if j.paused %}{% badge "paused" %}{% elif j.next_due %}{{ j.next_due|date:"M j, H:i" }} UTC <span class="muted">({{ j.next_due|ago }}{% if j.overdue %}, overdue{% endif %})</span>{% else %}–{% endif %}</dd>
     <dt>Last run</dt><dd>{% if j.run %}<a href="{% url 'opsconsole:run' j.run.pk %}">{% if j.partial %}{% badge "completed" "Completed" "with errors" %}{% else %}{% badge j.state %}{% endif %}</a> <span class="muted">{{ j.run.started_at|ago }}{% if j.duration is not None %} · {{ j.duration|seconds }}{% endif %}</span>{% else %}never{% endif %}</dd>

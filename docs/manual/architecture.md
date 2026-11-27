@@ -191,7 +191,8 @@ flowchart TB
 
 ## Sequence: one agent round
 
-This diagram shows one agent that does one task, and then the review of the drafts.
+This diagram shows one agent that does one task, and then the review of the drafts. The daily round does all of
+it through the agent API: see [the daily round](daily-round.md).
 
 ```mermaid
 sequenceDiagram
