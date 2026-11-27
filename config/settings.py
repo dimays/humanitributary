@@ -201,6 +201,18 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # The agent API (agentapi/, docs/adr/0017-agent-api.md): requests per token per minute.
 AGENT_API_RATE_PER_MINUTE = int(os.getenv("AGENT_API_RATE_PER_MINUTE", "120"))
+# The agent API's heavy operations (ADR 0035), per token: edit files checked and applied per hour, release checks per
+# hour, releases published per day.
+AGENT_API_EDITS_CHECKS_PER_HOUR = int(os.getenv("AGENT_API_EDITS_CHECKS_PER_HOUR", "20"))
+AGENT_API_EDITS_APPLIES_PER_HOUR = int(os.getenv("AGENT_API_EDITS_APPLIES_PER_HOUR", "6"))
+AGENT_API_RELEASE_CHECKS_PER_HOUR = int(os.getenv("AGENT_API_RELEASE_CHECKS_PER_HOUR", "10"))
+AGENT_API_PUBLISHES_PER_DAY = int(os.getenv("AGENT_API_PUBLISHES_PER_DAY", "4"))
+
+# The daily agent round (work/rounds.py, ADR 0035). The routine itself is a Claude Code cloud routine the owner makes,
+# with its own cron; ROUND_SCHEDULE repeats that cron (UTC) so the console can show it in words and say when the next
+# round is due. ROUND_ROUTINE names where it runs.
+ROUND_SCHEDULE = os.getenv("ROUND_SCHEDULE", "0 6 * * *")
+ROUND_ROUTINE = os.getenv("ROUND_ROUTINE", "cloud routine")
 
 # The operations console (/ops/, opsconsole/): when set, only these hosts serve it and every other host answers 404, so
 # the public page's domain has no /ops/ (comma-separated, e.g. data.humanitributary.com). Empty: any allowed host.

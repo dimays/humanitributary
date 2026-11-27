@@ -15,13 +15,26 @@ validates the result against its kind's schema and applies it through the servic
     GET  /api/agent/branches/<slug>         a branch summary: its events, latest metrics, open proposals
     GET  /api/agent/claims/<id>             a claim with its evidence and parts (the verify_claim payload's shape)
     GET  /api/agent/search?q=…&kind=event   entries by title or name (trigram similarity)
+
+The operations a round needs (agentapi/operations.py, ADR 0035; scopes review, publish and round):
+
+    GET  /api/agent/queue                   the queue per kind, caps, today's counts, drafts in review, round settings
+    POST /api/agent/edits/check             {"ops": [...], "name", "round"} → the problems and the diff (a dry run)
+    POST /api/agent/edits/apply             {"ops", "name", "round", "check", "reason"} + Idempotency-Key → applied
+    POST /api/agent/releases/check          {"round"} → the release gates and the change report (writes nothing)
+    POST /api/agent/releases/publish        {"check", "reason", "round", "notes"} + Idempotency-Key → the release
+    GET  /api/agent/rounds/settings         paused?, skip the next?, the round size, held drafts sent on, the schedule
+    POST /api/agent/rounds                  {"trigger": "schedule", "plan", "agents"} + Idempotency-Key → a round
+    GET  /api/agent/rounds/<id>             a round
+    PATCH /api/agent/rounds/<id>            {"status", "agents", "tasks", "drafts", "verdicts", "summary", "finish"}
 """
 
+import hashlib
 import json
 from datetime import date
 
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db import transaction
+from django.db import IntegrityError, OperationalError, transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -35,7 +48,7 @@ from . import apply as appliers
 from . import schemas
 from .auth import agent_view, error
 
-ENDPOINTS = [" ".join(ln.split()) for ln in __doc__.splitlines() if ln.strip().startswith(("GET ", "POST "))]
+ENDPOINTS = [" ".join(ln.split()) for ln in __doc__.splitlines() if ln.strip().startswith(("GET ", "POST ", "PATCH "))]
 
 
 def _body(request) -> dict:
@@ -78,6 +91,8 @@ def schema(request, kind):
 def _kinds(request, asked: list[str]) -> tuple[list[str] | None, JsonResponse | None]:
     t = request.agent_token
     allowed = sorted(schemas.RESULTS) if "*" in t.scopes else [k for k in t.scopes if k in schemas.RESULTS]
+    if not allowed:  # a token with operation scopes only (review, publish, round): no task kinds, so no tasks
+        return None, error(403, "this token may take no task kinds", scopes=t.scopes)
     if not asked:
         return allowed, None
     denied = [k for k in asked if k not in allowed]
@@ -156,10 +171,21 @@ def task_action(request, task_id, action):
         return error(409, str(e))
 
 
+def result_sha256(result) -> str:
+    return hashlib.sha256(json.dumps(result, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+
+
 def complete(request, task_id, body):
+    """Validate, apply and complete, in one transaction. Safe to retry: the stored result carries the sha256 of what
+    was sent, so the same agent sending the same result again for a task it already completed gets the task back
+    (200, `"replayed": true`) and nothing is applied twice; a different result is a 409.
+
+    A conflict that Postgres reports only at COMMIT (a deferred constraint such as `entry_sort_key_unique`, or a
+    serialization failure or deadlock between two agents writing at once) rolls everything back and is a 409 with
+    `"retryable": true`, never a 500: the task is still the agent's, and the same request may simply be sent again."""
     actor = request.agent_token.actor
     result = body.get("result")
-    task = AgentTask.objects.filter(pk=task_id).only("kind").first()
+    task = AgentTask.objects.filter(pk=task_id).only("kind", "status", "claimed_by", "result").first()
     if task is None:
         return error(404, f"no task #{task_id}")
     if not request.agent_token.may(task.kind):
@@ -167,13 +193,21 @@ def complete(request, task_id, body):
     problems = schemas.errors(task.kind, result)
     if problems:
         return error(422, "the result does not match its schema", problems=problems, schema=f"/api/agent/schemas/{task.kind}")
+    digest = result_sha256(result)
+    if task.status == AgentTask.Status.DONE and task.claimed_by == actor:
+        if (task.result or {}).get("result_sha256") == digest:
+            return _ok(_task_out(AgentTask.objects.get(pk=task_id)) | {"replayed": True})
+        return error(409, f"task #{task_id} is already done, with a different result", retryable=False)
     try:
         with transaction.atomic():
             held = queue._held(task_id, actor)  # locks the row: nobody else can take it over while we apply
             applied = appliers.apply(held, result, actor)
-            done = queue.complete(task_id, agent=actor, result={**result, "applied": applied})
+            done = queue.complete(task_id, agent=actor, result={**result, "applied": applied, "result_sha256": digest})
     except appliers.ApplyError as e:
         return error(422, str(e))
+    except (IntegrityError, OperationalError) as e:
+        return error(409, f"another write conflicted with this one ({type(e).__name__}); nothing was kept and the task is still yours: "
+                          "send the same request again", retryable=True, task=task_id)
     return _ok(_task_out(done))
 
 

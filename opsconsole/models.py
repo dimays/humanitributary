@@ -5,6 +5,9 @@ are working state, outside the Revision log), so this table is their record: who
 confirmation page showed, and what happened. Rows are only ever added and moved along their status; the admin shows
 them read-only.
 
+Since ADR 0035 the agent API records its operations here too (an edit file checked or applied, a release checked or
+published), as `agent:<name>` with `runs_in="api"`, so one log and one publish lock cover both doors.
+
 The `ops_operator` permission lives here: staff see the console, only holders of it (and superusers) act.
 """
 
@@ -26,6 +29,13 @@ class OpsAction(models.Model):
         ROLLBACK = "rollback", "roll back to an earlier release"
         PAUSE_JOB = "pause_job", "pause a job"
         RESUME_JOB = "resume_job", "resume a job"
+        PAUSE_ROUNDS = "pause_rounds", "pause the scheduled rounds"
+        RESUME_ROUNDS = "resume_rounds", "resume the scheduled rounds"
+        SKIP_ROUND = "skip_round", "skip the next scheduled round"
+        ROUND_SIZE = "round_size", "set the round size"
+        REVIEW_HELD = "review_held", "send held drafts to the next review"
+        EDITS_CHECK = "edits_check", "check an edit file (agent API)"
+        EDITS_APPLY = "edits_apply", "apply an edit file (agent API)"
 
     class Status(models.TextChoices):
         PENDING = "pending"      # waiting for the worker
@@ -37,6 +47,7 @@ class OpsAction(models.Model):
     class RunsIn(models.TextChoices):
         REQUEST = "request"  # quick, single-transaction changes, done in the web request
         WORKER = "worker"    # long or heavy ones, picked up by the worker between jobs (opsconsole/worker.py)
+        API = "api"          # an agent's call to the agent API (edits, releases: ADR 0035), done in that request
 
     kind = models.CharField(max_length=30, choices=Kind.choices, db_index=True)
     target = models.CharField(max_length=300, blank=True, help_text='What it acts on: "job:link_health", "task:412", "release:2026.11.26.2" …')
@@ -50,6 +61,8 @@ class OpsAction(models.Model):
     output = models.TextField(blank=True, help_text="What the action printed while it ran (secrets masked).")
     result = models.JSONField(null=True, blank=True)
     error = models.TextField(blank=True)
+    round = models.ForeignKey("work.Round", null=True, blank=True, on_delete=models.SET_NULL, related_name="actions",
+                              help_text="The agent round this action belongs to (agent API calls that name one).")
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -61,7 +74,8 @@ class OpsAction(models.Model):
         constraints = [
             models.CheckConstraint(condition=Q(status__in=["pending", "running", "done", "failed", "cancelled"]), name="opsaction_status_valid"),
             models.CheckConstraint(condition=~Q(reason=""), name="opsaction_reason_required"),
-            models.CheckConstraint(condition=Q(requested_by__startswith="human:"), name="opsaction_by_a_human"),
+            # A person from the console, or an agent through the agent API (ADR 0035): never a job.
+            models.CheckConstraint(condition=Q(requested_by__startswith="human:") | Q(requested_by__startswith="agent:"), name="opsaction_by_a_human_or_agent"),
         ]
 
     def __str__(self):

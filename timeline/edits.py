@@ -35,7 +35,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
-from django.db import DatabaseError, transaction
+from django.db import DatabaseError, connection, transaction
 from django.db.models import Max, TextField
 from django.db.models.functions import Cast
 from django.utils import timezone
@@ -103,6 +103,7 @@ class Outcome:
     counts: Counter = field(default_factory=Counter)
     revisions: int = 0
     applied: bool = False
+    txid: int | None = None  # the transaction's id: every Revision the file wrote carries it (Revision.txid)
 
 
 def load(path: str | Path) -> list:
@@ -967,6 +968,9 @@ def apply(ops: list, *, actor: str, source: str = "edits", dry_run: bool = False
     name = Path(source).name
     try:
         with transaction.atomic(), revising(actor, reason=f"apply_edits {name}"):
+            with connection.cursor() as c:
+                c.execute("SELECT txid_current()")
+                outcome.txid = c.fetchone()[0]
             for i, op in enumerate(ops):
                 high = Revision.objects.aggregate(m=Max("id"))["m"] or 0
                 try:

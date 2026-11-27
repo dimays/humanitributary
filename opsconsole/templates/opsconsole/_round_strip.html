@@ -1,0 +1,7 @@
+{% load ops %}<span class="rstrip" role="list" aria-label="The last rounds, oldest first">{% for e in empty %}<span class="cell empty" role="listitem"></span>{% endfor %}{% for c in history %}<a class="cell s-{{ c.state }}" role="listitem" href="{% url 'opsconsole:round' c.id %}" aria-label="Round #{{ c.id }} · {{ c.started|date:'M j H:i' }} UTC · {{ c.label }}">
+  <span class="pop"><b>Round #{{ c.id }} · {{ c.label }}</b>
+    <span>{{ c.started|date:"M j, H:i" }} UTC · {{ c.trigger }}{% if c.seconds is not None %} · {{ c.seconds|seconds }}{% endif %}</span>
+    <span>Planned: {% for k, n in c.mix.items %}{{ k }} {{ n }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</span>
+    <span>Done: {% for k, n in c.tasks.items %}{{ k }} {{ n }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</span>
+    <span>{{ c.drafts }} draft{{ c.drafts|pluralize }} · verdicts {% for k, n in c.verdicts.items %}{{ k|words }} {{ n }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</span>
+    <span>{{ c.ops }} op{{ c.ops|pluralize }} applied{% if c.release %} · release {{ c.release }}{% endif %}</span></span></a>{% endfor %}</span>

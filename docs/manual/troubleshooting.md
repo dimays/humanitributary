@@ -62,3 +62,14 @@ procedure.
 | CI fails in the tests or the release gates. | The change has a fault, or the content in the archive fails a gate. | Run `make check-pr` on your computer. Read the output of the lane that failed. |
 | A deploy fails in the release phase. | A migration failed. Heroku keeps the earlier release live. | Run `heroku releases:output -a humanitributary-staging`. Correct the migration with procedure [11](procedures/11-deploy-a-code-change.md). |
 | Heroku did not deploy after a merge. | CI did not pass on `main`, or the automatic deploy is off. | Examine the checks of the newest commit on `main`. Examine the Deploy tab of the app on the Heroku dashboard. |
+
+## The daily round
+
+| Symptom | Cause | Action |
+|---|---|---|
+| No round shows on the Work page after the scheduled time. | An operator paused the rounds, the routine did not start, or the environment has no token for a role. | Look for the badge Paused. Open the run of the scheduled task at `https://claude.ai/code/routines` and read its log. If a token is not there, do procedure [15](procedures/15-set-up-the-daily-round.md) again. |
+| A round shows "Held for review". | A release gate failed, or the review needs the owner. | Open the page of the round and read its notes. Correct the cause, then do procedure [01](procedures/01-run-a-round-by-hand.md). |
+| A round shows the state `failed`, with "interrupted" in its history. | The session stopped before the end. After 12 hours, the next start closes such a round. | Release each stuck task with procedure [07](procedures/07-release-a-stuck-task.md). The next round continues the work. |
+| The API answers `busy` to the routine. | Another round is still open. | Wait for it to finish. If it is older than 12 hours, the next start closes it. |
+| A complete call answers 409 with `"retryable": true`. | Two agents wrote at the same time, and Postgres found a conflict at the commit. Nothing changed. | No action. The agent sends the same request again. |
+

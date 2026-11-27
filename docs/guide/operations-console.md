@@ -8,6 +8,7 @@ covers:
   - tests/test_opsconsole_actions.py
   - tests/test_opsconsole_cards.py
   - tests/test_opsconsole_new_events.py
+  - tests/test_rounds.py
 ---
 
 The operations console is a handful of web pages for staff, at `/ops/` on the data host. Its shape is borrowed from
@@ -54,18 +55,29 @@ Humanitributary Operations"), from `base.html`'s `title` block; the admin's is "
 ## The pages
 
 The sidebar has seven items and nothing else. The pages they lead to link on to the rest: a job, a run, a task, a
-Revision, a release, an action and the action log.
+Revision, a release, an action and the action log, and, under Work, the agent rounds and a round
+([ADR 0035](../adr/0035-automated-daily-rounds.md)).
+
+**Jobs and Work, told apart.** Each of the two tabs opens with one plain sentence: Jobs, "The worker runs these on a
+schedule. They collect and prepare material and make tasks. They don't use Claude."; Work, "Claude agents do these
+tasks in rounds. Each round writes drafts, a reviewer checks them, and approved changes are published." Under it a
+compact flow (`_flow.html`: jobs collect and prepare → they make tasks → a round's agents draft → a reviewer checks
+→ approved changes are published) links to the manual's page with the diagram (`docs/manual/jobs-and-work.md`).
+They link to each other: a job's row and page name the task kinds it makes ("Makes write_event tasks"), and each
+Work queue card names the jobs that feed it ("fed by process"), from one map (`work/rounds.py` `FED_BY`).
 
 | Page | URL | What it shows |
 |---|---|---|
 | Dashboard | `/ops/` | **One status line**: "All good", or "N problems" with one sentence each, worst first (a store that can't be reached; no worker running and no run for 30 minutes; a job failing runs in a row, red at the alert threshold; stuck leases; jobs overdue by 30 minutes; no live release), each linking to where to look. A paused job is never a problem, whatever its last runs did: it is listed under the problems apart, with an amber Paused badge, who paused it and why, and how many failed runs before the pause are not counted ("N paused" beside the count); resumed, its failures count again. **Runs, last 24 hours**: the run graph, one row per job that ran, a bar per run placed at its start and as wide as it took (at least a sliver), green Completed, amber completed with errors, red Failed, blue Running; each bar links to its run, and pointing at it
-(or focusing it, or tapping it once) shows its [run card](#run-cards). **Needs attention**: each job's (or feed's) last run that failed, with Retry; not a paused job's. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck. Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
+(or focusing it, or tapping it once) shows its [run card](#run-cards). **Needs attention**: each job's (or feed's) last run that failed, with Retry; not a paused job's. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck. **Latest round**: the last agent round's number, state badge, age, trigger, drafts, ops applied and release, the ten-round strip, and when the next is due (or Rounds paused). Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
 | New events | `/ops/new/` | The content the platform makes, newest activity first: every current event (`write_event`), history-wave event (`fill_gap`) and branch addition (an edit file's `add_branch` or `add_event`), each with its five steps (Fetched, Queued, Drafted, Reviewed, Published) and their times, its branches, date, sources, agent and verdict, and its links; tabs, filters and a 14-day pulse above ([below](#new-events)). |
 | Jobs | `/ops/jobs/` | One row per job, in run order: its name and one-sentence description (the docstring's first sentence), its tags, its schedule in words ("every 15 minutes", "every hour" with "per feed · 1 of 1 on" for a feed job), its last run's state and age, its last ten runs as squares (oldest left, each its state's color and a link to the run, with its [run card](#run-cards) on hover, focus or tap; empty slots when it has run fewer times), its next run (or Paused, or Pending), and Run now / Pause, or Resume. Chips across the top filter by tag (`?tag=`), with counts. |
 | A job | `/ops/jobs/<name>/` | The description and tags; the schedule, next run, last run, failures in a row, console runs waiting; the ten-run strip and whether it may be run again straight away (`not_idempotent`); for a feed job its feeds (schedule, last fetched, next, a Run button each); its run history, 25 a page. |
 | Runs | `/ops/runs/` | Every run, newest first, 50 a page: state, run, job, started, duration, a counts summary (or the masked error's start). Filters: job, state and tag. Without a state, "Up next" (five) sits above the list; the states Scheduled and Paused list the jobs' next runs, Pending and Cancelled the console's run requests (waiting, or withdrawn), the others the runs. |
 | A run | `/ops/runs/<id>/` | The state (Completed with errors for a partial run), the job's description, older and newer runs of the job, Retry when it failed; when it started and how long it took, its feed, how much content it wrote; its counts as a key and value list (errors first); **its log**: one line each with the time (UTC, to the millisecond), the level in its color (INFO blue, WARNING amber, ERROR red), the logger and the message, with "Warnings and errors" to show only those and "Plain text" (`?format=text`) for the raw lines; the error with its traceback; and the Revisions it wrote (the first 20, each linking to its diff). |
-| Work | `/ops/work/` | A card per task kind: waiting, in progress, stuck, done today, the oldest waiting task's age, today's new tasks against the daily cap (`write_event`, `fill_gap`) and how many failed; the stuck leases, longest-expired first, each with Release; the content wave (active wave, coverage, gaps, the last `gap_waves` run) with "Advance to W2". |
+| Work | `/ops/work/` | **The round strip** at the top, the same visibility and controls the Jobs tab gives a job: "Daily agent round · cloud routine · next at 06:00 UTC" (`ROUND_SCHEDULE` in words, `ROUND_ROUTINE`; or "paused"), whether the next is skipped and how many held drafts go to the next review; the last round's state badge (Running, Reviewing, Release ready, Held for review, Completed, Failed, Skipped, or "Published release X"); the last ten rounds as squares, each its state's color and a link to the round, with a hover (or focus) card: the planned mix, tasks done per kind, drafts, verdicts, ops applied, the release, how long it took and its trigger; "All rounds"; for operators Pause rounds / Resume rounds, Skip the next, "Send them to the next review" (with the held count), and under "Round size" a form of agents and tasks each per role. Then a card per task kind: waiting, in progress, stuck, done today, **next round will take: N** (the round size times what waits), the oldest waiting task's age, **done in 7 days**, the jobs that feed it, today's new tasks against the daily cap (`write_event`, `fill_gap`) and how many failed; the stuck leases, longest-expired first, each with Release; the content wave (active wave, coverage, gaps, the last `gap_waves` run) with "Advance to W2". |
+| Rounds | `/ops/work/rounds/` | Every agent round, newest first, 25 a page: number and trigger, start, state, planned mix, drafts, verdicts, ops, release, how long it took. |
+| A round | `/ops/work/rounds/<id>/` | Its state and trigger, who started it and when, its summary; **the stage timeline**: Plan → Agents → Review → Apply → Publish, each done (green), current (blue), failed (red), skipped (faded) or still to come, with its time and a note (the mix; agents and drafts; the verdicts; the ops applied or why the file was refused; the release, "held for the owner" or "nothing to publish") (`work.rounds.stages`); the plan per kind (planned, claimed, completed, failed) and the size; the verdict counts and the edit file's ops, with the Revisions its transaction wrote; each agent's recorded counts beside what the queue says it did in the round's window (`queries.round_agents`); its actions (each edits and releases call, linking to the action log); its notes and history; links to New events and the release. |
 | A task kind | `/ops/work/<kind>/` | Tabs: Waiting, In progress, Stuck, Done, Failed, Cancelled (with counts), a search on dedupe key, target and creator, and the tasks, 50 a page: state, priority, what it is about, the agent, age, the outcome in a few words; Release, Requeue or Cancel per task; "Requeue these" (Failed, Cancelled) or "Cancel these" (Waiting, Stuck) for the tab's tasks, at most 50 at once. No payloads. |
 | A task | `/ops/tasks/<id>/` | Its fields, the result, the error, the payload behind "Show the payload", and the Revisions it made, each linking to its diff. Release and Extend on a claimed task, Requeue, Cancel. |
 | Releases | `/ops/releases/` | Three cards: the live release (and who pointed at it, why), the content changes not released yet (by agents, people and jobs, linking to them) and the fact base's corroborated share. Then every release, 25 a page: version, Live, when and by whom, added, changed and retracted (its manifest's totals), "page only" when nothing was added, changed or retracted and the page's hash differs from the release before, its events; Publish (top) and Roll back to this (each release not live). |
@@ -84,7 +96,10 @@ batch tables are gone: the waves card, the caps and the fact base's share kept w
 `ok` or `partial` FetchRun, "with errors" for partial), **Failed** (red), **Running** (blue, the dot pulsing),
 **Scheduled** (gray: a job's next due time), **Pending** (gray: a run asked for from the console, not yet taken by
 the worker), **Cancelled** (gray: one withdrawn) and **Paused** (amber). Tasks use Waiting, In progress, Stuck
-(amber: claimed, lease expired), Completed, Failed and Cancelled.
+(amber: claimed, lease expired), Completed, Failed and Cancelled. Rounds (`queries.ROUND_STATE`) use Running and
+Reviewing (blue), **Release ready** (accent: the edit file is applied and every gate passes), **Published** (green,
+"Published release X"), **Held for review** (amber: finished without a release; something needs the owner),
+Completed (green: nothing to publish), Failed (red) and Skipped (gray).
 
 **Tags.** A job's tags come from the registry: `@job(…, tags=…)` in `ingest/job_defs.py`, from the fixed set in
 `ingest/jobs.py` `TAGS` ([ingestion](ingestion.md#the-job-runner)): `collect`, `process`, `fact-check`,
@@ -226,6 +241,7 @@ ten times the rows and compares; the seven main pages make at most 25 queries, a
 | New events | `opsconsole/newevents.py` ([above](#new-events)): items, steps and states derived in three statements from tasks, Revisions and releases. |
 | Waves | `JobState` "gap_waves" read directly (`governance.waves.state()` would create the row). |
 | Paused jobs | `JobState` "paused_jobs" through `ingest.jobs.paused_jobs()`, which reads without creating the row. |
+| Rounds | `queries.rounds_overview`: the settings (`JobState` "agent_rounds", read without creating the row), the last ten `Round` rows with their releases, and the held drafts' count (`work.rounds.held_drafts`: entries in review with an `apply_edits` Revision, one `EXISTS` query); "next round will take" is the size times the queue's waiting counts. A queue card's 7-day count is one more `FILTER` in the queue's `GROUP BY`. |
 
 Lists never load the big JSON columns: tasks defer `payload` and `result` and read the decision and note with JSON
 key transforms; Revisions defer `before` and `after`. Error text and log lines are passed through
@@ -291,6 +307,14 @@ a key minted with the page.
 | Publish (`publish`) | worker | the finished check's page: the change report, the totals, "page changed; content unchanged" and the like, both hashes, a warning when nothing changed; fields for notes and "force: page-only change" | checks the content and page still hash as checked, then `publish.release.publish(actor="human:<username>", notes, force)`: the gates run again | the check isn't done, is over 30 minutes old or was already used; another publish or rollback is open; the content or page changed since the check |
 | Roll back (`rollback`) | worker | the pointer now (and who wrote it), the release it would point at, its snapshot's hash verified, its change totals | `publish.release.rollback(version, actor="human:<username>")` | it is already live; its snapshot is missing or doesn't match; another publish or rollback is open |
 | Pause, resume a job (`pause_job`, `resume_job`) | request | the job, and what pausing means | `ingest.jobs.set_paused`: `JobState` "paused_jobs" names it with who and why; `run_due` skips it | already paused; not paused |
+| Pause, resume the scheduled rounds (`pause_rounds`, `resume_rounds`) | request | the schedule in words and the next due time, and what pausing means (the routine still wakes, finds rounds paused and stops; a round by hand still runs; one running finishes) | `work.rounds.change(paused=…)`: the "agent_rounds" `JobState`, with who and why; `POST rounds` then refuses a scheduled round (409 `paused`) | already paused; not paused |
+| Skip the next round (`skip_round`) | request | the schedule and what skipping means | `work.rounds.change(skip_next=True)`: the next scheduled round is recorded as Skipped with the reason, and the flag clears | already skipped; rounds are paused |
+| Set the round size (`round_size`) | request | a table per role: its task kind, agents and tasks each (old → new), tasks in all; the limits | `work.rounds.change(size=…)`; the next round plans with it | out of bounds (0–4 agents a role, 10 in all, 1–12 tasks each: `work.rounds.validate_size`); the same size |
+| Send held drafts to the next review (`review_held`) | request | the held drafts (at most 200), as a table | `work.rounds.change(carry_over={"slugs": …})`; the next round's start moves them into its plan, for its reviewers, and clears it | none is held |
+
+None of the round controls starts a round or calls Anthropic's services: they change the settings the routine reads
+(`GET rounds/settings`) and `POST rounds` enforces (the `run-round` skill checks them first and exits cleanly when
+paused).
 
 Every `execute` re-checks what might have changed since the confirmation and fails the action with the reason if it
 no longer holds. None of these writes a canonical row itself: the queue, FetchRuns, the release pointer, `Release`
@@ -306,7 +330,10 @@ or cancel; a feed fetched from here at most once an hour; non-idempotent jobs at
 **The audit row.** `opsconsole/models.py` `OpsAction` (migration `opsconsole/migrations/0001_opsaction.py`): `kind`, `target`
 (`job:<name>`, `task:<id>`, `tasks:<n>`, `wave:<name>`, `release:<version>`), `params` (what the confirmation showed
 and the action uses), `reason` (required: a check constraint refuses an empty one), `requested_by`
-(`human:<username>`, also checked), `idempotency_key` (unique), `runs_in` (`request` or `worker`), `status`
+(`human:<username>`, or since ADR 0035 `agent:<name>` for the agent API's operations; a check constraint refuses
+anything else), `idempotency_key` (unique), `runs_in` (`request`, `worker`, or `api`: an agent's `edits/check`,
+`edits/apply`, `releases/check` or `releases/publish`, done in its own request; [work queue and
+agents](work-queue-and-agents.md#a-rounds-operations)), `round` (the agent round it belongs to, if any), `status`
 (`pending` → `running` → `done`, `failed` or `cancelled`), `check_output` (the confirmation's dry run, check or
 preview, as text), `output` (what it printed, masked), `result`, `error` (masked), and the times. The admin lists
 them read-only (no add, change or delete).
@@ -320,12 +347,17 @@ holding the scheduler lock runs them, inside `run_due`'s runner lock (a job run'
 lock again, which Postgres allows to its holder). It takes the oldest pending row `FOR UPDATE SKIP LOCKED`, marks
 it running, runs it outside any wrapping transaction (a job manages its own), and records the outcome; at most
 `PER_PICK_UP` (5) per call. A worker action left `running` by a worker that died is closed as failed
-("interrupted") at the next pick-up. A pending one can be withdrawn from its page ("Withdraw it"), and it then
+("interrupted") at the next pick-up; an agent API action still `running` after 10 minutes
+(`actions.API_STALE_MINUTES`: its request was cut off) is closed the same way by the next publish lock check
+(`close_interrupted_api`), so it never holds the lock. The one-at-a-time rule counts both doors' publishes and
+rollbacks: the worker's next publish refuses while an agent's runs, and the agent's while the console's is open. A pending one can be withdrawn from its page ("Withdraw it"), and it then
 never runs. With no worker running, actions wait; the page says so.
 
 **Where the buttons are.** Run now, Pause and Resume on Jobs and a job's page (and Run per feed); Retry on the
 Dashboard's "Needs attention" and a failed run's page; Release on Work's stuck leases and a task kind's list,
-Extend on a task's page; Requeue and Cancel per task and for a tab's tasks; Advance on Work's wave card; Publish
+Extend on a task's page; Requeue and Cancel per task and for a tab's tasks; Advance on Work's wave card; Pause
+rounds, Resume rounds, Skip the next, Send held drafts to the next review and Set the round size on Work's round
+strip; Publish
 on Releases (and the unreleased changes); Roll back to this on each release that isn't live.
 
 ## Template helpers
@@ -409,6 +441,13 @@ release, and one approval after it):
   their cooldown, and check → publish → refusing a second publish from the same check, content changed since the
   check, and a rollback (the build gate stubbed: no Node).
 
+`tests/test_rounds.py` (`ConsoleRoundTests`) holds the rounds' part: the Work page's round strip, its sentence and
+the flow, "next round will take" and "fed by", the Jobs page's sentence, a round's page, the rounds list and the
+Dashboard's card; no buttons and a 403 for staff without `ops_operator`; pause, resume, skip and size as confirmed,
+audited actions with their refusals (already paused, nothing to skip while paused, a size over the cap), and held
+drafts sent to the next review. The same file holds the agent API's operations and the `run-round` skill's
+preflight ([work queue and agents](work-queue-and-agents.md#rounds)).
+
 `seed()` also fills a local database for a look at the pages: `uv run python manage.py shell -c "from
 tests.test_opsconsole import seed; seed(skip_gates=(), releases=2)"` (with `skip_gates=()` it runs every publish
 gate, so it needs Node). It edits one archive event as an agent and as `human:owner` and pauses `year_pages`, so use
@@ -428,6 +467,7 @@ it on a development database only.
 | A new job tag | `ingest/jobs.py` `TAGS` and the job's `@job(tags=…)`; [ingestion](ingestion.md#the-job-runner) and this chapter |
 | A new docs folder | `opsconsole/docs.py` `SECTIONS`; the link rewriting follows |
 | The Mermaid version | `docs.MERMAID_URL` (a pinned version, at least two weeks old); look at a page with a diagram in both themes |
+| A round control or a round figure | `work/rounds.py` (the setting, its limits, what `start()` does with it), its action here, the `run-round` skill (the routine must obey it), `test_rounds.py`, this chapter, [work queue and agents](work-queue-and-agents.md#rounds) and the manual's procedure 14 |
 | Restricting it to the data host | Set `OPS_HOSTS` on the app (a config var; no deploy) |
 | A new action | An `OpsAction.Kind` (and a migration for the choices), `prepare` and `execute` in `opsconsole/actions.py` and an `Action` in `ACTIONS` (`runs_in` worker for anything that could outlast gunicorn's 30 seconds), a button through `{% act %}`, tests of its effect and refusals, this chapter, and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md) |
 | Who may act | Grant or revoke `ops_operator` in the admin; no deploy |

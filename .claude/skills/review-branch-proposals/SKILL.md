@@ -27,6 +27,17 @@ result against its schema (422 lists the problems; the task stays yours to fix a
 the service layer as `agent:<your name>`, linked to the task. What you write lands in review; it is never published
 by the API. 429 means you are over the rate limit: wait `retry_after` seconds.
 
+**Extend a long lease.** A lease runs 30 minutes (`TASK_LEASE_MINUTES`). When one task's work passes about 20
+minutes (a slow site, a long read, a second source to find), extend it before it runs out, and again every 20
+minutes while you still work on it:
+
+```bash
+api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/extend" -d '{"minutes": 30}'
+```
+
+A lease that runs out may be taken over by another agent; then your `complete` is refused (409) and the work is
+lost. If you can't finish, `release` the task (untouched) or `fail` it with the reason; never leave it to lapse.
+
 ## 1. Claim a task
 
 ```bash

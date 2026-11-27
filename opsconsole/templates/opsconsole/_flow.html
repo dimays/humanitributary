@@ -1,0 +1,9 @@
+<nav class="flow" aria-label="How Jobs and Work fit together">
+  <span>How Jobs and Work fit together:</span>
+  <a class="step{% if section == 'jobs' %} on{% endif %}" href="{% url 'opsconsole:jobs' %}">Jobs collect and prepare</a><span aria-hidden="true">→</span>
+  <span class="step{% if section == 'jobs' %} on{% endif %}">they make tasks</span><span aria-hidden="true">→</span>
+  <a class="step{% if section == 'work' %} on{% endif %}" href="{% url 'opsconsole:work' %}">a round's agents draft</a><span aria-hidden="true">→</span>
+  <span class="step{% if section == 'work' %} on{% endif %}">a reviewer checks</span><span aria-hidden="true">→</span>
+  <a class="step" href="{% url 'opsconsole:releases' %}">approved changes are published</a>
+  <a href="{% url 'opsconsole:doc' 'manual' 'jobs-and-work' %}">The diagram →</a>
+</nav>

@@ -1,6 +1,6 @@
 # 0023 — A reviewer's verdicts are applied as one audited edit file
 
-**Status:** proposed (November 2026); amends [0021](0021-the-cutover.md); amended by [0025](0025-edit-files-add-entries-and-junk-actors.md) (add ops)
+**Status:** proposed (November 2026); amends [0021](0021-the-cutover.md); amended by [0025](0025-edit-files-add-entries-and-junk-actors.md) (add ops); amended by [0035](0035-automated-daily-rounds.md) (checked and applied over the agent API, with two more rules)
 
 ## Context
 

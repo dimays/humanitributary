@@ -176,7 +176,8 @@ Every request goes through `ingest.http.Fetcher` and the source policy
 ## What the agent sends back
 
 The `fill-gaps` skill (`.claude/skills/fill-gaps/SKILL.md`) claims a task,
-reads, and completes it over the agent API with one of
+reads (with the project's honest User-Agent, one browser tab at most, a lease
+extended when a task passes about 20 minutes), and completes it over the agent API with one of
 ([the schema](work-queue-and-agents.md#results-validated-then-applied)):
 
 - `{"decision": "written", "events": [1–3 events]}`, each in the

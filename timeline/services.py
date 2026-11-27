@@ -11,7 +11,7 @@ re-applying the same content changes nothing and leaves no Revision.
                                  title="D-Day landings in Normandy", text="…", imp=1, status="review")
 """
 
-from django.db import models
+from django.db import connection, models
 
 from revisions import require_revising
 
@@ -61,7 +61,23 @@ def event_date_fields(when: str) -> dict:
     return {"precision": d.precision, "approximate": d.approximate, "date": d.date, "end_date": d.end_date}
 
 
+ORDER_LOCK = 0x4854  # the advisory-lock namespace for the snapshot order (the other key is the kind's hash)
+
+
+def _order_lock(kind: str) -> None:
+    """Hold the order of `kind` until this transaction ends, so two writers never pick the same sort key.
+
+    `entry_sort_key_unique` is deferred (a reorder may pass through a shared key), so without this lock two
+    transactions that each append an entry read the same last key, write the same new key, and the second fails only
+    at COMMIT (an IntegrityError there: the agent API's 500 when two agents completed tasks at once). The lock is
+    transaction-scoped (`pg_advisory_xact_lock`): the second writer waits for the first to commit, and under READ
+    COMMITTED its next query sees the first one's key."""
+    with connection.cursor() as c:
+        c.execute("SELECT pg_advisory_xact_lock(%s, hashtext(%s))", [ORDER_LOCK, kind])
+
+
 def _last_key(kind: str) -> str | None:
+    _order_lock(kind)
     return Entry.objects.filter(kind=kind).order_by("-sort_key").values_list("sort_key", flat=True).first()
 
 
@@ -70,6 +86,7 @@ def place(entry: Entry, *, after: str | None = None, before: str | None = None) 
     (slugs). Writes this entry's sort key only; no other entry moves."""
     require_revising()
     kind = entry.kind
+    _order_lock(kind)
     keys = Entry.objects.filter(kind=kind).exclude(pk=entry.pk).order_by("sort_key")
     if after is not None:
         lo = Entry.objects.get(slug=after, kind=kind).sort_key

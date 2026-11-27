@@ -1,12 +1,13 @@
 ---
 title: Work queue and agents
-summary: The queue that carries judgment work from deterministic jobs to Claude agents, how a task is leased, finished or handed back, and what each kind of task asks for.
+summary: The queue that carries judgment work from deterministic jobs to Claude agents, how a task is leased, finished or handed back, what each kind of task asks for, and how a round runs them, records itself and publishes.
 order: 50
 covers:
   - work/**
   - "!work/migrations/**"
   - .claude/skills/**
   - tests/test_queue.py
+  - tests/test_rounds.py
   - agentapi/*.py
   - agentapi/management/commands/*.py
 ---
@@ -22,7 +23,10 @@ The decision is [ADR 0003](../adr/0003-deterministic-jobs-and-an-agent-queue.md)
 The code is small: one model (`work/models.py` `AgentTask`), one module of
 queue operations (`work/queue.py`), the agent API that agents reach it
 through (`agentapi/`, [ADR 0017](../adr/0017-agent-api.md)), and the
-owner's command (`manage.py tasks`).
+owner's command (`manage.py tasks`). Agents work in **rounds**: a `Round`
+(`work/models.py`) records each one, and `work/rounds.py` holds the settings
+operators change and the preflight a round passes
+([ADR 0035](../adr/0035-automated-daily-rounds.md); [rounds](#rounds)).
 
 ## What a task is
 
@@ -171,7 +175,7 @@ people or agents to queue by hand with `tasks add`.
 | `verify_claim` | `ingest/second_source.py` (`job:second_source`, daily) | `claim:<id>` | 2 | `target_claim`, `target_entry` | `verify-stale-claims` |
 | `review_branch_proposal` | `governance/review.py` (`job:branches_review`, weekly) | `proposal:<id>` | 30 + min(20, ⌊10 × strength⌋) | `target_proposal`, `target_entry` (the branch) | `review-branch-proposals` |
 | `audit` | `governance/review.py`, for THIN findings | `thin:<branch slug>` | 15 | `target_entry` (the branch) | none |
-| `map_branch_entities` | `ingest/routing.py` (`job:seed_branch_entities`, weekly) | `branch:<slug>` | 1 | `target_entry` (the branch) | none |
+| `map_branch_entities` | `ingest/routing.py` (`job:seed_branch_entities`, weekly) | `branch:<slug>` | 1 | `target_entry` (the branch) | `map-branch-entities` |
 | `fill_gap` | `governance/waves.py` (`job:gap_waves`, daily) | `gap:<branch slug>:<from>:<to>` | 10–69: ten per wave (W1 60–69 … W6 10–19) plus the branch's importance | `target_entry` (the branch) | `fill-gaps` |
 | `enrich` | nothing (by hand) | | | | none |
 | `recheck_citation` | nothing (by hand) | | | | none |
@@ -323,8 +327,11 @@ agent picks the Wikidata items the branch is about and completes with
 `{"branch": <slug>, "entities": [{"qid", "role", "label"}]}` (up to 20). The
 API adds the `BranchEntity` rows (non-canonical routing data) with
 `created_by` set to the agent, creating a stub `Entity` for a QID not yet
-fetched (the daily `refresh_entities` job reads its facts). See
-[ingestion](ingestion.md).
+fetched (the daily `refresh_entities` job reads its facts). The
+`map-branch-entities` skill says how to choose: look the candidates up on
+Wikidata, keep only items the branch is about (not a disambiguation page, not
+a predecessor that ended early in the span, not a place for a state), and
+prefer an empty list to a wrong item. See [ingestion](ingestion.md).
 
 ## The tasks command
 
@@ -367,12 +374,22 @@ production URL.
 | `verify-stale-claims` | `verify_claim` from ingestion | The dead-link and changed-page cases (archived copies, replacements, re-recording `supports` to stamp a new hash) and suggested second sources (read each, add it as evidence only if it explicitly supports the claim, list it in `suggestions.accepted` or `rejected`). |
 | `review-branch-proposals` | `review_branch_proposal` | What to ask of each rule; fill every `needs_agent` field; accept with the operations (for the owner's `branches apply`) or reject with a note. |
 | `fill-gaps` | `fill_gap` | Claim; read the window, the events around it and the pointers; check duplicates with `GET search`; write 1–3 events in SCHEMA style on the branch's id prefix (titles ≤ 60, verbatim excerpts, contested claims attributed, a non-Wikipedia source each), or complete `nothing_notable` with what was read. |
+| `map-branch-entities` | `map_branch_entities` | Claim; read the payload's variants and cited articles; look the candidates up on Wikidata with the honest User-Agent; keep only items the branch is about (the polity, faith, movement or organization; a group's member states as `member`), never a disambiguation page, a predecessor or a namesake place; complete with up to 20 items or an empty list and a note. |
+| `run-round` | a whole round | The daily routine's skill ([rounds](#rounds)): the settings first (stop when paused), `GET queue`, a plan by value (gaps, then `map_branch_entities`, `write_event`, `verify_claim`) and the round size, `POST rounds`, role agents with the four skills above, fresh reviewers in batches of at most 40 drafts who read every cited page and write the edit file, `edits/check` then `edits/apply`, `releases/check` then `releases/publish` when everything passes, the round recorded, a summary posted. It carries the review rounds' hard-won rules and the cloud constraint (no browser: `browser_only` sources are never fetched by script; a draft resting on one only is held). |
 
 Every skill that records evidence (`drain-write-events`, `fill-gaps`, `verify-claims`, `verify-stale-claims`)
 carries the same excerpt rule: copy the sentence from the page's own text (the in-app browser's page text, or the
 raw page where the site allows scripts), never from a fetch tool's summary, whose "quotes" are often paraphrased.
 If only a summary is reachable, the cite goes in without an excerpt. Each review round so far had to re-copy
 summarized excerpts; reviewers still check every excerpt against the page.
+
+Every task skill also says to **extend a long lease** (`POST tasks/<id>/extend` when one task's work passes about
+20 minutes, and every 20 minutes after), and the skills that fetch pages (`drain-write-events`, `fill-gaps`,
+`verify-claims`, `verify-stale-claims`, `map-branch-entities`, `run-round`) carry three fetching rules: **never
+disguise the client** (every script fetch sends `INGEST_USER_AGENT`; no spoofed User-Agent, header tricks, proxies
+or mirrors), **one in-app browser tab per agent**, reused and always closed (leftover tabs fill the pane's cap and
+starve other agents), and **never force a paid or blocked wire** (Reuters 401, AFP, CNN 451): a `write_event`
+without two readable independent sources is rejected or failed with `retry: false`.
 
 ## From a task to the records
 
@@ -424,6 +441,10 @@ From `agentapi/views.py` (routes in `agentapi/urls.py`):
 | `GET branches/<slug>` | A branch: its events (up to 300 listed), latest metrics, open proposals. |
 | `GET claims/<id>` | A claim with its evidence and parts, in the `verify_claim` payload's shape. |
 | `GET search?q=…&kind=event` | Events and branches by title or name (trigram similarity; `kind` is `event` or `branch`, `limit` up to 50). |
+| `GET queue` | What a round plans from ([below](#a-rounds-operations)). Any token. |
+| `POST edits/check`, `POST edits/apply` | An edit file checked (a dry run) and applied. Scope `review`. |
+| `POST releases/check`, `POST releases/publish` | The release gates, and a release. Scope `publish`. |
+| `GET rounds/settings`, `POST rounds`, `GET`/`PATCH rounds/<id>` | The round settings, and a round's record ([rounds](#rounds)). Writing needs scope `round`. |
 
 The queue endpoints call `work.queue` unchanged: the same leases, the same
 `SKIP LOCKED` claims, the same ownership checks. A queue error (not your
@@ -435,7 +456,7 @@ task, not claimed) is a 409, a body that isn't a JSON object a 400.
 
 | Subcommand | What |
 |---|---|
-| `agent_token create <name> --scope <kind> [--scope …] [--by WHO]` | A token for `agent:<name>`, printed once. `--scope` is a task kind with a result schema, or `*` for all of them. |
+| `agent_token create <name> --scope <kind> [--scope …] [--by WHO]` | A token for `agent:<name>`, printed once. `--scope` is a task kind with a result schema, or `*` for all of them, or an operation scope: `review`, `publish` or `round` (ADR 0035), which `*` never includes. |
 | `agent_token list` | Every token as JSON: name, prefix, scopes, who made it, when last used, whether revoked. |
 | `agent_token revoke <name>` | Cuts that agent off; nobody else is touched. |
 
@@ -445,7 +466,11 @@ recognize it in a list. The admin shows tokens read-only. Scopes are task
 kinds: a token may peek at, claim and complete only those (asking for
 another kind is a 403), and every token may use the read endpoints. `*`
 covers the kinds with schemas, so `enrich` and `recheck_citation` are never
-offered over the API.
+offered over the API. The **operation scopes** (`agentapi/models.py`
+`OPERATION_SCOPES`: `review`, `publish`, `round`) are not task kinds: a token
+gets one only by naming it (`AgentToken.has`), so a `*` writer can never
+publish, and a token with operation scopes only claims nothing (a claim is a
+403, not "any kind").
 
 **Rate limit.** Each token may make `AGENT_API_RATE_PER_MINUTE` (120)
 requests in a one-minute window. The count is kept on the token row and
@@ -476,19 +501,104 @@ results, so `process` reads `result.entry` unchanged.
    each problem as `path: message`, with the schema's URL; nothing is
    written and the task stays yours to fix and resend. A kind without a
    schema is refused the same way.
-2. In one transaction, the task row is locked (`queue._held`: it must be
+2. **A retry is safe.** The completed result stores `result_sha256`, the
+   hash of what was sent. The same agent sending the same result for a task
+   it already completed gets the task back (200, `"replayed": true`) and
+   nothing is applied twice; a different result is a 409.
+3. In one transaction, the task row is locked (`queue._held`: it must be
    yours), the result is applied (`agentapi/apply.py`) inside
    `revising("agent:<name>", reason="<kind> #<id> (agent API)", task=task)`,
    and the task is completed with the result plus an `applied` summary. A
-   task you don't hold is a 409.
-3. A result that is well-formed but can't be applied (an id that exists, an
+   task you don't hold is a 409. A conflict Postgres reports only at COMMIT
+   (a deferred constraint such as `entry_sort_key_unique`, a serialization
+   failure or a deadlock between two agents writing at once: an
+   `IntegrityError` or `OperationalError`) rolls everything back and is a 409
+   with `"retryable": true`, never a 500; the task is still yours. The
+   sort-key race behind the 500 of November 27, 2026 is closed at its root
+   by the order lock ([content model](content-model.md#how-entries-are-ordered)).
+4. A result that is well-formed but can't be applied (an id that exists, an
    unknown branch, an uncitable URL, a task about another claim or
    proposal, operations with placeholders left, a `fill_gap` event outside
    its window) raises `ApplyError`: a 422
    with the reason, everything rolled back, the task still held.
 
-Nothing the API writes is published: events land in `review`, evidence is
-evidence, a branch change waits for the owner.
+Nothing a task's result writes is published: events land in `review`,
+evidence is evidence, a branch change waits for the owner. Only a round's
+reviewer and publisher tokens go further, through the operations below.
+
+## A round's operations
+
+`agentapi/operations.py` ([ADR 0035](../adr/0035-automated-daily-rounds.md))
+gives a round what used to need a shell on the host. Each edits and releases
+call is an `OpsAction` row (`opsconsole/models.py`) with `requested_by`
+`agent:<name>` and `runs_in="api"`, so the console's action log shows it, and
+the console's single-publish lock covers both doors.
+
+| Endpoint | Scope | What |
+|---|---|---|
+| `GET queue` | any | Per kind: `waiting`, `in_progress`, `stuck`, `done_today`, `failed_today`, `done_7d`, `oldest_waiting_minutes`, `priorities` (max, median, min of the waiting), the `top` five, the daily `cap`, `fed_by` (its jobs) and `role`; the stuck leases; the drafts `in_review` and the `held` ones; the live and newest release and the Revisions since; the round settings with `next_round_takes` and the latest round. |
+| `POST edits/check` | `review` | `{"ops", "name", "round"}`: `timeline.edits.check()` plus the agent rules (below), then `apply(dry_run=True)`. 200 with `valid`, `counts`, `revisions` and each op's diff (25 lines); 422 with every problem. The row keeps the full diff. At most 500 ops (413). |
+| `POST edits/apply` | `review` | `{"ops", "name", "round", "check", "reason"}` and an `Idempotency-Key` header. Needs a passing check of the same ops (their sha256), at most 60 minutes old and not yet applied. One transaction as `agent:<name>`, the file named `round-<id>:<name>` in every Revision's reason; the answer has the counts, the Revisions and the `txid`. The round's `edit_ops` add up. |
+| `POST releases/check` | `publish` | `publish.release.preview()`: the gates and the change report, writing nothing. 200 with the hashes, `unchanged_since` and the summary; 422 with `problems` per gate. A passing check moves an open round to `release_ready`. |
+| `POST releases/publish` | `publish` | `{"check", "reason", "round", "notes"}` and an `Idempotency-Key`. Refused (409) unless the check passed, is at most 30 minutes old, is unused and something changed, and no publish or rollback is open from either door (`opsconsole.actions.publish_check_refusal`, under an advisory lock while the row is made; `"retryable": true` when it was only busy). Then the content and page hashes must still match the check, and `publish.release.publish(actor="agent:<name>")` runs every gate again. The release's notes and the round record why; the round becomes `published`. |
+
+**Agent rules on edit files** (`agent_rules`): a reviewer may not `approve`
+an entry whose insert Revision is its own (independence: nothing reaches
+readers without a second reader), and an `add_event` or `add_branch` may not
+carry `"status": "published"` (an added entry lands in review, for the next
+round's reviewers).
+
+**Idempotency.** `edits/apply`, `releases/publish` and `POST rounds` need an
+`Idempotency-Key` (8–64 characters). It is stored hashed with the actor and
+the kind; a retry with the same key and body returns the stored answer
+(`"replayed": true`), the same key with another body is a 409.
+
+**Limits.** On top of the per-minute limit, per token: `edits/check` 20 an
+hour, `edits/apply` 6 an hour, `releases/check` 10 an hour,
+`releases/publish` 4 a day (`AGENT_API_*` in `config/settings.py`), counted
+from the `OpsAction` rows; `POST rounds` 6 a day. Over a limit: 429 with
+`Retry-After`. An API action still `running` after 10 minutes lost its
+request (Heroku ends one after 30 seconds) and is closed as failed by the next
+lock check, so it never holds the publish lock.
+
+## Rounds
+
+A `Round` (`work/models.py`) records one round: `started_at`, `finished_at`,
+`trigger` (`schedule`, `manual`), `status`, `started_by`, the `plan` (the
+mix, the roles, the size, held drafts carried over), `agents` and `tasks`
+(claimed, completed, failed, released per kind), `drafts`, `verdicts`
+(approve, approve with edits, hold, reject), `edit_ops`, the `release`, a
+`summary`, `notes`, a `history` of every change, and its idempotency key.
+Like a task it is not canonical. Its statuses: `running`, `reviewing`,
+`release_ready` (the file is applied and every gate passes), `published`
+(set only by `releases/publish`), `held` (finished without a release:
+something needs the owner), `finished` (nothing to publish), `failed`,
+`skipped`. The last five are final: then only `summary` and `notes` change.
+
+**The settings** (`work/rounds.py`, one `JobState` row, `agent_rounds`):
+`paused`, `skip_next`, `size` (agents per role, 0–4 and 10 in all, and tasks
+per agent, 1–12; the roles are writer, filler, verifier and mapper, for
+`write_event`, `fill_gap`, `verify_claim` and `map_branch_entities`) and
+`carry_over` (held drafts an operator sends to the next review). Operators
+change them from the Work page ([operations console](operations-console.md));
+`GET rounds/settings` gives them to the routine with the schedule
+(`ROUND_SCHEDULE` in words and the next time it is due) and
+`DRAFTS_PER_REVIEWER` (40). The console never calls Anthropic's services.
+
+**The preflight** (`rounds.start`, behind `POST rounds`, under the settings'
+row lock): an open round older than 12 hours is closed as failed; a
+scheduled round while `paused` is a 409 (`"paused": true`, nothing
+recorded: the routine stops cleanly); any round while another is open is a
+409 (`"busy": true`); a scheduled round with `skip_next` is recorded as
+`skipped`, the flag clears, and the answer says `"proceed": false`.
+Otherwise the round starts, and `carry_over` moves into its plan (the drafts
+still in review) and clears. **Held drafts** (`rounds.held_drafts`) are
+entries in review with a Revision whose reason starts `apply_edits`: a
+reviewer's file touched them and left them there.
+
+`PATCH rounds/<id>` checks what it sets (`validate_patch`: known fields,
+counts that are non-negative integers, a status an agent may set, `finish`
+only with a final status) and appends to the history.
 
 ## Changing it
 
@@ -501,4 +611,6 @@ evidence, a branch change waits for the owner.
 | The lease length | Set `TASK_LEASE_MINUTES` in the environment; the default is in `config/settings.py`. |
 | Retry limits | `max_attempts` is per task (default 3 in `work/models.py`); a job may pass another value when it creates tasks. Changing the default needs a migration. |
 | Claim order | `next_task`'s ordering and the `task_queued_idx` index must match; change both, with a migration. |
+| A round setting, a limit on the round size, `DRAFTS_PER_REVIEWER` | `work/rounds.py`, the `run-round` skill and the Work page together; `tests/test_rounds.py`. A change to the auto-publish policy is a new ADR (it amends ADR 0035). |
+| The heavy operations' limits | `AGENT_API_EDITS_CHECKS_PER_HOUR`, `AGENT_API_EDITS_APPLIES_PER_HOUR`, `AGENT_API_RELEASE_CHECKS_PER_HOUR`, `AGENT_API_PUBLISHES_PER_DAY` in the environment. |
 | Queue behavior | `tests/test_queue.py` covers ordering, peeking, ownership, takeover, release and fail, max attempts, dedupe, `not_before` and SKIP LOCKED between two connections. Extend it. A change of contract (leases, ownership) belongs in ADR 0003. |

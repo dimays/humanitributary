@@ -410,7 +410,21 @@ def execute_advance_wave(action, log):
 
 # ── publish, rollback ─────────────────────────────────────────────────────────────────────────────────────────────
 
+API_STALE_MINUTES = 10  # an agent API action still "running" after this long lost its request (a web dyno restart)
+
+
+def close_interrupted_api(now=None) -> int:
+    """Agent API actions (ADR 0035) run inside one web request, which Heroku ends after 30 seconds: one still
+    running after API_STALE_MINUTES was cut off, and must not hold the publish lock for ever."""
+    now = now or timezone.now()
+    return OpsAction.objects.filter(runs_in=OpsAction.RunsIn.API, status=OpsAction.Status.RUNNING,
+                                    started_at__lt=now - timedelta(minutes=API_STALE_MINUTES)).update(
+        status=OpsAction.Status.FAILED, finished_at=now, error="interrupted (the agent API request ended before it finished)")
+
+
 def exclusive_refusal(exclude_action: int | None = None) -> str:
+    """Why a publish or rollback may not start now: another is open, from the console or the agent API ("" if none)."""
+    close_interrupted_api()
     qs = _open_actions(EXCLUSIVE)
     if exclude_action:
         qs = qs.exclude(pk=exclude_action)
@@ -573,6 +587,110 @@ def execute_pause(action, log):
     return {"paused": sorted(set_paused(action.params["job"], action.kind == A.PAUSE_JOB, by=action.requested_by, reason=action.reason))}
 
 
+# ── the daily round: pause, resume, skip the next, its size, held drafts (ADR 0035) ─────────────────────────────
+# The console never starts a round or calls Anthropic's services: it changes the settings the routine reads
+# (work/rounds.py) and `POST rounds` enforces.
+
+def _round_rows(st) -> list:
+    rows = [("Schedule", f"{st['schedule_words']} ({st['routine']})" + (f"; next due {st['next_at']:%Y-%m-%d %H:%M} UTC" if st["next_at"] else ""))]
+    if st["paused"]:
+        rows.append(("Paused", f"by {st['paused'].get('by')} at {st['paused'].get('at', '')[:16]}: {st['paused'].get('reason')}"))
+    if st["skip_next"]:
+        rows.append(("Skip next", f"asked by {st['skip_next'].get('by')}: {st['skip_next'].get('reason')}"))
+    return rows
+
+
+def prepare_pause_rounds(data, actor):
+    from work import rounds
+
+    st = rounds.current()
+    if st["paused"]:
+        raise Refused(f"scheduled rounds are already paused (by {st['paused'].get('by')})")
+    return Plan(A.PAUSE_ROUNDS, "round:schedule", {}, "Pause the scheduled rounds", rows=_round_rows(st) + [
+        ("Then", "the routine still wakes on its schedule, asks first, finds rounds paused and stops at once: no agent starts, nothing is "
+                 "recorded. A round started by hand still runs. A round already running finishes.")])
+
+
+def prepare_resume_rounds(data, actor):
+    from work import rounds
+
+    st = rounds.current()
+    if not st["paused"]:
+        raise Refused("scheduled rounds are not paused")
+    return Plan(A.RESUME_ROUNDS, "round:schedule", {}, "Resume the scheduled rounds", rows=_round_rows(st) + [("Then", "the next scheduled round runs")])
+
+
+def execute_pause_rounds(action, log):
+    from work import rounds
+
+    st = rounds.change(by=action.requested_by, reason=action.reason, paused=action.kind == A.PAUSE_ROUNDS)
+    return {"paused": bool(st["paused"])}
+
+
+def prepare_skip_round(data, actor):
+    from work import rounds
+
+    st = rounds.current()
+    if st["skip_next"]:
+        raise Refused(f"the next round is already skipped (by {st['skip_next'].get('by')})")
+    if st["paused"]:
+        raise Refused("scheduled rounds are paused: there is no next round to skip")
+    return Plan(A.SKIP_ROUND, "round:next", {}, "Skip the next scheduled round", rows=_round_rows(st) + [
+        ("Then", "the next scheduled round is recorded as skipped, with your reason, and does nothing; the one after it runs")])
+
+
+def execute_skip_round(action, log):
+    from work import rounds
+
+    rounds.change(by=action.requested_by, reason=action.reason, skip_next=True)
+    return {"skip_next": True}
+
+
+def prepare_round_size(data, actor):
+    from work import rounds
+
+    try:
+        size = rounds.validate_size(data)
+    except ValueError as e:
+        raise Refused(str(e)) from None
+    st = rounds.current()
+    old = st["size"]
+    if size == old:
+        raise Refused("that is the size already")
+    table = {"head": ["Role", "Task kind", "Agents", "Tasks each", "Tasks in all"],
+             "rows": [[role, kind, f"{old['agents'][role]} → {size['agents'][role]}", f"{old['tasks_per_agent'][role]} → {size['tasks_per_agent'][role]}",
+                       str(size["agents"][role] * size["tasks_per_agent"][role])] for role, (kind, _) in rounds.ROLES.items()]}
+    return Plan(A.ROUND_SIZE, "round:size", {"size": size}, "Set the round size", table=table, rows=[
+        ("Limits", f"0 to {rounds.MAX_AGENTS_PER_ROLE} agents a role, {rounds.MAX_AGENTS} in all; 1 to {rounds.MAX_TASKS_PER_AGENT} tasks an agent; "
+                   f"reviewers read at most {rounds.DRAFTS_PER_REVIEWER} drafts each"),
+        ("Then", "the next round plans with it; the daily caps still limit how many tasks the jobs make")])
+
+
+def execute_round_size(action, log):
+    from work import rounds
+
+    st = rounds.change(by=action.requested_by, reason=action.reason, size=action.params["size"])
+    return {"size": st["size"]}
+
+
+def prepare_review_held(data, actor):
+    from work import rounds
+
+    slugs = list(rounds.held_drafts()[:rounds.MAX_CARRY_OVER])
+    if not slugs:
+        raise Refused("no draft is held: none is in review after a reviewer's edit file")
+    return Plan(A.REVIEW_HELD, "round:held", {"slugs": slugs}, f"Send {len(slugs)} held draft{'s' if len(slugs) != 1 else ''} to the next review",
+                table={"head": ["Held draft"], "rows": [[x] for x in slugs]},
+                rows=[("Then", "the next round's reviewers read them again with their own drafts; they still need an approve to be published")])
+
+
+def execute_review_held(action, log):
+    from work import rounds
+
+    rounds.change(by=action.requested_by, reason=action.reason, carry_over={"slugs": action.params["slugs"]})
+    return {"carry_over": len(action.params["slugs"])}
+
+
 # ── the registry ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
@@ -598,6 +716,11 @@ ACTIONS = {a.kind: a for a in [
     Action(A.ROLLBACK, W, prepare_rollback, execute_rollback),
     Action(A.PAUSE_JOB, R, lambda d, a: _pause_plan(A.PAUSE_JOB, d), execute_pause),
     Action(A.RESUME_JOB, R, lambda d, a: _pause_plan(A.RESUME_JOB, d), execute_pause),
+    Action(A.PAUSE_ROUNDS, R, prepare_pause_rounds, execute_pause_rounds),
+    Action(A.RESUME_ROUNDS, R, prepare_resume_rounds, execute_pause_rounds),
+    Action(A.SKIP_ROUND, R, prepare_skip_round, execute_skip_round),
+    Action(A.ROUND_SIZE, R, prepare_round_size, execute_round_size),
+    Action(A.REVIEW_HELD, R, prepare_review_held, execute_review_held),
 ]}
 
 

@@ -295,6 +295,16 @@ so a reorder may pass through a moment of two equal keys inside one
 transaction. Keys mean nothing beyond order: compare them only to each other,
 and never type one by hand.
 
+Because the constraint is deferred, two transactions that each append an entry
+would read the same last key, write the same new key, and the second would
+fail only at COMMIT (an `IntegrityError` there: the agent API's 500 when two
+agents completed tasks at once, November 27, 2026). So every writer that picks
+a key first takes the kind's order lock (`services._order_lock`: a
+transaction-scoped `pg_advisory_xact_lock(ORDER_LOCK, hashtext(kind))`, in
+`_last_key` and `place`): a second writer waits for the first to commit and
+then reads its key. Tested with two threads in `tests/test_rounds.py`
+(`ConcurrentAppendTests`).
+
 Where keys come from:
 
 | Writer | What it does |
@@ -404,7 +414,10 @@ connection note over its limit, an unknown `how`, a location outside the
 later in the file, and branches or regions that don't exist. If it finds anything, nothing runs.
 Otherwise `apply()` opens one transaction and one `revising(actor)` block and
 runs the ops in order, each in a nested `revising()` whose reason is
-`apply_edits <file> #<n> <op> <entry>: <reason>`. An op that fails (an entry
+`apply_edits <file> #<n> <op> <entry>: <reason>` (over the agent API the file's
+name is `round-<id>:<name>`, so each Revision names its round). The outcome records the
+transaction's id (`Outcome.txid`, which every Revision of the file carries as
+`Revision.txid`). An op that fails (an entry
 that doesn't exist, a claim key it doesn't have, the publishing rule) rolls
 back to its savepoint and is listed, and the rest still run, so the error
 lists every problem; then the whole transaction is rolled back. A file is
@@ -417,7 +430,9 @@ it wrote: `~ table row column: before → after` for an update, `+` an insert,
 `-` a delete. `--dry-run` prints the same and rolls back. `--validate-only`
 runs only `check()` and needs no `--actor`, so a file about drafts that a
 database lacks can still be checked there. `--actor` is required otherwise
-(`human:owner`, `agent:reviewer` …).
+(`human:owner`, `agent:reviewer` …). The agent API's `edits/check` and
+`edits/apply` ([work queue and agents](work-queue-and-agents.md#a-rounds-operations))
+call the same `check()` and `apply()`, the first with `dry_run=True`.
 
 Tests: `tests/test_apply_edits.py` (each op, both kinds of atomic failure, a
 rename that keeps its references, the dry run, validate-only; the add ops: what

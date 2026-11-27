@@ -24,6 +24,7 @@ from infra import storage
 from ingest.models import Candidate, Document, Feed, FetchRun, JobState
 from ingest.policy import mask_secrets
 from work.models import AgentTask
+from work.rounds import FED_BY
 
 # ── States, tags, schedules ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -257,6 +258,7 @@ def jobs(now, *, history: bool = True) -> list[dict]:
             "overdue": name not in paused and bool(next_due and next_due < now - OVERDUE),
             "paused": paused.get(name), "not_idempotent": j.not_idempotent,
             "history": hist.get(name, []), "pending": pending.get(name, []),
+            "creates": [kind for kind, by in FED_BY.items() if name in by],
         })
     return rows
 
@@ -493,13 +495,14 @@ def recent_actions(limit: int = 5) -> list:
 
 def queue(now) -> list[dict]:
     """Per task kind: waiting (queued), in progress (claimed, lease live), stuck (claimed, lease expired), done and
-    failed today, today's new tasks against the daily cap where there is one, the oldest waiting task (two queries)."""
+    failed today, done in the last seven days, today's new tasks against the daily cap where there is one, the oldest waiting task (two queries)."""
     mid = midnight(now)
     rows = {r["kind"]: r for r in AgentTask.objects.values("kind").annotate(
         waiting=Count("id", filter=Q(status="queued")),
         in_progress=Count("id", filter=Q(status="claimed", lease_until__gte=now)),
         stuck=Count("id", filter=Q(status="claimed", lease_until__lt=now)),
         done_today=Count("id", filter=Q(status="done", completed_at__gte=mid)),
+        done_7d=Count("id", filter=Q(status="done", completed_at__gte=now - timedelta(days=7))),
         failed_today=Count("id", filter=Q(status="failed", completed_at__gte=mid)),
         failed=Count("id", filter=Q(status="failed")),
         oldest_waiting=Min("created_at", filter=Q(status="queued")),
@@ -509,10 +512,11 @@ def queue(now) -> list[dict]:
     caps = {kind: {"made": made.get((kind, by), 0), "cap": getattr(settings, setting), "setting": setting} for kind, by, setting in CAPS}
     out = []
     for kind, label in AgentTask.Kind.choices:
-        r = rows.get(kind) or {"kind": kind, "waiting": 0, "in_progress": 0, "stuck": 0, "done_today": 0, "failed_today": 0, "failed": 0, "oldest_waiting": None}
+        r = rows.get(kind) or {"kind": kind, "waiting": 0, "in_progress": 0, "stuck": 0, "done_today": 0, "done_7d": 0, "failed_today": 0, "failed": 0, "oldest_waiting": None}
         r["label"] = label
         r["oldest_age"] = (now - r["oldest_waiting"]) if r["oldest_waiting"] else None
         r["cap"] = caps.get(kind)
+        r["fed_by"] = FED_BY.get(kind, [])
         r["active"] = any(r[k] for k in ("waiting", "in_progress", "stuck", "done_today", "failed_today", "failed"))
         out.append(r)
     return out
@@ -709,3 +713,59 @@ def row_label(rev) -> str:
         if slug:
             return slug
     return ""
+
+
+# ── Rounds (ADR 0035) ───────────────────────────────────────────────────────────────────────────────────────────
+
+ROUND_STATE = {  # Round.status → the badge's state class (base.html's s-* colors) and its label
+    "running": ("running", "Running"), "reviewing": ("running", "Reviewing"), "release_ready": ("approved", "Release ready"),
+    "published": ("completed", "Published"), "held": ("paused", "Held for review"), "finished": ("completed", "Completed"),
+    "failed": ("failed", "Failed"), "skipped": ("cancelled", "Skipped"),
+}
+ROUND_HISTORY = 10
+
+
+def round_card(r) -> dict:
+    """What a round's square in the history strip shows on hover, and its page's header."""
+    state, label = ROUND_STATE.get(r.status, ("pending", r.status))
+    if r.status == "published" and r.release_id:
+        label = f"Published release {r.release.version}"
+    tasks = {k: (v or {}).get("completed", 0) for k, v in (r.tasks or {}).items()}
+    return {"id": r.pk, "state": state, "label": label, "status": r.status, "trigger": r.get_trigger_display(), "started": r.started_at,
+            "seconds": r.duration.total_seconds() if r.duration else None, "mix": (r.plan or {}).get("mix") or {}, "tasks": tasks,
+            "drafts": len(r.drafts or []), "verdicts": r.verdicts or {}, "ops": sum((r.edit_ops or {}).values()), "edit_ops": r.edit_ops or {},
+            "release": r.release.version if r.release_id else None, "summary": r.summary}
+
+
+def rounds_overview(now, queue_rows: list[dict]) -> dict:
+    """The Work page's round strip: the settings, what the next round would take per kind, the last round and the
+    last ten (three queries)."""
+    from work import rounds as WR
+    from work.models import Round
+
+    st = WR.current()
+    recent = list(Round.objects.select_related("release").order_by("-started_at", "-id")[:ROUND_HISTORY])
+    takes = WR.capacity(st["size"], {k["kind"]: k["waiting"] for k in queue_rows})
+    return {"settings": st, "takes": takes, "latest": round_card(recent[0]) if recent else None,
+            "history": [round_card(r) for r in reversed(recent)], "pad": list(range(ROUND_HISTORY - len(recent))), "held": WR.held_drafts().count(),
+            "roles": [{"role": role, "kind": kind, "skill": skill, "agents": st["size"]["agents"][role], "each": st["size"]["tasks_per_agent"][role]}
+                      for role, (kind, skill) in WR.ROLES.items()]}
+
+
+def round_agents(r) -> list[dict]:
+    """What the queue says each of the round's agents did while the round ran (claimed_by and completed_at in its
+    window), beside what the round recorded: a check on the record (one query)."""
+    names = [f"agent:{a['name']}" if not str(a.get("name", "")).startswith("agent:") else a["name"] for a in (r.agents or [])]
+    if not names:
+        return []
+    end = r.finished_at or timezone.now()
+    rows = AgentTask.objects.filter(claimed_by__in=names, claimed_at__gte=r.started_at, claimed_at__lte=end).values("claimed_by", "kind").annotate(
+        done=Count("id", filter=Q(status="done")), failed=Count("id", filter=Q(status="failed")),
+        open=Count("id", filter=Q(status__in=["claimed", "queued"])))
+    by = {}
+    for x in rows:
+        by.setdefault(x["claimed_by"], []).append(x)
+    out = []
+    for a, actor in zip(r.agents or [], names):
+        out.append({**a, "actor": actor, "queue": by.get(actor, [])})
+    return out

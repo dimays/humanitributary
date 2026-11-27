@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import operations, views
 
 urlpatterns = [
     path("", views.index),
@@ -13,4 +13,13 @@ urlpatterns = [
     path("branches/<str:slug>", views.branch_detail),
     path("claims/<int:claim_id>", views.claim_detail),
     path("search", views.search),
+    # A round's operations (ADR 0035)
+    path("queue", operations.queue),
+    path("edits/check", operations.edits_check),
+    path("edits/apply", operations.edits_apply),
+    path("releases/check", operations.releases_check),
+    path("releases/publish", operations.releases_publish),
+    path("rounds", operations.rounds),
+    path("rounds/settings", operations.round_settings),
+    path("rounds/<int:round_id>", operations.round_detail),
 ]

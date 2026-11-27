@@ -1,0 +1,49 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Round #{{ r.pk }}{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'opsconsole:work' %}">Work</a> / <a href="{% url 'opsconsole:rounds' %}">Rounds</a> /</div>
+<div class="head">
+  <div><h1>Round #{{ r.pk }} {% badge card.state card.label %}</h1>
+    <div class="sub">{{ r.get_trigger_display|capfirst }} · started {{ r.started_at|date:"M j, Y H:i" }} UTC by {{ r.started_by }}{% if r.finished_at %} · took {{ card.seconds|seconds }}{% endif %}</div></div>
+</div>
+{% if r.summary %}<div class="banner">{{ r.summary|linebreaksbr }}</div>{% endif %}
+
+<ol class="stages" aria-label="Stages">{% for s in stages %}<li class="{{ s.status }}">
+  <b>{{ s.label }}</b><span class="small muted">{% if s.at %}{{ s.at|slice:"11:16" }} UTC{% elif s.status == 'todo' %}not yet{% elif s.status == 'skipped' %}skipped{% else %}–{% endif %}</span>
+  <div class="small">{{ s.note }}</div></li>{% endfor %}</ol>
+
+<div class="grid g2" style="margin-top:18px">
+  <div class="card"><h2>Plan</h2>
+    {% if mix %}<table><thead><tr><th>Task kind</th><th class="n">Planned</th><th class="n">Claimed</th><th class="n">Completed</th><th class="n">Failed</th></tr></thead>
+    <tbody>{% for k, n in mix.items %}{% with t=r.tasks|get:k %}<tr><td><a href="{% url 'opsconsole:work_kind' k %}">{{ k }}</a></td><td class="n">{{ n }}</td>
+      <td class="n">{{ t.claimed|default:"0" }}</td><td class="n">{{ t.completed|default:"0" }}</td><td class="n">{{ t.failed|default:"0" }}</td></tr>{% endwith %}{% endfor %}</tbody></table>
+    {% else %}<p class="empty-note">No mix recorded.</p>{% endif %}
+    {% if r.plan.size %}<p class="small muted" style="margin:10px 0 0">Size: {% for role, n in r.plan.size.agents.items %}{{ n }} {{ role }}{{ n|pluralize }} × {{ r.plan.size.tasks_per_agent|get:role }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+    {% if carry_over %}<p class="small muted" style="margin:6px 0 0">Held drafts sent to this review: {{ carry_over|join:", " }}</p>{% endif %}
+  </div>
+  <div class="card"><h2>Review</h2>
+    <div class="stat">{% for k in verdict_keys %}<div class="{% if not r.verdicts|get:k %}zero{% endif %}"><b>{{ r.verdicts|get:k|default:"0" }}</b><span>{{ k|words }}</span></div>{% endfor %}</div>
+    <p class="small muted" style="margin:12px 0 0">{{ r.drafts|length }} draft{{ r.drafts|length|pluralize }} · edit file: {% for k, n in r.edit_ops.items %}{{ k }} {{ n }}{% if not forloop.last %}, {% endif %}{% empty %}nothing applied{% endfor %}{% if revisions %} · {{ revisions }} revisions{% endif %}</p>
+    <p class="small" style="margin:6px 0 0"><a href="{% url 'opsconsole:new_events' %}?range=7d">Its drafts on New events →</a>{% if r.release %} · <a href="{% url 'opsconsole:release' r.release.version %}">Release {{ r.release.version }} →</a>{% endif %}</p>
+  </div>
+</div>
+
+<div class="card" style="margin-top:18px"><h2>Agents<span class="count">{{ agents|length }}</span></h2>
+  {% if agents %}<div class="scroll"><table><thead><tr><th>Agent</th><th>Role</th><th>Recorded</th><th>The queue says (in this round's window)</th></tr></thead>
+  <tbody>{% for a in agents %}<tr><td class="mono">{{ a.actor }}</td><td>{{ a.role|default:"–" }}</td>
+    <td class="small">{% if a.claimed is not None %}claimed {{ a.claimed }} · {% endif %}completed {{ a.completed|default:"0" }}{% if a.failed %} · failed {{ a.failed }}{% endif %}{% if a.released %} · released {{ a.released }}{% endif %}</td>
+    <td class="small">{% for q in a.queue %}{{ q.kind }}: {{ q.done }} done{% if q.failed %}, {{ q.failed }} failed{% endif %}{% if q.open %}, {{ q.open }} open{% endif %}{% if not forloop.last %} · {% endif %}{% empty %}<span class="faint">no tasks</span>{% endfor %}</td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<p class="empty-note">No agents recorded.</p>{% endif %}
+</div>
+
+<div class="card flush" style="margin-top:18px"><h2>Its actions<span class="count">{{ actions|length }}</span></h2><div class="scroll"><table>
+<thead><tr><th>Action</th><th>By</th><th>When</th><th>State</th><th>Result</th></tr></thead>
+<tbody>{% for a in actions %}<tr><td><a href="{% url 'opsconsole:action' a.pk %}">#{{ a.pk }} {{ a.get_kind_display }}</a></td><td class="small mono">{{ a.requested_by }}</td>
+  <td class="small nowrap">{{ a.created_at|date:"H:i" }} UTC</td><td>{% badge a.status|action_state %}</td>
+  <td class="small">{% if a.result.response.version %}release {{ a.result.response.version }}{% elif a.result.counts %}{% for k, n in a.result.counts.items %}{{ k }} {{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}{% elif a.error %}{{ a.error|truncatechars:160 }}{% elif a.result.summary %}{{ a.result.summary }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="muted">No edit file or release call named this round.</td></tr>{% endfor %}</tbody></table></div></div>
+
+{% if r.notes %}<div class="card" style="margin-top:18px"><h2>Notes</h2><pre>{{ r.notes }}</pre></div>{% endif %}
+<div class="card" style="margin-top:18px"><h2>History</h2><ul class="list">{% for h in r.history %}<li><div class="grow"><div class="t">{{ h.what }}</div>
+  <div class="small muted">{{ h.at|slice:":16" }} UTC · {{ h.by }} · {{ h.status }}</div></div></li>{% endfor %}</ul></div>
+{% endblock %}

@@ -2,8 +2,9 @@
 {% block title %}Jobs{% endblock %}
 {% block content %}
 <div class="head">
-  <div><h1>Jobs</h1><div class="sub">The scheduled, deterministic jobs the worker runs, in the order it runs them. Each square is one run, oldest on the left.</div></div>
+  <div><h1>Jobs</h1><div class="sub">The worker runs these on a schedule. They collect and prepare material and make tasks. They don't use Claude. Each square is one run, oldest on the left.</div></div>
 </div>
+{% include "opsconsole/_flow.html" %}
 <div class="chips" role="navigation" aria-label="Filter by tag">
   <a href="{% url 'opsconsole:jobs' %}" class="{% if not tag %}on{% endif %}">All<span class="n">{{ total }}</span></a>
   {% for t, about in tags.items %}<a href="?tag={{ t }}" class="{% if tag == t %}on{% endif %}" title="{{ about }}">{{ t }}<span class="n">{{ tag_counts|get:t }}</span></a>{% endfor %}
@@ -12,7 +13,7 @@
 <thead><tr><th>Job</th><th>Tags</th><th>Schedule</th><th>Last run</th><th>Last 10 runs</th><th>Next</th>{% if can_act %}<th></th>{% endif %}</tr></thead>
 <tbody>
 {% for j in rows %}<tr>
-  <td style="min-width:220px"><a href="{% url 'opsconsole:job' j.name %}"><b>{{ j.name }}</b></a><div class="doc">{{ j.doc }}</div></td>
+  <td style="min-width:220px"><a href="{% url 'opsconsole:job' j.name %}"><b>{{ j.name }}</b></a><div class="doc">{{ j.doc }}</div>{% if j.creates %}<div class="doc">Makes {% for k in j.creates %}<a href="{% url 'opsconsole:work_kind' k %}">{{ k }}</a>{% if not forloop.last %}, {% endif %}{% endfor %} tasks</div>{% endif %}</td>
   <td><div class="tags">{% for t in j.tags %}<a class="tag{% if t == 'paused' %} paused{% endif %}" href="?tag={{ t }}">{{ t }}</a>{% endfor %}</div></td>
   <td class="nowrap">{{ j.schedule }}{% if j.schedule_note %}<div class="small muted">{{ j.schedule_note }}</div>{% endif %}</td>
   <td class="nowrap">{% if j.run %}{% if j.partial %}{% badge "completed" "Completed" "with errors" %}{% else %}{% badge j.state %}{% endif %}
