@@ -1,0 +1,7 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Release {{ release.version }}{% endblock %}
+{% block content %}
+<h1>Release {{ release.version }} <span class="muted">change report</span></h1>
+<p class="note"><a href="{% url 'opsconsole:releases' %}">← releases</a>{% if report %} · <a href="?raw=1">changes.md</a>{% endif %} · <span class="mono">{{ release.snapshot_path }}</span> · sha256 <span class="mono">{{ release.content_hash }}</span>{% if manifest %} · revision high-water #{{ manifest.revision_high_water }}{% endif %}</p>
+{% if report %}<pre>{{ report }}</pre>{% else %}<p><span class="tag warn">missing</span> No <span class="mono">changes.md</span> for this release in the releases store.</p>{% endif %}
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Work queue{% endblock %}
+{% block content %}
+<h1>Work queue</h1>
+
+<form class="filters" method="get">
+  <label>Kind <select name="kind"><option value="">any</option>{% for k, label in kinds %}<option value="{{ k }}"{% if f.kind == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+  <label>Status <select name="status"><option value="">any</option>{% for s in statuses %}<option{% if f.status == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Agent <select name="agent"><option value="">any</option>{% for a in agents %}<option{% if f.agent == a %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+  <label>Key, ref or creator <input name="q" value="{{ f.q }}" placeholder="gap:france"></label>
+  <button type="submit">Filter</button> <a href="{% url 'opsconsole:tasks' %}">clear</a>
+</form>
+
+<h2>Tasks <span class="muted small">{{ page.paginator.count }} match</span></h2>
+<div class="scroll"><table>
+<tr><th>#</th><th>Kind</th><th>Status</th><th class="n">Priority</th><th class="n">Age</th><th>Lease</th><th class="n">Tries</th><th>Key</th><th>Result</th></tr>
+{% for t in page %}
+<tr class="{% if t.stale %}warn{% elif t.status == 'failed' %}bad{% endif %}">
+  <td class="mono"><a href="{% url 'opsconsole:task' t.pk %}">{{ t.pk }}</a></td>
+  <td>{{ t.kind }}</td>
+  <td><span class="tag {{ t.status|status_class }}">{{ t.status }}</span>{% if t.stale %} <span class="tag warn">lease expired</span>{% endif %}</td>
+  <td class="n">{{ t.priority }}</td>
+  <td class="n">{{ t.age|span }}</td>
+  <td class="small nowrap">{% if t.claimed_by %}{{ t.claimed_by }}{% if t.status == 'claimed' %}<div class="muted">until {{ t.lease_until|date:"H:i" }} ({{ t.lease_until|ago }})</div>{% endif %}{% endif %}</td>
+  <td class="n">{{ t.attempts }}/{{ t.max_attempts }}</td>
+  <td class="mono small">{{ t.dedupe_key|truncatechars:40 }}{% if t.target_ref %}<div class="muted">{{ t.target_ref|truncatechars:40 }}</div>{% endif %}</td>
+  <td class="small">{{ t.summary }}{% if t.error %}<div class="err">{{ t.error|truncatechars:100 }}</div>{% endif %}</td>
+</tr>
+{% empty %}<tr><td colspan="9" class="muted">No tasks match.</td></tr>
+{% endfor %}
+</table></div>
+{% include "opsconsole/_pager.html" %}
+
+<h2>Agents' throughput <span class="muted small">tasks done per agent per day, last {{ throughput.days|length }} days; time is claim to done (the last attempt)</span></h2>
+{% if throughput.rows %}
+<div class="scroll"><table>
+<tr><th>Agent</th>{% for d in throughput.days %}<th class="n">{{ d|date:"M j" }}</th>{% endfor %}<th class="n">Total</th><th class="n">Mean min / task</th></tr>
+{% for r in throughput.rows %}
+<tr><td><a href="?agent={{ r.agent }}">{{ r.agent }}</a></td>{% for n in r.days %}<td class="n">{% if n %}{{ n }}{% else %}<span class="muted">·</span>{% endif %}</td>{% endfor %}
+  <td class="n"><b>{{ r.total }}</b></td><td class="n">{% if r.mean_minutes is not None %}{{ r.mean_minutes|floatformat:1 }}{% else %}–{% endif %}</td></tr>
+{% endfor %}
+</table></div>
+{% else %}<p class="muted">No task finished by an agent in this period.</p>{% endif %}
+{% endblock %}

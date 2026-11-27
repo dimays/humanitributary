@@ -1,0 +1,39 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Job runs{% endblock %}
+{% block content %}
+<h1>Job runs</h1>
+
+<form class="filters" method="get">
+  <label>Job <select name="job"><option value="">any</option>{% for n in job_names %}<option{% if f.job == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+  <label>Status <select name="status"><option value="">any</option>{% for s in statuses %}<option{% if f.status == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>From <input type="date" name="since" value="{{ f.since }}"></label>
+  <label>To <input type="date" name="until" value="{{ f.until }}"></label>
+  <button type="submit">Filter</button> <a href="{% url 'opsconsole:runs' %}">clear</a>
+</form>
+
+<h2>History per job <span class="muted small">last 40 runs within 30 days: bar height is the run's duration; red bars failed, amber partial</span></h2>
+<div class="scroll"><table>
+<tr><th>Job</th><th>Runs</th><th class="n">Failed</th></tr>
+{% for s in spark %}
+<tr class="{% if s.failed %}warn{% endif %}"><td><a href="?job={{ s.job }}">{{ s.job }}</a></td><td>{% sparkline s.runs %}</td><td class="n">{{ s.failed }}</td></tr>
+{% endfor %}
+</table></div>
+
+<h2>Runs <span class="muted small">{{ page.paginator.count }} match</span></h2>
+<div class="scroll"><table>
+<tr><th>#</th><th>Job</th><th>Started</th><th class="n">Took</th><th>Status</th><th>Counts</th><th>Error</th></tr>
+{% for r in page %}
+<tr class="{% if r.status == 'failed' %}bad{% elif r.status == 'partial' %}warn{% endif %}">
+  <td class="mono">{{ r.pk }}</td>
+  <td><a href="?job={{ r.job }}">{{ r.job }}</a>{% if r.feed %}<div class="muted small">{{ r.feed.name }}</div>{% endif %}</td>
+  <td class="nowrap">{{ r.started_at|date:"Y-m-d H:i:s" }}<div class="muted small">{{ r.started_at|ago }}</div></td>
+  <td class="n">{{ r.duration|seconds }}</td>
+  <td><span class="tag {{ r.status|status_class }}">{{ r.status }}</span>{% if r.http_status %} <span class="muted small">HTTP {{ r.http_status }}</span>{% endif %}</td>
+  <td>{% if r.counts %}<details><summary class="small">{{ r.counts|length }} counts</summary><pre>{{ r.counts|pretty }}</pre></details>{% endif %}</td>
+  <td>{% if r.safe_error %}<details><summary class="small">{{ r.safe_error|truncatechars:90 }}</summary><div class="err">{{ r.safe_error }}</div></details>{% endif %}</td>
+</tr>
+{% empty %}<tr><td colspan="7" class="muted">No runs match.</td></tr>
+{% endfor %}
+</table></div>
+{% include "opsconsole/_pager.html" %}
+{% endblock %}
