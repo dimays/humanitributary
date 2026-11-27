@@ -344,7 +344,10 @@ const MIN_SPAN = 0.006;
 function clampView(v) {
   let span = Math.min(Math.max(v.s1 - v.s0, MIN_SPAN), ALL_HALF * 2);
   let s0 = v.s0, s1 = s0 + span;
-  const lo = Math.min(S_MIN - span * 0.04, ALL_VIEW.s0), hi = S_MAX + span * 0.08;
+  // Room to pan a little past the ends: past "now" at least ~72 px (or 8%), so today's dots and labels clear the edge
+  // and the scroll indicator, on a phone as on a wide screen.
+  const padR = Math.min(0.2, Math.max(0.08, 72 / (W || 1e9))), padL = Math.min(0.1, Math.max(0.04, 24 / (W || 1e9)));
+  const lo = Math.min(S_MIN - span * padL, ALL_VIEW.s0), hi = S_MAX + span * padR;
   if (s0 < lo) { s0 = lo; s1 = s0 + span; }
   if (s1 > hi) { s1 = hi; s0 = s1 - span; }
   v.s0 = s0; v.s1 = s1;
@@ -455,6 +458,14 @@ function truncate(str, font, max) {
   while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (tw(str.slice(0, mid) + "…", font) <= max) lo = mid; else hi = mid - 1; }
   return lo > 3 ? str.slice(0, lo) + "…" : "";
 }
+// Text with a halo in the page background, so the faint grid, "now" and contact lines stop under it and it
+// reads over any line. The halo follows the lane's fade (alpha), not the dimming of unrelated branches.
+function haloText(text, x, y, alpha = ctx.globalAlpha) {
+  const ga = ctx.globalAlpha; ctx.globalAlpha = alpha;
+  ctx.lineJoin = "round"; ctx.lineWidth = 3.5; ctx.strokeStyle = css.bg; ctx.strokeText(text, x, y);
+  ctx.globalAlpha = ga; ctx.fillText(text, x, y);
+}
+const LABEL_EDGE = 8; // labels stay this far inside the canvas (the scroll indicator sits at the right edge)
 const LABEL_FONT = "11.5px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const LABEL_BOLD = "600 11.5px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const GAP_FONT = "9.5px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
@@ -500,11 +511,11 @@ function draw() {
       ctx.globalAlpha = r.h / REGION_H;
       ctx.fillStyle = css.line; ctx.fillRect(0, r.top + 2, W, 1);
       ctx.fillStyle = r.region.color; ctx.font = REGION_FONT;
-      ctx.fillText(r.region.name.toUpperCase(), 12, r.top + 17);
+      haloText(r.region.name.toUpperCase(), 12, r.top + 17);
       if (r.summary) {
         const x0 = 12 + tw(r.region.name.toUpperCase(), REGION_FONT) + 10;
         const txt = truncate(`${r.summary.length} continuing, nothing recorded in view: ${r.summary.map((b) => b.name).join(", ")}`, RAIL_FONT, W - x0 - 20);
-        ctx.font = RAIL_FONT; ctx.fillStyle = css.faint; ctx.fillText(txt, x0, r.top + 17);
+        ctx.font = RAIL_FONT; ctx.fillStyle = css.faint; haloText(txt, x0, r.top + 17);
       }
       ctx.globalAlpha = 1;
     } else {
@@ -557,7 +568,8 @@ function draw() {
   ctx.lineWidth = 2;
   ctx.globalAlpha = 1;
 
-  // links (contact / blending) — dashed
+  // links (contact / blending) — dashed, kept faint: they run down through every lane between the two branches,
+  // across other branches' labels (which are haloed). Hovered or selected, one is drawn strong.
   ctx.setLineDash([3, 3]); ctx.lineWidth = 1.25;
   for (const ev of all) {
     if (!ev.link) continue;
@@ -565,7 +577,7 @@ function draw() {
     const La = ev.b.lane, Lb = lb.lane; if (La.h < 4 || Lb.h < 4) continue;
     const x = X(ev.s); if (x < -10 || x > W + 10) continue;
     const ya = laneMid(La), yb = laneMid(Lb);
-    ctx.globalAlpha = (ev === selected || ev === hover) ? 0.95 : 0.45 * (ev.b === selB ? 1.6 : dim(ev.b) * dim(lb) < 1 ? 0.5 : 1);
+    ctx.globalAlpha = (ev === selected || ev === hover) ? 0.95 : ev.b === selB ? 0.6 : 0.28 * (dim(ev.b) * dim(lb) < 1 ? 0.5 : 1);
     ctx.strokeStyle = ev.b.color;
     ctx.beginPath(); ctx.moveTo(x, ya); ctx.lineTo(x, yb); ctx.stroke();
     const xb = Math.min(Math.max(x, X(lb.s0)), X(lb.s1));
@@ -635,13 +647,13 @@ function draw() {
       if (b.fromLabel && bx0 > 40 && bx0 < W) {
         const prevEnd = bi > 0 ? X(L.branches[bi - 1].s1) : -Infinity;
         const t = truncate(b.fromLabel, RAIL_FONT, Math.min(bx0 - Math.max(prevEnd, 0) - 16, 220));
-        if (t) { const w = tw(t, RAIL_FONT); ctx.font = RAIL_FONT; ctx.fillStyle = css.muted; ctx.fillText(t, bx0 - 8 - w, mid + 3.5); }
+        if (t) { const w = tw(t, RAIL_FONT); ctx.font = RAIL_FONT; ctx.fillStyle = css.muted; haloText(t, bx0 - 8 - w, mid + 3.5, a); }
       }
       // sticky branch name
       const nx0 = Math.max(bx0, 8) + 2, room = Math.min(Math.max(bx1, nextB ? X(nextB.s0) - 12 : W), W) - nx0 - 4;
       if (room > 30) {
         const name = truncate(b.name, LABEL_BOLD, Math.min(room, 260));
-        if (name) { const w = tw(name, LABEL_BOLD); ctx.fillStyle = b.color; ctx.font = LABEL_BOLD; ctx.fillText(name, nx0, mid - 8); take(0, nx0, nx0 + w); }
+        if (name) { const w = tw(name, LABEL_BOLD); ctx.fillStyle = b.color; ctx.font = LABEL_BOLD; haloText(name, nx0, mid - 8, a); take(0, nx0, nx0 + w); }
       }
       for (const ev of b.events) {
         const x = X(ev.s); if (x < -10 || x > W + 10) continue;
@@ -692,13 +704,18 @@ function draw() {
       for (const { ev, x } of labelQueue) {
         const font = ev === selected ? LABEL_BOLD : LABEL_FONT;
         const text = truncate(ev.title, font, 190); if (!text) continue;
-        const w = tw(text, font), lx = x - 3;
+        // Written rightward from the dot; one that would run off the right edge ends at its dot instead, and
+        // either way it is kept inside the canvas (a dot just past the left edge keeps its label in view).
+        const w = tw(text, font);
+        let lx = x - 3;
+        if (lx + w > W - LABEL_EDGE) lx = x + 3 - w;
+        lx = Math.max(LABEL_EDGE / 2, Math.min(lx, W - LABEL_EDGE - w));
         const row = free(0, lx, lx + w) ? 0 : free(1, lx, lx + w) ? 1 : -1;
         if (row < 0) continue;
         take(row, lx, lx + w);
         ctx.globalAlpha = a * (ev === selected ? 1 : dim(ev.b));
         ctx.font = font; ctx.fillStyle = ev === selected ? css.fg : css.muted;
-        ctx.fillText(text, lx, row === 0 ? mid - 8 : mid + 17);
+        haloText(text, lx, row === 0 ? mid - 8 : mid + 17, a);
       }
     }
     ctx.globalAlpha = 1;
