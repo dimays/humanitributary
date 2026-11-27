@@ -67,7 +67,7 @@ An agent round has three parts. First, agents do the queued tasks. Then a review
     Make sure that no stopped agent holds a task.
 15. If a stopped agent holds a task, release it with procedure [07](07-release-a-stuck-task.md).
     Make sure that the task is `queued` again.
-16. Open the list of entries in the admin and filter by the status `review`.
+16. Open the New events page of the console with the state "In review".
     Make sure that the list shows the drafts of this round.
 17. Write the slugs of the drafts in a list for the reviewer.
     Make sure that the list has each draft of this round.

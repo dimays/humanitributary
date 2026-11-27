@@ -46,6 +46,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Job run | One run of one job, recorded as a `FetchRun` row. |
 | Lease | The time for which an agent holds a claimed task. After the lease time, another agent can take the task. |
 | Lock | A Postgres advisory lock. The runner lock lets one runner run jobs. The scheduler lock lets one worker schedule. |
+| New events | The console page that shows each content item from the fetch to the release, with its five steps. It also shows the numbers of the last 14 days. |
 | One-off dyno | A dyno that `heroku run` starts for one command. It stops when the command ends. |
 | OpsAction | The audit row of one console action: who, what, why, the status and the result. |
 | `ops_operator` | The permission that a staff user needs to do actions in the console. A superuser has it. |

@@ -1,0 +1,156 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}New events{% endblock %}
+{% block head %}<style>
+/* The pulse: one row per series, 14 bars each, scaled to the row's own largest day. */
+.pulse-grid { display: grid; grid-template-columns: minmax(120px, max-content) minmax(0, 1fr) 64px 76px; gap: 8px 16px; align-items: center; }
+.pulse-grid .ps-lab { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.pulse-grid svg { display: block; width: 100%; height: 32px; }
+.pulse-grid rect { fill: var(--bar-gray); } .pulse-grid rect.today { fill: var(--accent); }
+.pulse-grid rect:hover { fill: var(--text); }
+.pulse-grid line { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.pulse-grid .ps-today b { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; } .pulse-grid .ps-today span { font-size: 11.5px; color: var(--muted); margin-left: 4px; }
+.pulse-grid .ps-total { font-size: 12.5px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pulse-axis { display: grid; grid-template-columns: minmax(120px, max-content) minmax(0, 1fr) 64px 76px; gap: 0 16px; font-size: 11px; color: var(--faint); margin-top: 4px; }
+.pulse-axis div:nth-child(2) { display: flex; justify-content: space-between; }
+.pulse-head { display: flex; gap: 10px 22px; flex-wrap: wrap; align-items: baseline; margin-bottom: 14px; }
+.pulse-head h2 { margin: 0; } .pulse-head .muted { font-size: 12.5px; }
+@media (max-width: 640px) {
+  .pulse-grid, .pulse-axis { grid-template-columns: 92px minmax(0, 1fr) 40px; gap: 6px 10px; }
+  .pulse-grid .ps-total, .pulse-axis div:nth-child(4) { display: none; }
+  .pulse-grid .ps-lab { font-size: 12px; white-space: normal; line-height: 1.25; } .pulse-grid .ps-today span { display: none; }
+}
+
+/* The feed. */
+.feed { list-style: none; margin: 0; padding: 0; }
+.ev { padding: 16px 20px; border-top: 1px solid var(--line); }
+.ev:first-child { border-top: 0; }
+.ev-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ev-title { font-size: 15px; font-weight: 600; margin: 0; flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.ev-title a { color: var(--text); } .ev-title a:hover { color: var(--accent); }
+.ev-title .slug { font-weight: 400; color: var(--faint); font-size: 12px; margin-left: 6px; }
+.ev-ago { margin-left: auto; font-size: 12px; color: var(--faint); white-space: nowrap; }
+.src { font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 0 7px; border-radius: 5px; line-height: 18px; white-space: nowrap; }
+.src-current { background: var(--info-bg); color: var(--info); } .src-wave { background: var(--accent-bg); color: var(--accent); }
+.src-branch { background: var(--gray-bg); color: var(--gray); }
+.live { font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 0 7px; border-radius: 5px; line-height: 18px; background: var(--ok-bg); color: var(--ok); }
+.s-approved { background: var(--accent-bg); color: var(--accent); }
+.ev-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.ev-meta .tags { gap: 4px; } .ev-meta .tag { font-size: 11.5px; line-height: 18px; }
+.ev-meta b { color: var(--text); font-weight: 600; }
+.flag { color: var(--warn); font-weight: 600; }
+.ev-why { margin-top: 6px; font-size: 12.5px; color: var(--muted); max-width: 900px; overflow-wrap: anywhere; }
+.ev-why b { color: var(--text); font-weight: 600; }
+.ev-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 12.5px; }
+
+/* The lifecycle stepper: five steps on one line, a connector between them. */
+.stepper { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 920px; }
+.stepper li { position: relative; padding-top: 18px; min-width: 0; padding-right: 8px; }
+.stepper li::before { content: ""; position: absolute; top: 5px; left: 0; width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box;
+  border: 2px solid var(--bar-gray); background: var(--panel); z-index: 1; }
+.stepper li::after { content: ""; position: absolute; top: 10px; left: 14px; right: 2px; height: 2px; background: var(--line); }
+.stepper li:last-child::after { display: none; }
+.stepper .done::before { background: var(--bar-ok); border-color: var(--bar-ok); } .stepper .done::after { background: var(--bar-ok); opacity: .5; }
+.stepper .current::before { background: var(--panel); border-color: var(--bar-info); box-shadow: 0 0 0 3px var(--info-bg); }
+.stepper .failed::before { background: var(--bar-bad); border-color: var(--bar-bad); }
+.stepper .skipped::before { border-style: dashed; } .stepper .skipped .st-l { color: var(--faint); font-weight: 500; }
+.stepper .st-l { display: block; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stepper .failed .st-l { color: var(--bad); } .stepper .current .st-l { color: var(--info); }
+.stepper .pending .st-l { color: var(--faint); font-weight: 500; }
+.stepper .st-t { display: block; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stepper .st-n { display: block; font-size: 11.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) {
+  .ev { padding: 14px 16px; }
+  .stepper li { padding-right: 4px; } .stepper .st-l { font-size: 11.5px; } .stepper .st-n { display: none; }
+  .stepper .st-t .d { display: block; }
+  .ev-ago { margin-left: 0; }
+}
+.filters input[list] { min-width: 200px; }
+.range { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.range a { padding: 3px 10px; border-radius: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.range a:hover { text-decoration: none; color: var(--text); } .range a.on { background: var(--accent-bg); color: var(--accent); }
+.run-card .ic-steps { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 3px; }
+.run-card .ic-steps li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; }
+.run-card .ic-steps i { width: 9px; height: 9px; border-radius: 50%; background: var(--bar-gray); align-self: center; }
+.run-card .ic-steps .done i { background: var(--bar-ok); } .run-card .ic-steps .failed i { background: var(--bar-bad); }
+.run-card .ic-steps .current i { background: var(--bar-info); } .run-card .ic-steps .skipped i { background: transparent; border: 1px dashed var(--bar-gray); }
+.run-card .ic-steps li.ic-gap { display: block; color: var(--faint); font-size: 11.5px; padding-left: 18px; line-height: 1.3; }
+.run-card .ic-why { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+</style>{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>New events</h1><div class="sub">The content the platform makes, newest activity first: each current event, history-wave event and
+    branch addition from fetched to published. Times in UTC.</div></div>
+</div>
+
+<div class="card">
+  <div class="pulse-head"><h2>Pulse, last {{ pulse_days }} days</h2>
+    <span class="muted">Each row is scaled to its own busiest day · today in color · days in UTC</span></div>
+  <div class="pulse-grid">
+    {% for s in data.pulse.series %}
+    <div class="ps-lab">{{ s.label }}</div>
+    <svg viewBox="0 0 {{ data.pulse.width }} 32" preserveAspectRatio="none" role="img"
+      aria-label="{{ s.label }}: {{ s.today }} today, {{ s.total }} in {{ pulse_days }} days, at most {{ s.max }} a day">
+      <line x1="0" y1="31.5" x2="{{ data.pulse.width }}" y2="31.5"/>
+      {% for b in s.bars %}<rect class="bar{% if forloop.last %} today{% endif %}" x="{{ b.x }}" y="{{ b.y }}" width="{{ data.pulse.bar_w }}" height="{{ b.h }}"><title>{{ b.day|date:"D M j" }}: {{ b.n }} {{ s.label|lower }}</title></rect>{% endfor %}
+    </svg>
+    <div class="ps-today"><b>{{ s.today }}</b><span>today</span></div>
+    <div class="ps-total">{{ s.total }} in {{ pulse_days }} d</div>
+    {% endfor %}
+  </div>
+  <div class="pulse-axis" aria-hidden="true"><div></div><div><span>{{ data.pulse.days.0|date:"M j" }}</span><span>today</span></div><div></div><div></div></div>
+  <details class="small" style="margin-top:10px"><summary>As a table</summary><div class="scroll"><table>
+    <thead><tr><th>Day</th>{% for s in data.pulse.series %}<th class="n">{{ s.label }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for d in data.pulse.days reversed %}{% with i=forloop.revcounter0 %}<tr><td class="nowrap">{{ d|date:"D M j" }}</td>
+      {% for s in data.pulse.series %}{% for b in s.bars %}{% if forloop.counter0 == i %}<td class="n">{{ b.n }}</td>{% endif %}{% endfor %}{% endfor %}</tr>{% endwith %}{% endfor %}</tbody>
+  </table></div></details>
+</div>
+
+<nav class="tabs" aria-label="Kind of item" style="margin-top:22px">{% for key, label, n, href in tabs %}<a href="{{ href }}" class="{% if key == f.tab %}on{% endif %}"{% if key == f.tab %} aria-current="page"{% endif %}>{{ label }}<span class="n">{{ n }}</span></a>{% endfor %}</nav>
+<form class="filters" method="get">
+  {% if f.tab != 'all' %}<input type="hidden" name="tab" value="{{ f.tab }}">{% endif %}
+  <label>When<span class="range">{% for key, label, href in ranges %}<a href="{{ href }}" class="{% if key == f.range %}on{% endif %}">{{ label }}</a>{% endfor %}</span></label>
+  <input type="hidden" name="range" value="{{ f.range }}">
+  <label>State<select name="state"><option value="">Any state</option>
+    {% for key, label, n in state_options %}{% if n or key == f.state %}<option value="{{ key }}"{% if key == f.state %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endif %}{% endfor %}</select></label>
+  <label>Branch<input type="search" name="branch" list="branch-list" value="{{ f.branch }}" placeholder="any branch (slug)"></label>
+  <datalist id="branch-list">{% for slug, name in branches %}<option value="{{ slug }}">{{ name }}</option>{% endfor %}</datalist>
+  <button class="btn" type="submit">Apply</button>{% if f.state or f.branch %}<a class="btn quiet" href="?{% if f.tab != 'all' %}tab={{ f.tab }}&{% endif %}range={{ f.range }}">Clear</a>{% endif %}
+</form>
+
+<div class="card flush">
+  <ul class="feed">{% for it in items %}
+  <li class="ev">
+    <div class="ev-head">
+      <span class="src src-{{ it.source }}">{{ it.source_label }}</span>
+      {% badge it.state_class it.state_label it.state_doc %}
+      {% if it.live %}<span class="live" title="in the live release">LIVE</span>{% endif %}
+      <h3 class="ev-title"><a href="{% if it.public_url %}{{ it.public_url }}{% elif it.task %}{% url 'opsconsole:task' it.task %}{% elif it.revision %}{% url 'opsconsole:revision' it.revision %}{% endif %}" data-item="{{ it.key }}">{{ it.title }}</a>{% if it.slug %}<span class="slug mono">{{ it.slug }}</span>{% endif %}</h3>
+      <span class="ev-ago">{{ it.last_at|ago }}</span>
+    </div>
+    <div class="ev-meta">
+      {% if it.when %}<span>{{ it.when }}</span>{% endif %}
+      {% if it.branches %}<span class="tags">{% for b in it.branches %}<a class="tag" href="?branch={{ b.slug }}{% if f.tab != 'all' %}&tab={{ f.tab }}{% endif %}&range={{ f.range }}" title="{{ b.slug }}">{{ b.name }}</a>{% endfor %}</span>{% endif %}
+      {% if it.sources %}<span><b>{{ it.sources.total }}</b> source{{ it.sources.total|pluralize }} · <b>{{ it.sources.non_wikipedia }}</b> not Wikipedia</span>
+        {% if it.sources.single %}<span class="flag" title="one independent publisher (ADR 0018)">single source</span>{% elif not it.sources.total %}<span class="flag">no source</span>{% endif %}{% endif %}
+      {% if it.wave %}<span>{{ it.wave }}{% if it.window %} · {{ it.window }}{% endif %}{% if it.gap_kind %} · {{ it.gap_kind }} gap{% endif %}</span>{% endif %}
+      {% if it.agent %}<span>by <span class="mono">{{ it.agent }}</span></span>{% endif %}
+      {% if it.verdict %}<span>{{ it.verdict }}{% if it.verdict_by %} by <span class="mono">{{ it.verdict_by }}</span>{% endif %}</span>{% endif %}
+    </div>
+    <ol class="stepper" aria-label="Lifecycle">{% for s in it.steps %}
+      <li class="{{ s.status }}"><span class="st-l">{{ s.label }}</span>
+        <span class="st-t">{% if s.at %}<span class="d">{{ s.at|date:"M j" }}</span> {{ s.at|date:"H:i" }}{% else %}&nbsp;{% endif %}</span>
+        {% if s.note %}<span class="st-n" title="{{ s.note }}">{{ s.note }}</span>{% endif %}</li>{% endfor %}
+    </ol>
+    {% if it.verdict_why or it.note or it.duplicate_of or it.error %}<div class="ev-why">
+      {% if it.duplicate_of %}Duplicate of <a class="mono" href="{{ public_site }}/#{{ it.duplicate_of }}">{{ it.duplicate_of }}</a>. {% endif %}
+      {% if it.verdict_why %}<b>Reviewer:</b> {{ it.verdict_why|truncatechars:220 }}{% elif it.note %}<b>Agent:</b> {{ it.note|truncatechars:220 }}{% endif %}
+      {% if it.error and it.state == 'failed' %}<span class="err">{{ it.error|masked|truncatechars:160 }}</span>{% endif %}
+    </div>{% endif %}
+    {% if it.links %}<div class="ev-links">{% for label, href in it.links %}<a href="{{ href }}">{{ label }}{% if forloop.first and it.public_url %} ↗{% endif %}</a>{% endfor %}</div>{% endif %}
+  </li>
+  {% empty %}<li class="ev"><p class="empty-note">Nothing here{% if f.range != 'all' %} in this time range: try <a href="?{% if f.tab != 'all' %}tab={{ f.tab }}&{% endif %}range=all">any time</a>{% endif %}.</p></li>{% endfor %}
+  </ul>
+</div>
+{% include "opsconsole/_pager.html" %}
+{% include "opsconsole/_item_cards.html" %}
+{% endblock %}

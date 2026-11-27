@@ -1,0 +1,91 @@
+{% load ops %}{% json_data cards "item-cards" %}
+<script>
+/* Item cards (ADR 0033): hover an item's title (after 80 ms), focus it, or tap it once on a touch screen, and a card
+   shows its five steps with their times in this browser's time zone and the time between them, the verdict and the
+   reviewer's reason, the agent's note, the wave. Everything is in the JSON above, made with the page: no request
+   per hover. Escape closes it. The look is the run card's (.run-card). */
+(function () {
+  var src = document.getElementById("item-cards"), data;
+  try { data = JSON.parse(src.textContent); } catch (e) { return; }
+  var card = document.createElement("div"), current = null, showT = 0, hideT = 0, touch = false;
+  card.id = "item-card"; card.className = "run-card"; card.setAttribute("role", "tooltip"); card.hidden = true;
+  document.body.appendChild(card);
+  var zone = ""; try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
+  function span(s) {
+    if (s < 90) return Math.round(s) + " s";
+    if (s < 5400) return Math.round(s / 60) + " min";
+    if (s < 172800) return (s / 3600).toFixed(s < 36000 ? 1 : 0).replace(/\.0$/, "") + " h";
+    return Math.round(s / 86400) + " d";
+  }
+  function when(t) {
+    var d = new Date(t * 1000);
+    return d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  }
+  function render(key) {
+    var c = data[key];
+    if (!c) return "";
+    var prev = null, li = c.steps.map(function (s) {
+      var gap = s.t != null && prev != null && s.t >= prev ? '<li class="ic-gap">' + span(s.t - prev) + " later</li>" : "";
+      if (s.t != null) prev = s.t;
+      return gap + '<li class="' + esc(s.status) + '"><i></i><span><b>' + esc(s.label) + "</b>" + (s.note ? ' <span class="muted">' + esc(s.note) + "</span>" : "") +
+        '</span><span class="muted">' + (s.t != null ? when(s.t) : "–") + "</span></li>";
+    });
+    var meta = [];
+    if (c.wave) meta.push(["Wave", esc(c.wave) + (c.window ? " · " + esc(c.window) : "") + (c.gap ? " · " + esc(c.gap) + " gap" : "")]);
+    if (c.agent) meta.push(["Agent", esc(c.agent) + (c.attempts > 1 ? " · attempt " + esc(c.attempts) : "")]);
+    if (c.verdict) meta.push(["Verdict", esc(c.verdict) + (c.by ? " by " + esc(c.by) : "")]);
+    if (c.file) meta.push(["Edit file", esc(c.file)]);
+    return '<div class="rc-head"><div class="rc-title"><b>' + esc(c.title) + '</b><span class="muted">' + esc(c.source) + "</span></div>" +
+      '<span class="badge s-' + esc(c.cls) + '"><i></i>' + esc(c.state) + "</span></div>" +
+      '<div class="rc-trigger"><span>' + esc(c.doc) + "</span></div>" +
+      '<ul class="ic-steps">' + li.join("") + "</ul>" +
+      (meta.length ? '<dl class="rc-meta">' + meta.map(function (x) { return "<dt>" + x[0] + "</dt><dd>" + x[1] + "</dd>"; }).join("") + "</dl>" : "") +
+      (c.why ? '<div class="ic-why"><b>Reviewer:</b> ' + esc(c.why) + "</div>" : "") +
+      (c.note ? '<div class="ic-why"><b>Agent:</b> ' + esc(c.note) + "</div>" : "") +
+      (c.error ? '<div class="rc-err">' + esc(c.error) + "</div>" : "") +
+      '<div class="rc-foot"><span class="faint">' + esc(zone ? "Times in " + zone : "Local times") + "</span></div>";
+  }
+  function place(el) {
+    var b = el.getBoundingClientRect(), w = card.offsetWidth, h = card.offsetHeight, vw = innerWidth, vh = innerHeight;
+    var left = Math.min(Math.max(8, b.left), vw - w - 8), top = b.bottom + 8;
+    if (top + h > vh - 8) top = b.top - h - 8 >= 8 ? b.top - h - 8 : Math.max(8, vh - h - 8);
+    card.style.left = Math.max(8, left) + "px"; card.style.top = top + "px";
+  }
+  function show(el) {
+    clearTimeout(showT); clearTimeout(hideT);
+    var html = render(el.getAttribute("data-item"));
+    if (!html) return;
+    if (current && current !== el) current.removeAttribute("aria-describedby");
+    if (current !== el) card.innerHTML = html;
+    current = el; el.setAttribute("aria-describedby", "item-card");
+    card.hidden = false; place(el);
+  }
+  function hide() {
+    clearTimeout(showT); clearTimeout(hideT);
+    if (current) current.removeAttribute("aria-describedby");
+    current = null; card.hidden = true;
+  }
+  function target(e) { return e.target.closest ? e.target.closest("[data-item]") : null; }
+  document.addEventListener("pointerdown", function (e) { touch = e.pointerType === "touch" || e.pointerType === "pen"; }, true);
+  document.addEventListener("pointerover", function (e) {
+    if (e.pointerType === "touch") return;
+    var el = target(e);
+    if (el) { clearTimeout(hideT); clearTimeout(showT); if (!card.hidden) show(el); else showT = setTimeout(function () { show(el); }, 80); }
+    else if (card.contains(e.target)) clearTimeout(hideT);
+  });
+  document.addEventListener("pointerout", function (e) {
+    if (e.pointerType === "touch") return;
+    if (target(e) || card.contains(e.target)) { clearTimeout(showT); hideT = setTimeout(hide, 120); }
+  });
+  document.addEventListener("click", function (e) {
+    var el = target(e);
+    if (el && touch && current !== el) { e.preventDefault(); show(el); return; }  /* first tap shows, a second follows the link */
+    if (!el && !card.contains(e.target)) hide();
+  });
+  document.addEventListener("focusin", function (e) { var el = target(e); if (el) show(el); });
+  document.addEventListener("focusout", function (e) { if (target(e)) hide(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && current) hide(); });
+  addEventListener("scroll", function () { if (current) place(current); }, { passive: true, capture: true });
+})();
+</script>
