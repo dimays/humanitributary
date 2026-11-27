@@ -47,6 +47,7 @@ HOST_DELAY = {
     "api.crossref.org": 1.0,  # public pool: 1 request a second, one at a time
     "news.un.org": 10.0,  # un.org robots.txt Crawl-delay
     "press.un.org": 10.0,
+    "sec.gov": 0.5,  # SEC fair access: at most 10 requests a second, all machines together (www. and data.sec.gov)
 }
 DEFAULT_HOST_DELAY = 1.0
 

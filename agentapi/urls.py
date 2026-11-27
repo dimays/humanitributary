@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import operations, views
+from . import evidence, operations, views
 
 urlpatterns = [
     path("", views.index),
@@ -13,6 +13,10 @@ urlpatterns = [
     path("branches/<str:slug>", views.branch_detail),
     path("claims/<int:claim_id>", views.claim_detail),
     path("search", views.search),
+    # Evidence packs (ADR 0036)
+    path("documents", evidence.documents),
+    path("documents/<int:doc_id>", evidence.documents),
+    path("evidence/check-excerpt", evidence.check_excerpt),
     # A round's operations (ADR 0035)
     path("queue", operations.queue),
     path("edits/check", operations.edits_check),

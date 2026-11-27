@@ -103,6 +103,7 @@ User-Agent with contact.
 | api.openalex.org | 0.2 | |
 | api.crossref.org | 1.0 | Public pool: 1 request a second, one at a time. |
 | news.un.org, press.un.org | 10.0 | un.org robots.txt Crawl-delay. |
+| sec.gov (www., data.) | 0.5 | SEC fair access: at most 10 requests a second, all machines together. |
 
 ### Bot walls
 
@@ -164,6 +165,7 @@ The publishers `PUBLISHERS` adds beyond `KNOWN`:
 |---|---|---|---|
 | wikidata.org | Wikidata | 3 | CC0 1.0 |
 | federalregister.gov | Federal Register (US) | 1 | public domain (US government work) |
+| sec.gov | US Securities and Exchange Commission (EDGAR) | 1 | public domain (US government work); filings are the filers' |
 | thegazette.co.uk | The Gazette (UK) | 1 | Open Government Licence v3.0 |
 | api.nobelprize.org | Nobel Prize API | 1 | CC0 1.0 (data); policy `allowed` |
 | raw.githubusercontent.com | GitHub raw files | unrated | per repository |
@@ -189,6 +191,7 @@ ADR 0013, since archive.org has no verdict entry. "Fetched by" names the job or 
 | Wayback availability API | Look up a snapshot for a dead link. | robots.txt blocks only its control and report paths; no stated rate rule (we send 1 a second). |
 | WHO Disease Outbreak News API | Metadata and a short summary (`who_don`), acknowledging WHO with the URL. | who.int terms: non-commercial research or private study; CC BY-NC-SA 3.0 IGO. |
 | Federal Register API | Fetch (`federal_register`). | US government work; robots.txt blocks only search and auth paths. |
+| SEC EDGAR (sec.gov, data.sec.gov) | The submissions API and single filings under `/Archives/edgar/data`, for evidence packs (`prefetch_sources`); no crawling, never `/cgi-bin`. Checked 2026-11-27 ([ADR 0036](../adr/0036-evidence-packs.md)). | "Accessing EDGAR Data": at most 10 requests a second, declare the user agent, no crawling; sec.gov privacy page: public information, may be copied without permission, cite the SEC. data.sec.gov has no robots.txt. The SEC's sample User-Agent has an e-mail; ours has `INGEST_CONTACT`: if refused, the filings show as `blocked`. |
 | The Gazette (UK) | State notices (codes 11xx) only, never personal-data notices (`gazette`). | Open Government Licence v3.0, with its attribution line; Crawl-delay 10. |
 | Nobel Prize API (api.nobelprize.org) | Fetch (`nobel`, the `nobel` adapter); cache locally, don't alter, don't imply endorsement. The website stays `browser_only`. | API data CC0. |
 | Office of the Historian Milestones (GitHub raw files) | Weekly at most (`historian_sync`). Never history.state.gov's search. | CC0 / US public domain; GitHub's acceptable-use policy (no excessive bulk activity); robots.txt disallows the site's search, Crawl-delay 20. |
@@ -233,6 +236,26 @@ Publishers that are `browser_only` after seeding: britannica.com, worldhistory.o
 un.org (and its subdomains news.un.org and press.un.org, which start with its rating), nobelprize.org, and the news
 publishers the verdicts set: theguardian.com, bbc.co.uk, bbc.com, npr.org, aljazeera.com, apnews.com.
 
+## Evidence packs: full text, privately, for a while
+
+The `prefetch_sources` job ([ingestion](ingestion.md#evidence-packs), [ADR 0036](../adr/0036-evidence-packs.md))
+is the one place a job keeps a page's **full text**: the clean main text and the raw bytes, in the private `raw`
+store under `pages/`, so agents can check excerpts against it. What holds it to the terms:
+
+- **Only `allowed` publishers.** A `browser_only` or `forbidden` publisher, or a NEVER_FETCH host, is never
+  requested (`policy_reason`, before the Fetcher's own checks), and `store_page` checks the policy again just before
+  writing. Those URLs go in the task's `unreadable` list for an agent's browser.
+- **Never published.** The text is in neither a snapshot, a release, the public page nor the database; the agent
+  API serves it only to the agent holding a task whose pack names it, or to a reviewer (scope `review`) when an
+  entry in review cites it.
+- **Retention.** `EVIDENCE_RETENTION_DAYS` (180 days; news and everything else) or `EVIDENCE_RETENTION_DAYS_OPEN`
+  (365 days, when the publisher's `license` is CC0, CC BY, public domain or the Open Government Licence) after the
+  last fetch, then the text and bytes are deleted and the packs that quoted them lose those passages.
+- **Payloads quote passages, not pages**: up to 5 passages of at most 50 words per stored page, 20,000 bytes a
+  pack. A cited excerpt stays at most 25 words.
+
+The feed jobs' rule is unchanged: from a news feed they keep the headline, date, link and a short lead.
+
 ## OpenStax is refused everywhere
 
 OpenStax's terms forbid use of its textbooks by AI systems, so it is never read and never cited (AGENTS.md rule 6).
@@ -240,7 +263,7 @@ Each layer refuses it on its own:
 
 | Layer | What refuses it |
 |---|---|
-| Jobs | `ingest/policy.py` `NEVER_FETCH["openstax.org"]`: the Fetcher raises `Refused`. |
+| Jobs | `ingest/policy.py` `NEVER_FETCH["openstax.org"]`: the Fetcher raises `Refused`. Evidence packs list it `forbidden` and never request it. |
 | Starting rating | `evidence/publishers.py` `KNOWN["openstax.org"]`: `fetch_policy` `forbidden`. |
 | The database: publishers | Check constraint `publisher_openstax_forbidden` on `evidence.Publisher`: a publisher whose domain is openstax.org or a subdomain must be `forbidden`. |
 | The database: citations | Check constraint `citation_never_openstax` on `evidence.Citation`: no citation URL on openstax.org or a subdomain (`evidence.models.OPENSTAX_RE`). |

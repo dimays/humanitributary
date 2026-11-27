@@ -1,6 +1,6 @@
 # 0013 — Source policy: what jobs fetch, what they never do, and why
 
-**Status:** accepted (November 2026; terms checked 2026-11-26); amended by [0020](0020-heroku-hosting.md)
+**Status:** accepted (November 2026; terms checked 2026-11-26); amended by [0020](0020-heroku-hosting.md); amended by [0036](0036-evidence-packs.md) (full text of `allowed` pages kept privately for a limited time, payload passages, and the sec.gov row below)
 
 ## Context
 
@@ -53,6 +53,7 @@ a Project key before hosted scheduling.
 | UNESCO World Heritage list RSS | Headline + link only, **disabled** | robots `Content-Signal: ai-train=no, use=reference`; tdmrep.json `tdm-reservation: 1`; Publisher `browser_only` |
 | WHO Disease Outbreak News API | ALLOW (non-commercial) | who.int terms: research or private study, acknowledge WHO with the URL; CC BY-NC-SA 3.0 IGO |
 | Federal Register API | ALLOW | US government work; robots.txt blocks only search and auth paths |
+| SEC EDGAR (added by [0036](0036-evidence-packs.md), checked 2026-11-27) | ALLOW | "Accessing EDGAR Data": ≤ 10 requests/s, declared user agent, no crawling; submissions API and single filings under /Archives/edgar/data (robots.txt allows it, disallows /cgi-bin); sec.gov privacy page: public information, may be copied |
 | The Gazette (UK) data feed | ALLOW | Open Government Licence v3.0 (attribution); Crawl-delay 10; state notices (11xx) only, never personal-data notices |
 | Nobel Prize API v2 | ALLOW | Data CC0 ("free to use according to … CC0"); cache, don't alter, no endorsement |
 | Office of the Historian Milestones (GitHub TEI) | ALLOW | LICENSE.md: CC0 / US public domain; fetched weekly at most (GitHub AUP: no excessive bulk activity); history.state.gov `/search` is robots-disallowed |

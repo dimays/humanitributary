@@ -20,6 +20,7 @@
       {% if k.oldest_age %}<span>oldest waiting {{ k.oldest_age|span }}</span>{% endif %}
       <span title="done in the last seven days">{{ k.done_7d }} done in 7 days</span>
       {% for j in k.fed_by %}<span>fed by <a href="{% url 'opsconsole:job' j %}">{{ j }}</a></span>{% endfor %}
+      {% if k.prefetched %}<span title="waiting tasks whose evidence pack has at least one non-Wikipedia page stored (prefetch_sources)">evidence ready {% if k.ready_share is not None %}{{ k.ready_share|pct }} ({{ k.evidence_ready }} of {{ k.waiting }}){% else %}–{% endif %}</span>{% endif %}
       {% if k.cap %}<span title="{{ k.cap.setting }}">{{ k.cap.made }} / {{ k.cap.cap }} made today</span>{% endif %}
       {% if k.failed %}<a href="{% url 'opsconsole:work_kind' k.kind %}?tab=failed" style="color:var(--bad)">{{ k.failed }} failed</a>{% endif %}</div>
   </div>{% endfor %}

@@ -21,6 +21,7 @@ PUBLISHERS = {
     "wikidata.org": dict(name="Wikidata", tier=3, license="CC0 1.0"),
     "who.int": {},
     "federalregister.gov": dict(name="Federal Register (US)", tier=1, license="public domain (US government work)"),
+    "sec.gov": dict(name="US Securities and Exchange Commission (EDGAR)", tier=1, license="public domain (US government work); filings are the filers'"),
     "thegazette.co.uk": dict(name="The Gazette (UK)", tier=1, license="Open Government Licence v3.0"),
     "api.nobelprize.org": dict(name="Nobel Prize API", tier=1, license="CC0 1.0 (data)", fetch_policy="allowed"),
     "history.state.gov": {},
@@ -54,6 +55,9 @@ VERDICTS = {
     "whc.unesco.org": (None, "Headline + link only, if ever enabled: robots Content-Signal ai-train=no, use=reference; tdmrep.json tdm-reservation 1. Feed disabled while browser_only."),
     "who.int": (None, "ALLOW (non-commercial): DON API metadata and a short summary, acknowledging WHO with the URL (who.int terms of use; CC BY-NC-SA 3.0 IGO)."),
     "federalregister.gov": (None, "ALLOW: documented public API, US government work; robots.txt blocks search and auth paths only."),
+    "sec.gov": (None, "ALLOW (checked 2026-11-27, ADR 0036): EDGAR \"Accessing EDGAR Data\": at most 10 requests/second, declare the user agent, no crawling; "
+                "the submissions API (data.sec.gov) and single filings under /Archives/edgar/data (robots.txt allows it; /cgi-bin is disallowed). "
+                "sec.gov privacy page: public information, may be copied without permission; cite the SEC."),
     "thegazette.co.uk": (None, "ALLOW: Open Government Licence v3.0 (\"Contains public sector information licensed under the OGL v3.0\"); Crawl-delay 10; state notices only (no personal-data notices)."),
     "api.nobelprize.org": ("allowed", "ALLOW: API data CC0 (nobelprize.org terms for api.nobelprize.org); cache locally, don't alter or imply endorsement. The website itself is browser_only."),
     "history.state.gov": (None, "ALLOW: Milestones TEI on GitHub is CC0 / US public domain; fetched weekly at most. The site's /search is robots-disallowed (Crawl-delay 20)."),

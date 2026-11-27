@@ -98,3 +98,4 @@ script. Write a comment that tells why.
 | 13 | [Make the preview card again](procedures/13-make-the-preview-card-again.md) |
 | 14 | [Control the daily round](procedures/14-control-the-daily-round.md) |
 | 15 | [Set up the daily round](procedures/15-set-up-the-daily-round.md) |
+| 16 | [Measure the evidence coverage](procedures/16-measure-the-evidence-coverage.md) |

@@ -97,6 +97,11 @@ Britannica, BBC, the Guardian, NPR, AP, Al Jazeera and un.org. The agents never 
 use other reputable sources. If a draft has support only from a `browser_only` page, the reviewer holds it. Then
 you can examine it in a browser with procedure [01](procedures/01-run-a-round-by-hand.md).
 
+The job `prefetch_sources` reads the `allowed` pages of each task before the round (ADR 0036). The agents and the
+reviewers read the stored text of these pages through the agent API, and copy their excerpts from it. The API
+refuses an excerpt that is not on a stored page. The list `unreadable` in each task tells the agents which pages
+need a browser.
+
 ## What the owner controls
 
 The Work page of the console shows the round schedule, the last round and the last ten rounds. An operator can do

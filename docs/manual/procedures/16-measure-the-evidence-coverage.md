@@ -1,0 +1,43 @@
+# 16. Measure the evidence coverage
+
+Purpose: This procedure tells how to find the tasks that have no stored source other than Wikipedia, and the sites
+that cause this.
+
+The job `prefetch_sources` reads the pages of each queued task before an agent claims it (ADR 0036). It reads only
+the sites whose publisher has the fetch policy `allowed`. It keeps the clean text of each page in the private store
+for 180 days (365 days for an open license). Agents copy their excerpts from this text.
+
+A task is "ready" when its evidence pack has one or more stored pages that are not Wikipedia. A task is "possible"
+when it cites a page that is not Wikipedia and that a job can read.
+
+## Before you start
+
+- You have access to the Heroku app `humanitributary-staging`.
+- The job `prefetch_sources` ran in the last hour.
+
+## Procedure
+
+1. Open the Work page of the console, `https://data.humanitributary.com/ops/work/`.
+   Make sure that the cards of `write_event`, `fill_gap` and `verify_claim` show "evidence ready".
+2. Write the report:
+
+   ```bash
+   heroku run python manage.py evidence_coverage -a humanitributary-staging
+   ```
+
+   Make sure that the report has a table for each task kind, region and era.
+3. Find the groups with a low "Possible" share in the report.
+   Make sure that you have a list of these groups. They need new sources.
+4. Find the hosts in the tables "Left to read by hand" and "Hosts the policy keeps jobs off".
+   Make sure that you know the reason for each frequent host.
+5. Find the groups where "Ready" is less than "Possible".
+   Make sure that you know which tasks the job has not read yet. The next runs read them.
+6. Open the page of one task from a group with a low share.
+   Make sure that the evidence pack shows the stored pages and the pages to read by hand.
+
+> **NOTE:** A new source needs its terms first. Do procedure [12](12-add-a-data-source.md) for each new source.
+
+> **NOTE:** The report makes no requests. It reads only the queue and the `PrefetchedPage` rows.
+
+> **CAUTION:** Do not change a `browser_only` publisher to `allowed` to increase the share. Change the fetch policy
+> only when the terms of the site permit automated access.

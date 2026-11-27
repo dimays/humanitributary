@@ -352,7 +352,7 @@ class PagesTests(FreshStorage, TestCase):
         self.assertEqual([h["state"] for h in rows["link_health"]["history"]][-3:], ["failed"] * 3)
         self.assertContains(r, 'class="strip"')
         self.assertContains(r, reverse("opsconsole:run", args=[rows["process"]["history"][-1]["id"]]))
-        self.assertEqual({j["name"] for j in self.get("jobs", tag="fact-check").context["rows"]}, {"link_health", "facts_sweep", "second_source"})
+        self.assertEqual({j["name"] for j in self.get("jobs", tag="fact-check").context["rows"]}, {"link_health", "facts_sweep", "second_source", "prefetch_sources"})
         self.assertEqual([j["name"] for j in self.get("jobs", tag="paused").context["rows"]], ["year_pages"])
         self.assertEqual(len(self.get("jobs", tag="nonsense").context["rows"]), len(rows), "an unknown tag shows every job")
 

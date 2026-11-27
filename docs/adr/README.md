@@ -56,6 +56,7 @@ things work now; an ADR says why, and what was given up.
 | [0033](0033-a-new-events-page-derived-from-existing-rows.md) | A New events page in the console, every state derived from the rows that already record it | proposed |
 | [0034](0034-brand-assets.md) | Brand files drawn from the page's mark, a preview card rendered from the page, served at the root of every host | proposed |
 | [0035](0035-automated-daily-rounds.md) | Agent rounds run daily on a cloud routine, end to end through the API, and publish when the review approves and every gate passes | accepted |
+| [0036](0036-evidence-packs.md) | Evidence packs: a job pre-fetches the allowed pages a task needs, stores their text privately for a limited time, and the API checks every excerpt against it | proposed |
 <!-- index:end -->
 
 ## Template

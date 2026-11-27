@@ -23,6 +23,7 @@ from django.utils import timezone
 from infra import storage
 from ingest.models import Candidate, Document, Feed, FetchRun, JobState
 from ingest.policy import mask_secrets
+from ingest.prefetch import KINDS as PREFETCH_KINDS
 from work.models import AgentTask
 from work.rounds import FED_BY
 
@@ -506,13 +507,19 @@ def queue(now) -> list[dict]:
         failed_today=Count("id", filter=Q(status="failed", completed_at__gte=mid)),
         failed=Count("id", filter=Q(status="failed")),
         oldest_waiting=Min("created_at", filter=Q(status="queued")),
+        # Evidence packs (ingest/prefetch.py, ADR 0036): waiting tasks with a pack, and with ≥ 1 non-Wikipedia page stored.
+        packed=Count("id", filter=Q(status="queued", payload__has_key="evidence_pack")),
+        evidence_ready=Count("id", filter=Q(status="queued", payload__evidence_ready=True)),
     )}
     made = {(r["kind"], r["created_by"]): r["n"] for r in
             AgentTask.objects.filter(created_at__gte=mid, kind__in=[k for k, _, _ in CAPS]).values("kind", "created_by").annotate(n=Count("id"))}
     caps = {kind: {"made": made.get((kind, by), 0), "cap": getattr(settings, setting), "setting": setting} for kind, by, setting in CAPS}
     out = []
     for kind, label in AgentTask.Kind.choices:
-        r = rows.get(kind) or {"kind": kind, "waiting": 0, "in_progress": 0, "stuck": 0, "done_today": 0, "done_7d": 0, "failed_today": 0, "failed": 0, "oldest_waiting": None}
+        r = rows.get(kind) or {"kind": kind, "waiting": 0, "in_progress": 0, "stuck": 0, "done_today": 0, "done_7d": 0, "failed_today": 0, "failed": 0,
+                               "oldest_waiting": None, "packed": 0, "evidence_ready": 0}
+        r["prefetched"] = kind in PREFETCH_KINDS
+        r["ready_share"] = (r["evidence_ready"] / r["waiting"]) if r["prefetched"] and r["waiting"] else None
         r["label"] = label
         r["oldest_age"] = (now - r["oldest_waiting"]) if r["oldest_waiting"] else None
         r["cap"] = caps.get(kind)
@@ -769,3 +776,19 @@ def round_agents(r) -> list[dict]:
     for a, actor in zip(r.agents or [], names):
         out.append({**a, "actor": actor, "queue": by.get(actor, [])})
     return out
+
+
+def evidence_pack(t) -> dict | None:
+    """A task's evidence pack for its page (ADR 0036): the pages fetched, with their top passages, and the ones left
+    to read by hand; None for a kind the prefetch_sources job doesn't serve."""
+    p = t.payload or {}
+    if t.kind not in PREFETCH_KINDS:
+        return None
+    pack = p.get("evidence_pack") or []
+    unreadable = p.get("unreadable") or []
+    reasons = defaultdict(int)
+    for u in unreadable:
+        reasons[u.get("reason", "")] += 1
+    return {"built": "evidence_pack" in p, "at": p.get("evidence_pack_at"), "ready": bool(p.get("evidence_ready")), "pages": pack,
+            "unreadable": unreadable, "reasons": dict(sorted(reasons.items())), "browser": [u for u in unreadable if u.get("reason") == "browser_only"],
+            "passages": sum(len(e.get("passages") or []) for e in pack)}

@@ -179,6 +179,12 @@ WRITE_EVENT_THRESHOLD = float(os.getenv("WRITE_EVENT_THRESHOLD", "70"))
 # person: the project's repository by default (Wikimedia asks for a contact).
 INGEST_CONTACT = os.getenv("INGEST_CONTACT", "https://github.com/dimays/humanitributary")
 INGEST_USER_AGENT = os.getenv("INGEST_USER_AGENT", f"{SITE_NAME}Bot/0.1 (history timeline research; +{INGEST_CONTACT}) python-httpx")
+# Evidence packs (ingest/prefetch.py, docs/adr/0036-evidence-packs.md): the clean text of a page the prefetch_sources
+# job stored is deleted from the private store this many days after it was last fetched; a publisher whose license
+# is open (CC0, CC BY, public domain, the Open Government Licence: Wikipedia, government sites) keeps it longer. News
+# and everything else keeps the shorter one.
+EVIDENCE_RETENTION_DAYS = int(os.getenv("EVIDENCE_RETENTION_DAYS", "180"))
+EVIDENCE_RETENTION_DAYS_OPEN = int(os.getenv("EVIDENCE_RETENTION_DAYS_OPEN", "365"))
 # Free keys for two lookup adapters (ingest/lookup.py); without them those adapters stay disabled.
 SMITHSONIAN_API_KEY = os.getenv("SMITHSONIAN_API_KEY", "")  # api.data.gov
 EUROPEANA_API_KEY = os.getenv("EUROPEANA_API_KEY", "")

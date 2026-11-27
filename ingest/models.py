@@ -386,3 +386,49 @@ class JobState(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class PrefetchedPage(models.Model):
+    """A page the `prefetch_sources` job read for an evidence pack (ingest/prefetch.py, ADR 0036): one row per
+    canonical URL. Only pages of `allowed` publishers are ever stored. The raw bytes and the clean main text live in
+    the private `raw` object store by content hash (`pages/raw/…`, `pages/text/…`), never in the database, a
+    snapshot or the public page; both are deleted at `retain_until` (EVIDENCE_RETENTION_DAYS), and the row stays as
+    a record that the page was read. A page that couldn't be read keeps its reason, so it isn't asked again soon."""
+
+    class Status(models.TextChoices):
+        STORED = "stored"          # the clean text is in the store
+        UNREADABLE = "unreadable"  # refused, blocked, an error or an unsupported type: see `reason`
+        PURGED = "purged"          # stored once; the text and bytes were deleted at retain_until
+
+    url = models.URLField(max_length=1000, unique=True, help_text="The canonical URL (ingest.prefetch.page_key): what packs and citations match on.")
+    fetched_url = models.URLField(max_length=1000, help_text="As requested.")
+    final_url = models.URLField(max_length=1000, blank=True, help_text="After redirects.")
+    host = models.CharField(max_length=255, db_index=True, help_text="The URL's host: a host's health (blocked, robots) is read from its rows.")
+    publisher = models.ForeignKey("evidence.Publisher", null=True, blank=True, on_delete=models.PROTECT, related_name="prefetched_pages")
+    status = models.CharField(max_length=12, choices=Status.choices)
+    reason = models.CharField(max_length=40, blank=True, help_text="Why it is unreadable: robots, blocked, browser_only, forbidden, never_fetch, http_<status>, error, unsupported, too_large, empty.")
+    detail = models.CharField(max_length=500, blank=True)
+    http_status = models.PositiveSmallIntegerField(null=True, blank=True)
+    fetched_at = models.DateTimeField(help_text="When the stored copy was fetched (a 304 moves it on: the copy is still the page).")
+    checked_at = models.DateTimeField(help_text="The last request about it, whatever the answer.")
+    etag = models.CharField(max_length=300, blank=True)
+    last_modified = models.CharField(max_length=100, blank=True)
+    content_type = models.CharField(max_length=100, blank=True)
+    raw_hash = models.CharField(max_length=64, blank=True)
+    raw_key = models.CharField(max_length=300, blank=True, help_text="pages/raw/<hash[:2]>/<hash> in the raw store; empty once purged.")
+    text_hash = models.CharField(max_length=64, blank=True, help_text="sha256 of the clean text, as stored.")
+    text_key = models.CharField(max_length=300, blank=True, help_text="pages/text/<hash[:2]>/<hash> in the raw store; empty once purged.")
+    words = models.PositiveIntegerField(default=0)
+    title = models.CharField(max_length=500, blank=True)
+    language = models.CharField(max_length=20, blank=True)
+    retain_until = models.DateTimeField(null=True, blank=True, db_index=True, help_text="The text and bytes are deleted after this (ADR 0036).")
+    purged_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-checked_at"]
+        constraints = [models.CheckConstraint(condition=Q(status__in=["stored", "unreadable", "purged"]), name="prefetchedpage_status_valid"),
+                       models.CheckConstraint(condition=~Q(status="stored") | ~Q(text_key=""), name="prefetchedpage_stored_has_text")]
+
+    def __str__(self):
+        return f"{self.url} ({self.status})"

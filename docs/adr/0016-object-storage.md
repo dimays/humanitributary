@@ -1,6 +1,6 @@
 # 0016 — Object storage for everything that isn't a row
 
-**Status:** proposed (November 2026); amends [0012](0012-ingestion.md) (where raw bytes live); amended by [0020](0020-heroku-hosting.md)
+**Status:** proposed (November 2026); amends [0012](0012-ingestion.md) (where raw bytes live); amended by [0020](0020-heroku-hosting.md); amended by [0036](0036-evidence-packs.md) (a deletable `pages/` prefix in `raw`, with retention)
 
 ## Context
 

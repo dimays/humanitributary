@@ -54,8 +54,8 @@ the operations console show it, so it is one plain sentence saying what the job 
 | Tag | Jobs |
 |---|---|
 | `collect` | fetch from an outside source, once per enabled feed: `portal`, `year_pages`, `rss`, `who_don`, `federal_register`, `gazette`, `nobel`, `historian_sync` |
-| `process` | turn collected material into candidates, priorities and tasks: `pageviews`, `process`, `enrich_tasks` |
-| `fact-check` | check citations and claims: `link_health`, `facts_sweep`, `second_source` |
+| `process` | turn collected material into candidates, priorities and tasks: `pageviews`, `process`, `enrich_tasks`, `prefetch_sources` |
+| `fact-check` | check citations and claims: `link_health`, `facts_sweep`, `second_source`, `prefetch_sources` |
 | `governance` | branch structure: `entity_relations` (what the NEW-BRANCH rule reads), `branches_review` |
 | `waves` | content waves: `gap_waves`, `gap_pointers` |
 | `maintenance` | set-up and upkeep: `seed_sources`, `seed_branch_entities`, `refresh_entities` |
@@ -178,6 +178,7 @@ seeded feed's `interval_minutes` (`ingest/seed.py` `FEEDS`), shown in the third 
 | `second_source` | day | — | Suggested second sources for claims only Wikipedia supports. |
 | `gap_waves` | day | — | Content waves (`governance/waves.py`, [content waves](content-waves.md)): gaps in each branch's windows become `fill_gap` tasks (at most `FILL_GAP_TASKS_PER_DAY` new a day); the active wave advances. No requests. |
 | `gap_pointers` | 60 min | — | Pointers for queued `fill_gap` tasks (`governance/pointers.py`): the branch's Wikipedia history sections that name years in the window, and lookup hits, 20 tasks a run. |
+| `prefetch_sources` | 15 min | — | Evidence packs ([below](#evidence-packs)): the `allowed` pages queued `write_event`, `fill_gap` and `verify_claim` tasks point at, fetched, stored privately and ranked into passages in the payload; 60 requests and 40 tasks a run, 8 a host. Last in the order, so every other job's sources and pointers are in. |
 
 The lookup adapters also have `Feed` rows (`config.job` = `lookup`), but no job is named `lookup`: those rows are
 only on/off switches the adapters read.
@@ -263,7 +264,9 @@ pure function of its input, with no network.
 desktop host), no fragment, no trailing slash, and no tracking parameters (`TRACKING_PARAMS`: `utm_*`, `fbclid`,
 `gclid`, `ref` and others). A page's own rel=canonical wins when it points at the same site.
 
-**HTML pages** (`extract_html`): main text by trafilatura (no comments or tables, precision over recall), plus
+**HTML pages** (`extract_html`): main text by trafilatura (no comments or tables, precision over recall; with
+`deduplicate=False` for evidence packs, since trafilatura's de-duplication remembers paragraphs across calls in a
+process, and a page read a second time would come back without them), plus
 og:, twitter:, article: and schema.org metadata, the title, rel=canonical, `<html lang>` and outbound links (up to
 200). Dates come from the metadata, else trafilatura, and are parsed by dateparser (`parse_date`). Language without
 a `lang` attribute is a stopword vote among six languages (`guess_language`: at least 8 words and 3 stopword hits).
@@ -601,6 +604,104 @@ the terms behind them are in [sources and terms](sources-and-terms.md#lookup-ada
 - **`enrich_tasks`** (hourly) runs the same lookups for up to 30 queued `write_event` tasks that have no
   `suggested_sources` yet, highest priority first, and adds the hits to their payload.
 
+## Evidence packs
+
+[ingest/prefetch.py](../../ingest/prefetch.py) is the `prefetch_sources` job ([ADR 0036](../adr/0036-evidence-packs.md)):
+it reads ahead the pages a queued task will need, so an agent verifies against stored text instead of fetching, and
+excerpts copied from it are exact by construction. What the agent sees is in
+[work queue and agents](work-queue-and-agents.md#evidence-packs).
+
+**Which tasks.** Queued `write_event`, `fill_gap` and `verify_claim` tasks (`KINDS`), the best `scan` (400) by
+priority, then age; a task is packed when it has no pack or its candidate URLs changed since (`evidence_urls`, the
+hash of the page keys it was built from, `needs_pack`), and at most `tasks` (40) a run. The payload is written only
+while the task is still queued (an update filtered on the status), so a task an agent claimed meanwhile keeps the
+payload it was claimed with. `process` and `gap_waves` keep `PAYLOAD_KEYS` when they refresh a queued payload.
+
+**Which pages** (`candidates`, at most `urls` (12) a task, citations and sources first and at most a third
+Wikipedia):
+
+| Kind | From the payload |
+|---|---|
+| `write_event` | `sources`, the EDGAR filings (below), `suggested_sources`, `story_article` |
+| `fill_gap` | `pointers.lookups`, `pointers.wikipedia_sections` (one page each), `pointers.pages`, the branch's `article` |
+| `verify_claim` | `evidence` (the claim's cited pages; for a `second_source` task, read from its claim's Evidence rows), `suggested_sources` |
+
+Each page has one key (`page_key`): the canonical URL (`canonical_url`), and an English Wikipedia article by its
+decoded title with underscores. It is requested at the URL as given (less fragment and tracking parameters) and
+stored under the key; citations match on the key.
+
+**EDGAR.** A `write_event` story whose title hint or items name an SEC filing (`SEC_FORM_RE`: 8-K, 10-K, 10-Q,
+20-F, S-1, Form 4, "SEC filing" …) gets the filings themselves (`edgar_urls`): its `org` entities' Central Index Key
+from Wikidata (P5531, one SPARQL query, cached in `Entity.facts["P5531"]`, empty when there is none), EDGAR's
+submissions API (`data.sec.gov/submissions/CIK<10 digits>.json`), and the primary document of each filing of the
+named form (any of 8-K, 10-K, 10-Q, 20-F, 6-K when none is named) filed within `EDGAR_DAYS` (3) of the story's
+first and last dates, two at most, under `www.sec.gov/Archives/edgar/data/…`. Never `/cgi-bin` (robots.txt
+disallows it) and no crawling ([sources and terms](sources-and-terms.md#the-verdict-for-each-source)).
+
+**Reading a page** (`read`), in order:
+
+1. **Policy** (`policy_reason`): a publisher that is `browser_only` or `forbidden` (named so even when NEVER_FETCH
+   lists the host too, since that is what tells an agent to open a browser), then NEVER_FETCH (`never_fetch`). No
+   request is made.
+2. **Reuse**: a page stored less than `REFRESH_DAYS` (7) ago, with its text in the store, is used as is; a page
+   found unreadable less than `RETRY_DAYS` (3) ago keeps its reason.
+3. **Host health** (`host_refusal`): a host with an unreadable page whose reason is `blocked` or `robots` in the last
+   `HOST_COOLDOWN_DAYS` (14) isn't asked (not the Wikimedia API hosts). The page rows are the host's record;
+   `health()` sums them by host and outcome for the console and the coverage report.
+4. **Caps**: `per_run` (60) requests a run, `per_host` (8) a host (three times that for `API_HOSTS`); past a cap the
+   page is `deferred`, its task's `evidence_urls` ends in `+deferred`, and the next run packs it again.
+5. **Fetch** through the Fetcher (robots.txt, bot walls, delays, backoff, the honest User-Agent), with the stored
+   page's `etag` / `last_modified` for a conditional GET (a 304 moves `fetched_at` and `retain_until` on). English
+   Wikipedia goes through the MediaWiki API (`prop=extracts|info`, plain text, `etag` `rev:<lastrevid>`). Other
+   pages: HTML through `extract_html`, `text/plain` as is; anything else (a PDF) is `unsupported`, more than
+   `MAX_BYTES` (5 MB) `too_large`, fewer than `MIN_TEXT_WORDS` (40) of main text `empty`.
+6. **Outcomes**: a 401, 403, 429, 451 or a bot wall is `blocked`; another 4xx or 5xx `http_<status>`; a refusal by
+   robots.txt `robots`; a network error `error`. A stored page whose refresh fails keeps its stored copy.
+
+**Storing** (`store_page`): only for an `allowed` publisher, checked again just before writing (a `Refused`
+otherwise, so a redirect or a policy change can't store a page). The raw bytes go to `pages/raw/<hash[:2]>/<hash>`
+and the clean text (at most `MAX_TEXT_CHARS`, 400,000) to `pages/text/<hash[:2]>/<hash>` in the `raw` store, by
+sha256. A **PrefetchedPage** row records the page: `url` (the key), `fetched_url`, `final_url`, `host`,
+`publisher`, `status` (`stored`, `unreadable` with `reason` and `detail`, `purged`), `http_status`, `fetched_at`,
+`checked_at`, `etag`, `last_modified`, `content_type`, the hashes and store keys, `words`, `title`, `language`,
+`retain_until` and `purged_at`. Its text is read back with `read_text`; `stored(url)` finds a cited URL's page.
+
+**Passages** ([ingest/passages.py](../../ingest/passages.py), pure functions):
+
+- `normalize`: Unicode NFC, whitespace collapsed. The only difference an excerpt may have from the page;
+  `contains(text, excerpt)` is the verbatim test.
+- `split`: each line is a paragraph; sentences end at `.`, `!`, `?` or `…` (closing quotes and brackets kept)
+  before a capital, a digit or an opening quote, except after an abbreviation in `ABBREV` ("U.S.", "Gen.", "Jan.")
+  or a single letter; a sentence longer than `MAX_WORDS` (50) is cut into pieces; one under `MIN_WORDS` (5) is
+  skipped. Each passage is a slice of the normalized text.
+- `Terms` (`terms_for(task)`): dates and years from the suggested `when` and dates, the items' text, a claim's value
+  and its parts' values; a `fill_gap` window as a range of years; numbers (not years); entity labels with their
+  QIDs and up to four Wikidata aliases each (not concepts); title words (4 letters or more, not `STOPWORDS`).
+- `rank`: each passage scores `WEIGHTS` (date 3; year, number, entity 2; word 1) for each distinct match; those
+  under `MIN_SCORE` (2) are dropped; best first, ties by position; the top `passages` (5) per page, each with its
+  `matches` ("date:June 6", "year:1944", "number:156000", "entity:France (Q142)", "word:landings").
+- `closest`: the passage, or two adjacent ones, most like an excerpt by word sequence (`difflib`): what the API's
+  422 shows.
+
+**The payload** (`build`): `evidence_pack`, the stored pages ordered non-Wikipedia first, then by tier and best
+passage, each `{url, title, publisher, tier, fetched_at, doc_id, words, passages}`, cut by `fit` to `pack_bytes`
+(20,000) of JSON (the last passage of the page with the most passages first, then pages from the end);
+`unreadable`, `[{url, reason, detail}]`; `evidence_ready` (a stored page that isn't Wikipedia), `evidence_pack_at`
+and `evidence_urls`. All the limits are job options (`--opt per_run=…`, `DEFAULTS`).
+
+**Retention** (`purge`, first thing each run, 500 pages at most): a stored page past `retain_until` loses its raw
+bytes and text from the store (unless another stored page still in retention has the same hash), becomes `purged`
+with empty keys, and every task payload whose pack names it gets that entry's passages emptied and `purged: true`.
+`retain_until` is `fetched_at` plus `EVIDENCE_RETENTION_DAYS` (180), or `EVIDENCE_RETENTION_DAYS_OPEN` (365) when
+the publisher's license is open (`OPEN_LICENSE_RE`: CC0, CC BY, public domain, the Open Government Licence). Only
+`pages/` is ever deleted from; ingestion's `raw/` documents stay write-once.
+
+**Coverage** ([ingest/coverage.py](../../ingest/coverage.py), `manage.py evidence_coverage [--out var/]`, no
+requests): per task kind, region (the task's branch's) and era (`ERAS`), the share of queued tasks that are packed,
+**ready** (`evidence_ready`) and **possible** (pointing at a non-Wikipedia URL the policy lets a job fetch), the
+groups with no such URL, the unreadable reasons and hosts, the hosts the policy keeps jobs off, and the host health.
+`--out` writes `evidence-coverage-<date>.md` and `.json`.
+
 ## Link health
 
 [ingest/linkhealth.py](../../ingest/linkhealth.py) re-checks the URLs we cite, `limit` (200) a day.
@@ -641,7 +742,9 @@ so and points at `make schedule-status`.
 
 ## Tests
 
-`tests/test_ingest.py` covers the whole pipeline with no network. `tests/cassette.py` replays recorded responses
+`tests/test_ingest.py` covers the whole pipeline with no network; `tests/test_evidence_packs.py` covers evidence
+packs (selection by policy, robots and blocked hosts, passages, the payload and its cap, retention, the API) with an
+`httpx.MockTransport`. `tests/cassette.py` replays recorded responses
 from `tests/fixtures/ingest/` and fails loudly on any request not in the cassette; unknown robots.txt requests answer
 404 (allow all). `tests/record_fixtures.py` re-records cassettes against the live services (not part of the suite).
 `tests/fixtures/ingest/first_run.json` is a recording of the first real run's routing inputs (three misrouted stories'
@@ -659,6 +762,7 @@ Hand-made responses (`cassette.response`) cover what live services won't reliabl
 | A new job | A function in `ingest/job_defs.py` with `@job(name, interval=…, tags=…)` and a docstring whose first sentence says what it does, placed where it should run in the order. A feed job also needs a `Feed` row with `config.job` (add it to `ingest/seed.py` `FEEDS`). Add it to the tables above and to ADR 0012. |
 | A new tag | `ingest/jobs.py` `TAGS` (with what it means), the tag table above, [the console's chapter](operations-console.md) and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md). |
 | What a run's log keeps | `ingest/runlog.py`: `LEVEL`, `MAX_LINES`, `MAX_BYTES`, `TAIL_LINES`, `KEEP_DAYS`, the masks; `tests/test_opsconsole.py` `RunLogTests`. |
+| An evidence-pack limit or weight | `ingest/prefetch.py` `DEFAULTS` (or a job `--opt`), `REFRESH_DAYS`, `HOST_COOLDOWN_DAYS`; `ingest/passages.py` `WEIGHTS`, `MIN_SCORE`, `MAX_WORDS`; this chapter and ADR 0036; `tests/test_evidence_packs.py`. A new payload key goes in `PAYLOAD_KEYS` and the skills. |
 | A new source | Read its terms first ([adding a source](sources-and-terms.md#adding-a-source)), then a reader in `sources_news.py` or `sources_wiki.py` using `NewsWriter` or `upsert_candidate`, and a recorded cassette and test. |
 | A new Wikidata property or kind class | `ingest/wikidata.py` `PROPS` or `KIND_CLASSES`; `refresh_entities` re-derives kinds on its next run. |
 | A new field on an ingest model | A migration (these tables aren't canonical, so no `audit_table()`), and `docs/data-model.md`. |

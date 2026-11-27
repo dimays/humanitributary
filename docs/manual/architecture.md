@@ -42,6 +42,8 @@ flowchart LR
 - Jobs read the outside sources. Each request goes through one HTTP client, `ingest.http.Fetcher`. The Fetcher
   refuses a host that the source policy does not permit.
 - Agents use the agent API only. Agents read each cited page themselves. A `browser_only` site gets a browser.
+- The job `prefetch_sources` reads the `allowed` pages of the queued tasks first. Agents read the stored text of
+  these pages through the agent API. The text stays private and goes away after the retention time (ADR 0036).
 - A reviewer is a separate Claude session that writes nothing to the database. The reviewer gives a review and an
   edit file to the owner.
 - Readers get the public page only. The page does not read the database.

@@ -116,6 +116,9 @@ Start the role agents as subagents, in parallel, one per agent in the plan. Brie
   minutes, and again every 20 minutes;
 - the fetching rules below (honest User-Agent, one browser tab at most, closed at the end, never force a site);
 - the cloud constraint (no `browser_only` pages; see below);
+- **the evidence pack first** (each task skill's "The evidence pack: read it first"): passages and `GET
+  documents/<doc_id>`, excerpts copied from the stored text (`complete` refuses one that isn't on a stored page),
+  a browser only for `unreadable` URLs whose reason is `browser_only`;
 - to finish by releasing (`POST tasks/<id>/release`) any task it holds and can't finish, and to report:
   task ids claimed, completed, failed and released per kind; every slug it drafted (`result.entry`,
   `result.entries`); and the sources that refused it.
@@ -135,7 +138,9 @@ true, "summary": …}`) and post the summary: there is nothing to review or publ
 The drafts to review are this round's `drafts` plus `carry_over`. Split them into batches of at most
 `drafts_per_reviewer` (40) and start one reviewer subagent per batch, **fresh** (never an agent that wrote in this
 round), with the reviewer token's variable name. A reviewer reads only (`GET entries/<slug>`, `claims/<id>`,
-`branches/<slug>`, `search`), writes nothing through the API, and returns:
+`branches/<slug>`, `search`, and the stored pages: `GET documents?url=<cited URL>` gives the text of a stored page
+that a draft in review cites, and `POST evidence/check-excerpt -d '{"url": …, "excerpt": …}'` checks an excerpt
+against it), writes nothing through the API, and returns:
 
 - a verdict per draft: **APPROVE**, **APPROVE WITH EDITS**, **HOLD** or **REJECT**, each with one or two lines why;
 - the edit-file ops for its batch (`timeline/edits.py`; the shape `manage.py apply_edits` takes), each with a
@@ -146,7 +151,11 @@ round), with the reviewer token's variable name. A reviewer reads only (`GET ent
 - the sources it could only partly read, or could not read.
 
 Brief every reviewer with the hard-won rules below, in full. A reviewer must **read every cited page itself**: a
-draft whose excerpt it could not check against the page is not approved.
+draft whose excerpt it could not check against the page is not approved. A stored page (ADR 0036) counts as read
+from `GET documents?url=`: the reviewer reads the text there, judges the stance from it and checks each excerpt
+with `evidence/check-excerpt`; it opens a browser (desktop rounds) only for a `browser_only` page. `edits/check`
+refuses an excerpt that isn't on a stored page, naming the closest passage, so a reviewer's `add_evidence` and
+`add_cites` excerpts are copied from the stored text too.
 
 ## 6. Check and apply the edit file
 
@@ -232,7 +241,10 @@ AP, Al Jazeera, un.org, nobelprize.org …, the payload's `fetch_policy`) can't 
 - **Prefer other reputable sources** that scripts may read: official sites, national archives, universities and
   museums, peer-reviewed papers, reputable outlets that allow automated reads.
 - **Hold a draft whose only support is a `browser_only` source** (a reviewer can't check it either). Name it in
-  the summary so the owner can review it by hand in a browser (procedure 01).
+  the summary so the owner can review it by hand in a browser (procedure 01). A task's `unreadable` list names
+  those sources (reason `browser_only`); its `evidence_pack` holds the ones a cloud round can read and check.
+- **Use the evidence packs.** In a cloud round they are most of what can be read: the stored pages, their
+  passages, `GET documents/<doc_id>` and `evidence/check-excerpt`.
 
 ## Hard-won rules from the review rounds
 
