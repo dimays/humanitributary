@@ -213,10 +213,11 @@ def diffs(rev):
 
 
 @register.simple_tag(takes_context=True)
-def act(context, kind, label, css="", **fields):
+def act(context, action_name, label, css="", **fields):
     """A one-button POST form that starts an action (step 1: the confirmation page). Rendered only for operators
     (`can_act`); everyone else gets nothing. Carries the CSRF token and a fresh key (used by actions that skip the
-    confirmation, so a double click acts once)."""
+    confirmation, so a double click acts once). The action's name is `action_name`, not `kind`: a form field may be
+    called `kind` (the Work page's batch buttons pass the task kind as `kind=…`)."""
     from django.middleware.csrf import get_token
     from django.urls import reverse
 
@@ -227,7 +228,7 @@ def act(context, kind, label, css="", **fields):
     return format_html(
         '<form class="act" method="post" action="{}"><input type="hidden" name="csrfmiddlewaretoken" value="{}">'
         '<input type="hidden" name="key" value="{}">{}<button type="submit" class="btn {}">{}</button></form>',
-        reverse("opsconsole:act", args=[kind]), get_token(request), uuid.uuid4().hex, mark_safe(hidden), css, label)
+        reverse("opsconsole:act", args=[action_name]), get_token(request), uuid.uuid4().hex, mark_safe(hidden), css, label)
 
 
 @register.filter
