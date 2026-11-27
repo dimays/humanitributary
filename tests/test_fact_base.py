@@ -215,7 +215,10 @@ class SweepTests(TestCase):
             record_evidence(part, url="https://en.wikipedia.org/wiki/Punic_Wars", stance="supports", checked_by="agent:verifier", today=TODAY)
         part.refresh_from_db()
         self.assertEqual(part.status, "corroborated")
-        self.assertEqual(part.recheck_after, TODAY + timedelta(days=3650))
+        # The recheck date counts from when the evidence was actually recorded (checked_at is the real clock), not
+        # from the sweep's fixed TODAY: the two differ once the calendar moves past TODAY.
+        checked = Evidence.objects.filter(claim=part).latest("checked_at").checked_at.date()
+        self.assertEqual(part.recheck_after, checked + timedelta(days=3650))
 
     def test_changed_wording_marks_a_checked_part_for_recheck(self):
         sweep(TODAY)
