@@ -55,6 +55,11 @@ class FetchRun(models.Model):
         PARTIAL = "partial"
         FAILED = "failed"
 
+    class Trigger(models.TextChoices):
+        SCHEDULE = "schedule"  # the scheduler found it due
+        MANUAL = "manual"      # "Run now" from the console (or manage.py run_job)
+        RETRY = "retry"        # "Retry" on a failed run, from the console
+
     feed = models.ForeignKey(Feed, null=True, blank=True, on_delete=models.CASCADE, related_name="runs", help_text="Empty for a job that reads no feed (link health, processing).")
     job = models.CharField(max_length=60, blank=True, db_index=True, help_text="The job registry name (ingest/jobs.py) that ran.")
     started_at = models.DateTimeField(db_index=True)
@@ -63,10 +68,18 @@ class FetchRun(models.Model):
     counts = models.JSONField(default=dict, blank=True, help_text='{"fetched": …, "new": …, "changed": …, "unchanged": …, "errors": …}')
     http_status = models.PositiveSmallIntegerField(null=True, blank=True)
     error = models.TextField(blank=True)
+    # What started the run (ADR 0032): the scheduler, an operator's "run now" or a retry of a failed run.
+    trigger = models.CharField(max_length=10, choices=Trigger.choices, default=Trigger.SCHEDULE)
+    triggered_by = models.CharField(max_length=200, blank=True, help_text='Who asked: "human:<username>" for a console run, "shell" for manage.py run_job; empty for the scheduler.')
+    ops_action = models.PositiveIntegerField(null=True, blank=True, db_index=True, help_text="The console's OpsAction #id that started it (no foreign key: ingest does not depend on the console).")
+    retry_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="retries", help_text="The failed run this one retries.")
+    attempt = models.PositiveSmallIntegerField(default=1, help_text="1, or one more than the run it retries.")
+    scheduled_for = models.DateTimeField(null=True, blank=True, help_text="When the scheduler found it due (a plain job: its last start plus its interval; a feed job: the feed's next_run_at). Empty for a console or shell run, a first run, and runs before November 2026.")
 
     class Meta:
         ordering = ["-started_at"]
-        constraints = [models.CheckConstraint(condition=Q(status__in=["running", "ok", "partial", "failed"]), name="fetchrun_status_valid")]
+        constraints = [models.CheckConstraint(condition=Q(status__in=["running", "ok", "partial", "failed"]), name="fetchrun_status_valid"),
+                       models.CheckConstraint(condition=Q(trigger__in=["schedule", "manual", "retry"]), name="fetchrun_trigger_valid")]
         # A job's newest runs (the console's history strips and job pages): one index scan per job.
         indexes = [models.Index(fields=["job", "-started_at"], name="fetchrun_job_started_idx")]
 

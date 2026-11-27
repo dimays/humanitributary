@@ -172,8 +172,10 @@ def dashboard(request):
     queue = Q.queue(now)
     attention = [{"job": r, "run": run} for r in job_rows for run in r["failing"]][:8]
     latest = Release.objects.order_by("-created_at", "-id").first()
+    tl = Q.timeline(now)
     return _render(request, "dashboard.html", {
-        "health": health, "problems": problems(now, health, job_rows, queue), "timeline": Q.timeline(now),
+        "health": health, "problems": problems(now, health, job_rows, queue), "timeline": tl,
+        "run_cards": Q.run_cards((r["id"] for row in tl["rows"] for r in row["runs"]), now),
         "attention": attention, "upcoming": Q.upcoming(job_rows, now, limit=7), "queue": queue,
         "queue_active": [k for k in queue if k["active"]], "latest": latest, "today": Q.today(now),
         "open_actions": Q.open_actions(5), "recent_actions": Q.recent_actions(4),
@@ -192,7 +194,8 @@ def jobs(request):
     rows = Q.jobs(now)
     counts = {t: sum(t in r["tags"] for r in rows) for t in tags}
     shown = [r for r in rows if not tag or tag in r["tags"]]
-    return _render(request, "jobs.html", {"rows": shown, "tag": tag, "tags": tags, "tag_counts": counts, "total": len(rows)},
+    return _render(request, "jobs.html", {"rows": shown, "tag": tag, "tags": tags, "tag_counts": counts, "total": len(rows),
+                                          "run_cards": Q.run_cards((h["id"] for r in shown for h in r["history"]), now)},
                    section="jobs")
 
 
@@ -210,7 +213,8 @@ def job_detail(request, name):
         feeds = list(Feed.objects.filter(config__job=name).only("id", "name", "enabled", "interval_minutes", "next_run_at", "last_run_at", "url").order_by("name"))
         for f in feeds:
             f.schedule = Q.every(f.interval_minutes or row["interval"])
-    return _render(request, "job_detail.html", {"j": row, "page": page, "qs": qs_rest, "feeds": feeds, "tags": Q.tag_set()},
+    return _render(request, "job_detail.html", {"j": row, "page": page, "qs": qs_rest, "feeds": feeds, "tags": Q.tag_set(),
+                                                "run_cards": Q.run_cards((h["id"] for h in row["history"]), now)},
                    section="jobs")
 
 

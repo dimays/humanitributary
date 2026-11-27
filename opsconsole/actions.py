@@ -204,14 +204,18 @@ def execute_job(action: OpsAction, log) -> dict:
         raise Refused(why)
     before = _revision_high()
     runs = []
+    # What started the runs (ADR 0032): this action, who asked, and for a retry the failed run and its attempt.
+    retry_of = FetchRun.objects.filter(pk=action.params.get("run")).first() if action.kind == A.RETRY_RUN and action.params.get("run") else None
+    how = {"trigger": FetchRun.Trigger.RETRY if action.kind == A.RETRY_RUN else FetchRun.Trigger.MANUAL,
+           "triggered_by": action.requested_by, "ops_action": action.pk, "retry_of": retry_of}
     if action.params.get("feeds"):
         for fid in action.params["feeds"]:
-            got = run_named(name, feed=str(fid), log=log)
+            got = run_named(name, feed=str(fid), log=log, **how)
             if got is None:
                 raise Refused("another runner holds the lock")
             runs += got
     else:
-        got = run_named(name, log=log)
+        got = run_named(name, log=log, **how)
         if got is None:
             raise Refused("another runner holds the lock")
         runs += got

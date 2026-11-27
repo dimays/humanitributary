@@ -6,7 +6,9 @@
 - `run_due()` runs whatever is due, in registry order (sources, then entities, then processing, then upkeep),
   under a Postgres advisory lock: a second runner finds the lock taken and exits at once, and the lock dies with
   the process, so a crash never leaves it stuck. Runs left "running" by a crashed process are closed as failed.
-- Every run is a FetchRun (job, feed, timings, status, counts, error). A failing job never stops the others; one
+- Every run is a FetchRun (job, feed, timings, status, counts, error) that says what started it (ADR 0032): the
+  scheduler (with `scheduled_for`, when it became due), a console run or retry (the OpsAction's id, who asked, the
+  failed run it retries and the attempt number), or `run_job` from the shell. A failing job never stops the others; one
   that fails ALERT_AFTER_FAILURES runs in a row sends one alert (infra/alerts.py).
 - `loop()` is the worker process (Procfile `worker`: `run_jobs --loop`): it holds a second advisory lock, the
   scheduler lock, for its whole life, so only one worker schedules at a time (a second waits as a standby), and runs
@@ -172,18 +174,38 @@ def set_paused(name: str, paused: bool, *, by: str, reason: str) -> dict[str, di
     return jobs
 
 
-def is_due(j: Job, now, feed: Feed | None = None, *, paused: dict | None = None) -> bool:
-    if j.name in (paused_jobs() if paused is None else paused):
-        return False
+def due_at(j: Job, feed: Feed | None = None):
+    """When the job (a feed job: the feed) became due: a plain job's last start plus its interval, a feed's
+    `next_run_at`. None when it never ran (due at once). The run records it as `scheduled_for` (ADR 0032)."""
     if j.feed:
-        return feed is not None and feed.enabled and (feed.next_run_at is None or feed.next_run_at <= now)
-    last = FetchRun.objects.filter(job=j.name, feed__isnull=True).exclude(status=FetchRun.Status.RUNNING).order_by("-started_at").first()
-    return last is None or last.started_at + timedelta(minutes=j.interval) <= now
+        return feed.next_run_at if feed is not None else None
+    last = (FetchRun.objects.filter(job=j.name, feed__isnull=True).exclude(status=FetchRun.Status.RUNNING)
+            .order_by("-started_at").values_list("started_at", flat=True).first())
+    return last + timedelta(minutes=j.interval) if last else None
 
 
-def run_one(j: Job, *, feed: Feed | None = None, options: dict | None = None, fetcher: Fetcher | None = None, log=print) -> FetchRun:
+def _due(j: Job, now, feed: Feed | None, paused: dict) -> tuple[bool, object]:
+    """(due?, when it became due)."""
+    if j.name in paused or (j.feed and (feed is None or not feed.enabled)):
+        return False, None
+    at = due_at(j, feed)
+    return at is None or at <= now, at
+
+
+def is_due(j: Job, now, feed: Feed | None = None, *, paused: dict | None = None) -> bool:
+    return _due(j, now, feed, paused_jobs() if paused is None else paused)[0]
+
+
+def run_one(j: Job, *, feed: Feed | None = None, options: dict | None = None, fetcher: Fetcher | None = None, log=print,
+            trigger: str = FetchRun.Trigger.SCHEDULE, triggered_by: str = "", ops_action: int | None = None,
+            retry_of: FetchRun | None = None, scheduled_for=None) -> FetchRun:
+    """Run one job (one feed of a feed job) now and record it as a FetchRun, with what started it (ADR 0032): the
+    scheduler (`scheduled_for`: when it became due), an operator's run or retry (`ops_action`, `triggered_by`), or
+    the shell."""
     now = timezone.now()
-    run = FetchRun.objects.create(job=j.name, feed=feed, started_at=now)
+    run = FetchRun.objects.create(job=j.name, feed=feed, started_at=now, trigger=trigger, triggered_by=triggered_by[:200],
+                                  ops_action=ops_action, retry_of=retry_of, attempt=(retry_of.attempt + 1) if retry_of else 1,
+                                  scheduled_for=scheduled_for if trigger == FetchRun.Trigger.SCHEDULE else None)
     label = j.name + (f" [{feed.name}]" if feed else "")
     with runlog.capture(run) as cap:
         cap.add("INFO", f"{label} started" + (f" with {json.dumps(options, sort_keys=True, default=str)}" if options else ""), logger="ingest.jobs")
@@ -261,15 +283,18 @@ def run_due(*, only: list[str] | None = None, log=print, fetcher_factory=Fetcher
                 for feed in feeds_for(j.name).order_by("name"):
                     if stopping():
                         return runs
-                    if is_due(j, now_, feed, paused=paused):
+                    due, at = _due(j, now_, feed, paused)
+                    if due:
                         gap()
-                        runs.append(run_one(j, feed=feed, fetcher=fetcher_factory() if fetcher_factory is not Fetcher else None, log=log))
+                        runs.append(run_one(j, feed=feed, fetcher=fetcher_factory() if fetcher_factory is not Fetcher else None, log=log,
+                                            scheduled_for=at))
             else:
                 if stopping():
                     return runs
-                if is_due(j, now_, paused=paused):
+                due, at = _due(j, now_, None, paused)
+                if due:
                     gap()
-                    runs.append(run_one(j, fetcher=fetcher_factory() if fetcher_factory is not Fetcher else None, log=log))
+                    runs.append(run_one(j, fetcher=fetcher_factory() if fetcher_factory is not Fetcher else None, log=log, scheduled_for=at))
         gap()
     finally:
         unlock()
@@ -347,8 +372,11 @@ def loop(*, tick: int | None = None, log=print, stop: Stop | None = None, max_ti
     return ticks
 
 
-def run_named(name: str, *, feed: str | None = None, options: dict | None = None, log=print, fetcher=None) -> list[FetchRun] | None:
-    """Run one job now, due or not, paused or not (every enabled feed of a feed job, or the one named)."""
+def run_named(name: str, *, feed: str | None = None, options: dict | None = None, log=print, fetcher=None,
+              trigger: str = FetchRun.Trigger.MANUAL, triggered_by: str = "shell", ops_action: int | None = None,
+              retry_of: FetchRun | None = None) -> list[FetchRun] | None:
+    """Run one job now, due or not, paused or not (every enabled feed of a feed job, or the one named). Its runs are
+    `manual` by "shell" unless the console says otherwise (a run or a retry, with its OpsAction's id and who asked)."""
     _load_registry()
     if name not in REGISTRY:
         raise KeyError(f"no job {name!r}; known: {', '.join(REGISTRY)}")
@@ -362,7 +390,10 @@ def run_named(name: str, *, feed: str | None = None, options: dict | None = None
             qs = feeds_for(name, enabled_only=feed is None)
             if feed:
                 qs = qs.filter(pk=int(feed)) if feed.isdigit() else qs.filter(name=feed)
-            return [run_one(j, feed=f, options=options, fetcher=fetcher, log=log) for f in qs.order_by("name")]
-        return [run_one(j, options=options, fetcher=fetcher, log=log)]
+            how = dict(trigger=trigger, triggered_by=triggered_by, ops_action=ops_action)
+            return [run_one(j, feed=f, options=options, fetcher=fetcher, log=log, **how,
+                            retry_of=retry_of if retry_of is not None and retry_of.feed_id == f.pk else None) for f in qs.order_by("name")]
+        return [run_one(j, options=options, fetcher=fetcher, log=log, trigger=trigger, triggered_by=triggered_by, ops_action=ops_action,
+                        retry_of=retry_of)]
     finally:
         unlock()

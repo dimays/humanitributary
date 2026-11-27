@@ -10,8 +10,9 @@ Completed (ok, or partial: completed with errors) or Failed; a run asked for fro
 the worker is Pending, or Cancelled if it was withdrawn; a job's next due time is Scheduled, or Paused.
 """
 
+import json
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.db import connection
@@ -299,6 +300,138 @@ def timeline(now, hours: int = TIMELINE_HOURS) -> dict:
         t += timedelta(hours=1)
     return {"rows": rows, "ticks": ticks, "start": start, "end": now, "hours": hours,
             "quiet": [j for j in order if not by_job.get(j)], "total": sum(len(v) for v in by_job.values())}
+
+
+# ── Run cards: what the hover card over a run shows (ADR 0032) ─────────────────────────────────────────────────────
+
+USUAL_RUNS = 30      # a job's usual runtime: the median and p90 of its last this many completed runs
+USUAL_MIN = 5        # fewer completed runs than this: too few to compare against
+SLOW_RATIO = 1.5     # slow: at least this many times the median, and longer than the p90
+EARLIER_SHOWN = 3    # earlier attempts of a retry drawn in its card
+CARD_COUNTS = 4      # numbers from a run's counts in its card
+
+# The visible runs with their feed, the action that started them, each job's usual runtime and each retry's earlier
+# attempts (following retry_of, nearest last): one query, whatever the runs are.
+RUN_CARDS_SQL = """
+WITH RECURSIVE
+v AS (SELECT id, job, feed_id, status, started_at, finished_at, scheduled_for, trigger, triggered_by, ops_action,
+             attempt, retry_of_id, counts, left(split_part(error, E'\\n', 1), 400) AS error
+      FROM ingest_fetchrun WHERE id = ANY(%s)),
+usual AS (SELECT j.job, count(*) AS n, percentile_cont(0.5) WITHIN GROUP (ORDER BY r.s) AS p50,
+                 percentile_cont(0.9) WITHIN GROUP (ORDER BY r.s) AS p90
+          FROM (SELECT DISTINCT job FROM v) j
+          CROSS JOIN LATERAL (SELECT extract(epoch FROM finished_at - started_at)::float AS s FROM ingest_fetchrun
+                              WHERE job = j.job AND status IN ('ok', 'partial') AND finished_at IS NOT NULL
+                              ORDER BY started_at DESC, id DESC LIMIT %s) r
+          GROUP BY j.job),
+chain(run_id, prev_id, depth) AS (
+    SELECT id, retry_of_id, 1 FROM v WHERE retry_of_id IS NOT NULL
+  UNION ALL
+    SELECT c.run_id, r.retry_of_id, c.depth + 1 FROM chain c JOIN ingest_fetchrun r ON r.id = c.prev_id
+    WHERE r.retry_of_id IS NOT NULL AND c.depth < %s),
+earlier AS (SELECT c.run_id, json_agg(json_build_object('id', r.id, 'status', r.status, 'started', r.started_at, 'finished', r.finished_at,
+                                                         'attempt', r.attempt, 'requested', ea.created_at) ORDER BY c.depth DESC) AS runs
+            FROM chain c JOIN ingest_fetchrun r ON r.id = c.prev_id LEFT JOIN opsconsole_opsaction ea ON ea.id = r.ops_action
+            GROUP BY c.run_id)
+SELECT v.id, v.job, f.name, v.status, v.started_at, v.finished_at, v.scheduled_for, v.trigger, v.triggered_by, v.ops_action,
+       v.attempt, v.retry_of_id, v.counts, v.error, u.n, u.p50, u.p90, a.created_at, a.started_at, e.runs
+FROM v LEFT JOIN ingest_feed f ON f.id = v.feed_id
+       LEFT JOIN usual u ON u.job = v.job
+       LEFT JOIN opsconsole_opsaction a ON a.id = v.ops_action
+       LEFT JOIN earlier e ON e.run_id = v.id
+"""
+
+
+def _secs(a, b) -> float | None:
+    return None if a is None or b is None else round(max((b - a).total_seconds(), 0.0), 1)
+
+
+def _epoch(t) -> int | None:
+    return round(t.timestamp()) if t else None
+
+
+def stages(run: dict, now, earlier: list[dict] = ()) -> tuple[list[dict], list[str]]:
+    """A run's mini-timeline, oldest first: for a retry its earlier attempts (each its run, then the gap until the next
+    attempt was asked for), then the wait (a scheduled run: from when it became due to its start; a console run: from
+    the request to its start, the worker's pick-up in between), then the run itself (to now while it runs).
+    → (segments, the stages not recorded). Each segment: {"k": attempt | gap | wait | run, "s": seconds, ...}."""
+    segs, missing = [], []
+    wait_from = run["scheduled_for"] if run["trigger"] == "schedule" else run["requested"]
+    chain = list(earlier)
+    for i, e in enumerate(chain):
+        end = e["finished"] or e["started"]
+        segs.append({"k": "attempt", "s": _secs(e["started"], end), "state": run_state(e["status"]), "n": e["attempt"], "id": e["id"]})
+        nxt = (chain[i + 1]["requested"] or chain[i + 1]["started"]) if i + 1 < len(chain) else (wait_from or run["started"])
+        segs.append({"k": "gap", "s": _secs(end, nxt)})
+    if wait_from is not None:
+        seg = {"k": "wait", "s": _secs(min(wait_from, run["started"]), run["started"])}
+        if run["trigger"] != "schedule" and run["picked"]:
+            seg["picked"] = _secs(min(wait_from, run["picked"]), run["picked"])  # requested → the worker took it
+        segs.append(seg)
+    elif run["trigger"] == "schedule" or run["ops_action"]:
+        missing.append("wait")  # older runs, a first run: never recorded, never guessed
+    segs.append({"k": "run", "s": _secs(run["started"], run["finished"] or now)})  # its color: the card's state
+    return segs, missing
+
+
+def usual(seconds: float | None, n: int | None, p50: float | None, p90: float | None) -> dict:
+    """How a runtime compares with its job's usual one (the median and p90 of its last USUAL_RUNS completed runs):
+    {"ratio": runtime / median, "slow": at least SLOW_RATIO times the median and over the p90}. Empty below USUAL_MIN
+    completed runs or without a runtime: too few to compare."""
+    if not n or n < USUAL_MIN or seconds is None or not p50:
+        return {}
+    return {"ratio": round(seconds / p50, 1), "slow": seconds >= SLOW_RATIO * p50 and seconds > p90}
+
+
+def key_counts(counts: dict, n: int = CARD_COUNTS) -> list[list]:
+    """A card's few numbers: errors first, then the largest, without "requests" (shown on its own)."""
+    items = [(k, v) for k, v in (counts or {}).items() if isinstance(v, (int, float)) and v and k != "requests"]
+    items.sort(key=lambda kv: (kv[0] != "errors", -kv[1], kv[0]))
+    return [[k.replace("_", " "), v] for k, v in items[:n]]
+
+
+def run_cards(ids, now) -> dict:
+    """The hover cards of the runs on a page (the Dashboard's run graph, the history strips), as compact JSON the page
+    embeds and a small script draws (ADR 0032). One query (RUN_CARDS_SQL) for the runs, their feeds, the actions that
+    started them, each job's usual runtime and each retry's earlier attempts. Times are epoch seconds (the browser
+    shows them in its own time zone); optional keys are left out when empty, to keep the page small."""
+    from django.urls import reverse
+
+    ids = sorted({int(i) for i in ids})
+    out = {"url": reverse("opsconsole:run", args=[0]), "action_url": reverse("opsconsole:action", args=[0]), "jobs": {}, "runs": {}}
+    if not ids:
+        return out
+    with connection.cursor() as c:
+        c.execute(RUN_CARDS_SQL, [ids, USUAL_RUNS, EARLIER_SHOWN])
+        rows = c.fetchall()
+    cols = ("id", "job", "feed", "status", "started", "finished", "scheduled_for", "trigger", "by", "ops_action", "attempt",
+            "retry_of", "counts", "error", "n", "p50", "p90", "requested", "picked", "earlier")
+    runs = [dict(zip(cols, r)) for r in rows]
+    reg = _registry()
+    for r in runs:
+        if isinstance(r["counts"], str):  # a raw cursor may hand jsonb back as text
+            r["counts"] = json.loads(r["counts"] or "{}")
+        earlier = json.loads(r["earlier"]) if isinstance(r["earlier"], str) else (r["earlier"] or [])
+        for e in earlier:  # json_agg's times are ISO text
+            for k in ("started", "finished", "requested"):
+                e[k] = datetime.fromisoformat(e[k]) if e.get(k) else None
+        if r["job"] not in out["jobs"]:
+            j = reg.get(r["job"])
+            out["jobs"][r["job"]] = {"tags": list(j.tags) if j else [], "n": r["n"] or 0,
+                                     **({"p50": round(r["p50"], 1), "p90": round(r["p90"], 1)} if r["n"] else {})}
+        secs = _secs(r["started"], r["finished"] or now)
+        segs, missing = stages(r, now, earlier)
+        card = {"job": r["job"], "state": run_state(r["status"]), "trigger": r["trigger"], "attempt": r["attempt"],
+                "t0": _epoch(r["started"]), "t1": _epoch(r["finished"]), "s": secs, "stages": segs,
+                "counts": key_counts(r["counts"])}
+        optional = {"feed": r["feed"], "partial": r["status"] == "partial", "by": r["by"], "action": r["ops_action"],
+                    "retry_of": r["retry_of"], "requests": (r["counts"] or {}).get("requests"), "missing": missing,
+                    **usual(secs, r["n"], r["p50"], r["p90"]),
+                    "error": first_line(r["error"]) if r["status"] in ("failed", "partial") else "",
+                    "requested": _epoch(r["requested"]), "due": _epoch(r["scheduled_for"])}
+        card.update({k: v for k, v in optional.items() if v not in (None, "", [], False)})
+        out["runs"][str(r["id"])] = card
+    return out
 
 
 def fetch_runs(*, job="", state="", tag="", feed=None):

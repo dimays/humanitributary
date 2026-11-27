@@ -92,6 +92,9 @@ erDiagram
     FetchRun {
         string job
         string status
+        string trigger
+        datetime scheduled_for
+        int attempt
         json counts
         string error
     }

@@ -6,6 +6,7 @@ covers:
   - opsconsole/**
   - tests/test_opsconsole.py
   - tests/test_opsconsole_actions.py
+  - tests/test_opsconsole_cards.py
 ---
 
 The operations console is a handful of web pages for staff, at `/ops/` on the data host. Its shape is borrowed from
@@ -48,8 +49,9 @@ Revision, a release, an action and the action log.
 
 | Page | URL | What it shows |
 |---|---|---|
-| Dashboard | `/ops/` | **One status line**: "All good", or "N problems" with one sentence each, worst first (a store that can't be reached; no worker running and no run for 30 minutes; a job failing runs in a row, red at the alert threshold; stuck leases; jobs overdue by 30 minutes; no live release), each linking to where to look. **Runs, last 24 hours**: the run graph, one row per job that ran, a bar per run placed at its start and as wide as it took (at least a sliver), green Completed, amber completed with errors, red Failed, blue Running; each bar links to its run. **Needs attention**: each job's (or feed's) last run that failed, with Retry. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck. Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
-| Jobs | `/ops/jobs/` | One row per job, in run order: its name and one-sentence description (the docstring's first sentence), its tags, its schedule in words ("every 15 minutes", "every hour" with "per feed · 1 of 1 on" for a feed job), its last run's state and age, its last ten runs as squares (oldest left, each its state's color and a link to the run; empty slots when it has run fewer times), its next run (or Paused, or Pending), and Run now / Pause, or Resume. Chips across the top filter by tag (`?tag=`), with counts. |
+| Dashboard | `/ops/` | **One status line**: "All good", or "N problems" with one sentence each, worst first (a store that can't be reached; no worker running and no run for 30 minutes; a job failing runs in a row, red at the alert threshold; stuck leases; jobs overdue by 30 minutes; no live release), each linking to where to look. **Runs, last 24 hours**: the run graph, one row per job that ran, a bar per run placed at its start and as wide as it took (at least a sliver), green Completed, amber completed with errors, red Failed, blue Running; each bar links to its run, and pointing at it
+(or focusing it, or tapping it once) shows its [run card](#run-cards). **Needs attention**: each job's (or feed's) last run that failed, with Retry. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck. Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
+| Jobs | `/ops/jobs/` | One row per job, in run order: its name and one-sentence description (the docstring's first sentence), its tags, its schedule in words ("every 15 minutes", "every hour" with "per feed · 1 of 1 on" for a feed job), its last run's state and age, its last ten runs as squares (oldest left, each its state's color and a link to the run, with its [run card](#run-cards) on hover, focus or tap; empty slots when it has run fewer times), its next run (or Paused, or Pending), and Run now / Pause, or Resume. Chips across the top filter by tag (`?tag=`), with counts. |
 | A job | `/ops/jobs/<name>/` | The description and tags; the schedule, next run, last run, failures in a row, console runs waiting; the ten-run strip and whether it may be run again straight away (`not_idempotent`); for a feed job its feeds (schedule, last fetched, next, a Run button each); its run history, 25 a page. |
 | Runs | `/ops/runs/` | Every run, newest first, 50 a page: state, run, job, started, duration, a counts summary (or the masked error's start). Filters: job, state and tag. Without a state, "Up next" (five) sits above the list; the states Scheduled and Paused list the jobs' next runs, Pending and Cancelled the console's run requests (waiting, or withdrawn), the others the runs. |
 | A run | `/ops/runs/<id>/` | The state (Completed with errors for a partial run), the job's description, older and newer runs of the job, Retry when it failed; when it started and how long it took, its feed, how much content it wrote; its counts as a key and value list (errors first); **its log**: one line each with the time (UTC, to the millisecond), the level in its color (INFO blue, WARNING amber, ERROR red), the logger and the message, with "Warnings and errors" to show only those and "Plain text" (`?format=text`) for the raw lines; the error with its traceback; and the Revisions it wrote (the first 20, each linking to its diff). |
@@ -85,7 +87,41 @@ action's page reloads every 3 seconds with a `<meta http-equiv="refresh">`.
 
 **Look.** One stylesheet in `base.html`: a system font stack, a left sidebar (a top bar of icons under 860 px), white
 cards on a light gray page, the state colors as CSS variables, redefined for `prefers-color-scheme: dark`. No
-front-end framework, no build step; the only script besides the reload is Mermaid on Docs pages.
+front-end framework, no build step; the only scripts besides the reload are the run cards' (below) and Mermaid on
+Docs pages.
+
+## Run cards
+
+Pointing at a run on the Dashboard's run graph or in a ten-run strip (Jobs, a job's page) shows a card about it
+after 80 ms; moving to the next bar swaps the card at once ([ADR 0032](../adr/0032-run-cards-and-what-started-a-run.md)).
+
+| Part | What it shows |
+|---|---|
+| Head | The job, its feed, its tags as chips, the state badge (Completed with errors for a partial run). |
+| Trigger | **Scheduled** (started by the scheduler), **Manual** ("Run now" by who, with a link to the action; or `run_job` from the shell) or **Retry** (by who, of which run, the action). From `FetchRun.trigger` ([ingestion](ingestion.md#the-job-runner)). |
+| Runtime | How long it ran (so far, while running), the job's usual runtime: the median and p90 of its last 30 completed (`ok` or `partial`) runs, and "N× usual": amber when at least 1.5 times the median and over the p90 (`queries.SLOW_RATIO`), green at two thirds or less, else "about usual". Fewer than 5 completed runs: no comparison ("too few to compare"). |
+| Stages | One bar of colored segments, each listed below it with its duration: for a retry each earlier attempt (red when it failed) and the gap until the next was asked for (hatched), at most 3; the wait (gray): due to start for a scheduled run (`scheduled_for`), request to start for a console run, with when the worker picked it up; the run in its state's color. A run without `scheduled_for` (older runs, a first run) says "Wait: not recorded"; nothing is guessed. Segments are at least 3% wide, so a 5-second run shows beside a 3-hour gap. |
+| Times and numbers | Started, finished, due or requested, in the browser's time zone (named at the bottom); up to four counts (errors first, then the largest); requests made (`counts["requests"]`, or "not counted"); the attempt when it is a retry. |
+| Error | The error's first line, masked, for a failed or partial run. |
+| Link | "Open run #N" (the bar itself also links to the run). |
+
+**How it stays fast.** The view hands the ids of the runs it shows to `queries.run_cards(ids, now)`, which reads
+everything in one statement, `RUN_CARDS_SQL`: the runs (the error cut to its first line in SQL), their feeds, the
+OpsActions that started them (request and pick-up times), each job's usual runtime (`percentile_cont` over a
+`LATERAL` scan of the job's newest completed runs through `fetchrun_job_started_idx`) and each retry's earlier
+attempts (a recursive CTE on `retry_of`). `queries.stages()` turns a run into its segments and `queries.usual()`
+compares it. The page embeds the result once (`{% json_data %}`: `json_script` without spaces) and
+`_run_cards.html`'s script draws a card from it on demand, caching each card's markup: no request per hover. Times
+are epoch seconds, durations seconds; keys with nothing to say are left out. About 270 bytes a run; the page makes
+one query more than without cards.
+
+**How it behaves.** The card is a single `role="tooltip"` element; the bar or square it describes gets
+`aria-describedby` while it shows. Each bar and square keeps its link and an `aria-label` in words (job, time,
+state, duration), and no `title`, so the browser's own tooltip never doubles it. The card opens on keyboard focus,
+stays while the pointer is over it (its links work), closes when the pointer leaves, focus moves on, or Escape. On a
+touch screen the first tap shows the card and a second tap on the same run opens it; a tap elsewhere closes it. It
+is placed below its run, else above, else beside, always inside the window, and follows on scroll. Colors are the
+console's variables, so it follows the dark scheme. The Dashboard's auto-refresh waits while a card is open.
 
 ## Where the numbers come from
 
@@ -101,6 +137,7 @@ ten times the rows and compares; the six main pages make at most 25 queries, a d
 | Needs attention | From the same last runs: each job's (each feed's) whose status is `failed`. |
 | Next due | A plain job: its last run's start plus its interval. A feed job: the earliest `next_run_at` of its enabled feeds. Overdue means more than 30 minutes past. A job that never ran is due now. |
 | The run graph | FetchRuns started in the last 24 hours (on the `started_at` index), placed as shares of the window in Python. |
+| Run cards | `RUN_CARDS_SQL` ([above](#run-cards)): the shown runs, their feeds and actions, each job's median and p90 over its last 30 completed runs, each retry's earlier attempts; one query per page. |
 | The worker | `pg_locks`: whether a session holds the scheduler lock (`ingest/jobs.py` `SCHEDULER_LOCK_KEY`, held by `run_jobs --loop` for its life) or the runner's lock (`LOCK_KEY`). With neither and no run started for 30 minutes, the Dashboard says no worker is running jobs. |
 | Agent queues | One `GROUP BY kind` with a `FILTER` per number: waiting (`queued`), in progress (`claimed`, lease live), stuck (`claimed`, lease expired), done and failed today, failed; and one count of today's tasks by the jobs with a daily cap. "Today" starts at local midnight, as the caps do. |
 | A run's log | The run's `RunLog` row (`ingest/runlog.py`, [ingestion](ingestion.md#the-job-runner)): one row, read only on the run's page. Lines are masked when captured and masked again when shown. |
@@ -215,7 +252,8 @@ on Releases (and the unreleased changes); Roll back to this on each release that
 ## Template helpers
 
 `opsconsole/templatetags/ops.py` holds the tags and filters the templates use: `badge` (a state badge), `task_state`
-and `action_state` (a task's or an action's status in state words), `history_strip` (the ten-run squares),
+and `action_state` (a task's or an action's status in state words), `history_strip` (the ten-run squares, each with
+`data-run` for its card and an `aria-label`), `json_data` (`json_script` without spaces, for the run cards),
 `level_class` and `logtime` (a log line's color and time), `every` (an interval in words), durations (`seconds`),
 ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `words` (a key as words), JSON
 (`pretty`), `act` (a one-button POST form for an action, only for operators) and `took` (how long an action ran).
@@ -228,7 +266,8 @@ ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `wor
 - anonymous and non-staff users are redirected, a POST to a page is refused, staff get `noindex` and `no-store` on
   every page, another host gets a 404 when `OPS_HOSTS` is set, the sidebar has exactly the six items, the admin
   links to the console, and the old addresses redirect;
-- every page and detail page renders against `seed()` (runs over the last day with their logs, a job at the alert
+- every page and detail page renders against `seed()` (runs over the last day with their logs, most with the time
+  they became due, a manual run from the console and a run retried twice, a job at the alert
   threshold with a key in its error, a running run, tasks with a stuck lease, a pending and a cancelled console run,
   a paused job, agents' and a reviewer's edits, a release, the waves' state) and shows what it should: the problems,
   the run graph, attention, up next and the queues; tags, schedules in words and the ten-run strips, the tag filter;
@@ -243,6 +282,19 @@ ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `wor
   failure's traceback, other threads ignored, old logs pruned;
 - reading every page writes nothing;
 - each page's query count is the same after the tables grow tenfold.
+
+`tests/test_opsconsole_cards.py` holds the run cards to theirs:
+
+- what started a run: the scheduler (with `scheduled_for`, empty for a first run; a feed job's `next_run_at`),
+  `run_job` from the shell (manual, "shell"), "Run now" through the worker (manual, who, the action), and two retries
+  in a row (retry, the retried run, attempts 2 and 3); the backfill from the audit rows, leaving other runs alone;
+- the stages: a scheduled run's wait, an older run's "not recorded", a console run's queue and pick-up, a shell run
+  with no wait, a retry's attempts and gaps, a running run up to now; the usual-runtime comparison and its minimum;
+- `run_cards`: the median and p90 from SQL over the last 30 completed runs only, a retry card's whole shape (keys
+  left out when empty, epoch times, the error's first line masked), at most 3 earlier attempts, and one query for 3
+  runs or 63 (with a long retry chain);
+- the pages: every Dashboard bar and every strip square carries `data-run`, its card and an `aria-label`, no
+  `title`; the script has the tooltip role, `aria-describedby`, Escape, focus, the 80 ms delay and no `fetch`.
 
 `tests/test_opsconsole_actions.py` holds the actions to theirs:
 
@@ -268,6 +320,7 @@ it on a development database only.
 
 | Change | What it needs |
 |---|---|
+| Something new on a run card | A column in `RUN_CARDS_SQL` (never a second query per run), its key in `run_cards` (left out when empty), its line in `_run_cards.html`'s `render`, a test in `test_opsconsole_cards.py`; [ADR 0032](../adr/0032-run-cards-and-what-started-a-run.md) if it changes what is recorded |
 | A new figure | A function in `opsconsole/queries.py` that aggregates in SQL, its place on a page (a card, not a table, unless it is a list), a line in `test_opsconsole.py`'s page tests, and the query-count test still equal; this chapter |
 | A new page | Think twice: the sidebar is six items on purpose. A detail page linked from one of them, its test, the query-count test |
 | A new problem on the Dashboard | `views.problems()`: one sentence, a level (`bad` or `warn`) and where to look; a test |

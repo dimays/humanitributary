@@ -78,7 +78,9 @@ def seed(now=None, *, runs_per_job: int = 6, extra_tasks: int = 0, publish_relea
             if error:
                 counts = {**counts, "errors": 1}
             took = 3 + 7 * (i % 9)
-            r = FetchRun.objects.create(job=job, started_at=t, finished_at=t + timedelta(seconds=took), status=status, counts=counts, error=error)
+            due = t - timedelta(seconds=4 + (i * 37) % 80) if i >= 2 else None  # the first two from before scheduled_for was recorded
+            r = FetchRun.objects.create(job=job, started_at=t, finished_at=t + timedelta(seconds=took), status=status, counts=counts, error=error,
+                                        scheduled_for=due)
             if i >= n - 2:
                 at = t.isoformat(timespec="milliseconds")
                 lines = [[at, "INFO", "ingest.jobs", f"{job} started"]]
@@ -90,7 +92,32 @@ def seed(now=None, *, runs_per_job: int = 6, extra_tasks: int = 0, publish_relea
                 lines.append([(t + timedelta(seconds=took)).isoformat(timespec="milliseconds"), "ERROR" if status == "failed" else "INFO",
                               "ingest.jobs", f"{job} finished: {status} in {took:.1f} s"])
                 _log(r, lines)
-    FetchRun.objects.create(job="gap_pointers", started_at=now - timedelta(minutes=1), status="running")
+    FetchRun.objects.create(job="gap_pointers", started_at=now - timedelta(minutes=1), status="running", scheduled_for=now - timedelta(minutes=1, seconds=20))
+    k = OpsAction.objects.count()
+
+    def console_run(kind, job, asked, picked, took, status, *, retry_of=None, error="", counts=None):
+        a = OpsAction.objects.create(kind=kind, target=f"job:{job}", params={"job": job, **({"run": retry_of.pk} if retry_of else {})},
+                                     reason="seeded: see whether it passes now", requested_by="human:owner", idempotency_key=f"seed-{kind}-{job}-{k}-{asked:%H%M}",
+                                     runs_in="worker", status="done", started_at=picked, finished_at=picked + timedelta(seconds=took + 1))
+        OpsAction.objects.filter(pk=a.pk).update(created_at=asked)
+        start = picked + timedelta(seconds=1)
+        r = FetchRun.objects.create(job=job, started_at=start, finished_at=start + timedelta(seconds=took), status=status, error=error,
+                                    counts=counts or {"checked": 40, "requests": 9, **({"errors": 1} if error else {})},
+                                    trigger="retry" if retry_of else "manual", triggered_by="human:owner", ops_action=a.pk,
+                                    retry_of=retry_of, attempt=retry_of.attempt + 1 if retry_of else 1)
+        OpsAction.objects.filter(pk=a.pk).update(result={"runs": [{"id": r.pk, "feed": None, "status": status, "counts": r.counts}]})
+        return r
+
+    # A manual run, and a scheduled run that failed, was retried, failed again and passed on the second retry.
+    console_run("run_job", "entity_relations", now - timedelta(hours=2, minutes=4), now - timedelta(hours=2, minutes=3, seconds=15), 18, "ok",
+                counts={"entities": 64, "relations": 210, "requests": 33})
+    t = now - timedelta(hours=5, minutes=40)
+    first = FetchRun.objects.create(job="gap_pointers", started_at=t, finished_at=t + timedelta(seconds=9), status="failed", scheduled_for=t - timedelta(seconds=25),
+                                    error="HTTPError: 502 Bad Gateway from en.wikipedia.org\nTraceback (most recent call last): …", counts={"errors": 1, "requests": 3})
+    second = console_run("retry_run", "gap_pointers", t + timedelta(minutes=12), t + timedelta(minutes=13), 7, "failed", retry_of=first,
+                         error="HTTPError: 502 Bad Gateway from en.wikipedia.org")
+    console_run("retry_run", "gap_pointers", t + timedelta(minutes=41), t + timedelta(minutes=41, seconds=20), 46, "ok", retry_of=second,
+                counts={"tasks": 20, "pointers": 57, "requests": 61})
     if feed:
         for i in range(runs_per_job * 4):
             t = now - timedelta(hours=runs_per_job * 4 - i)
@@ -149,7 +176,6 @@ def seed(now=None, *, runs_per_job: int = 6, extra_tasks: int = 0, publish_relea
                      "coverage": {"W1": {"share_covered": 0.84, "pairs": 2085, "empty": 300, "sparse": 10}},
                      "counts": {"W1.held_cap": 270, "W1.held_branch": 30, "W1.recent_written": 3, "queued": 4}, "per_day": 40}}})
     jobs.set_paused("year_pages", True, by="human:owner", reason="the 2026 pages are being reorganized")
-    k = OpsAction.objects.count()
     OpsAction.objects.create(kind="run_job", target="job:facts_sweep", params={"job": "facts_sweep"}, reason="a new claim splitter",
                              requested_by="human:owner", idempotency_key=f"seed-pending-{k}", runs_in="worker")
     OpsAction.objects.create(kind="run_job", target="job:pageviews", params={"job": "pageviews"}, reason="check the new limit",

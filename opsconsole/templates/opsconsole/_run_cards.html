@@ -1,0 +1,151 @@
+{% load ops %}{% json_data run_cards "run-cards" %}
+<script>
+/* Run cards (ADR 0032): hover a run's bar or square (after 80 ms), focus it with the keyboard, or tap it once on a
+   touch screen, and a card shows what the run was: job, tags, state, what started it, its runtime against the job's
+   usual one, its stages as one bar, its times (this browser's time zone), counts, requests and error. Everything is
+   in the JSON above, made by queries.run_cards() with the page: no request per hover. Escape closes it. */
+(function () {
+  var src = document.getElementById("run-cards"), data;
+  try { data = JSON.parse(src.textContent); } catch (e) { return; }
+  var card = document.createElement("div"), cache = {}, current = null, showT = 0, hideT = 0, touch = false;
+  card.id = "run-card"; card.className = "run-card"; card.setAttribute("role", "tooltip"); card.hidden = true;
+  document.body.appendChild(card);
+  var STATE = { completed: "Completed", failed: "Failed", running: "Running" };
+  var zone = ""; try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
+  function dur(s) {  /* the console's `seconds` filter */
+    if (s == null) return "–";
+    if (s < 60) return s.toFixed(1) + " s";
+    if (s < 3600) return Math.floor(s / 60) + " m " + Math.floor(s % 60) + " s";
+    return Math.floor(s / 3600) + " h " + Math.floor(s % 3600 / 60) + " m";
+  }
+  function when(t) {
+    if (t == null) return "–";
+    var d = new Date(t * 1000), today = new Date().toDateString() === d.toDateString();
+    var hms = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+    return today ? hms : d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + hms;
+  }
+  function stateWord(r) { return r.partial ? "Completed with errors" : STATE[r.state] || r.state; }
+  function trigger(r, id) {
+    var by = r.by && r.by !== "shell" ? " by " + esc(r.by) : "";
+    var act = r.action ? ' · <a tabindex="-1" href="' + data.action_url.replace("/0/", "/" + r.action + "/") + '">action #' + r.action + "</a>" : "";
+    if (r.trigger === "retry") return '<span class="rc-trig retry">Retry</span><span>' + by.trim() +
+      (r.retry_of ? ' of <a tabindex="-1" href="' + data.url.replace("/0/", "/" + r.retry_of + "/") + '">#' + r.retry_of + "</a>" : "") + act + "</span>";
+    if (r.trigger === "manual") return '<span class="rc-trig manual">Manual</span><span>' +
+      (r.by === "shell" ? "run_job from the shell" : "Run now" + by) + act + "</span>";
+    return '<span class="rc-trig schedule">Scheduled</span><span>started by the scheduler</span>';
+  }
+  function segLabel(g, r) {
+    if (g.k === "attempt") return "Attempt " + g.n + " " + (g.state === "failed" ? "failed" : g.state);
+    if (g.k === "gap") return "Until the retry";
+    if (g.k === "wait") return r.trigger === "schedule" ? "Wait after due" : "Queued";
+    return r.state === "running" ? "Running" : "Ran";
+  }
+  function segClass(g, r) {
+    if (g.k === "attempt") return "k-run s-" + g.state;
+    if (g.k === "run") return "k-run s-" + r.state + (r.partial ? " partial" : "");
+    return "k-" + g.k;
+  }
+  function bar(r) {
+    var segs = r.stages.filter(function (g) { return g.s > 0 || g.k === "run"; });
+    var total = segs.reduce(function (a, g) { return a + (g.s || 0); }, 0) || 1;
+    var w = segs.map(function (g) { return Math.max(100 * (g.s || 0) / total, 3); }), sum = w.reduce(function (a, b) { return a + b; }, 0);
+    return '<div class="rc-bar" aria-hidden="true">' + segs.map(function (g, i) {
+      return '<i class="' + segClass(g, r) + '" style="width:' + (100 * w[i] / sum).toFixed(2) + '%"></i>';
+    }).join("") + "</div>";
+  }
+  function stages(r) {
+    var li = r.stages.map(function (g) {
+      var extra = g.picked != null ? ' <span class="faint">picked up after ' + dur(g.picked) + "</span>" : "";
+      return '<li><i class="' + segClass(g, r) + '"></i>' + segLabel(g, r) + " <b>" + dur(g.s) + "</b>" + extra + "</li>";
+    });
+    if ((r.missing || []).indexOf("wait") >= 0) li.unshift('<li class="faint"><i class="k-none"></i>Wait: not recorded</li>');
+    return '<ul class="rc-stages">' + li.join("") + "</ul>";
+  }
+  function usual(r, job) {
+    if (!job.n) return '<div><span>Usual</span><b class="faint">–</b><small>no completed run yet</small></div>';
+    var cmp = "";
+    if (r.ratio != null) {
+      var cls = r.slow ? "slow" : r.ratio <= 0.67 ? "fast" : "";
+      cmp = '<span class="rc-cmp ' + cls + '">' + (cls ? r.ratio.toFixed(1) + "× usual" : "about usual") + "</span>";
+    }
+    return '<div><span>Usual (median)</span><b>' + dur(job.p50) + '</b><small>p90 ' + dur(job.p90) + " · last " + job.n + " run" + (job.n === 1 ? "" : "s") +
+      (r.ratio == null ? ", too few to compare" : "") + "</small></div>" + cmp;
+  }
+  function meta(r) {
+    var rows = [["Started", when(r.t0)], ["Finished", r.t1 ? when(r.t1) : r.state === "running" ? "still running" : "–"]];
+    if (r.due) rows.push(["Due", when(r.due)]);
+    if (r.requested) rows.push(["Requested", when(r.requested)]);
+    if (r.counts && r.counts.length) rows.push(["Counts", r.counts.map(function (c) { return esc(c[0]) + " <b>" + esc(c[1]) + "</b>"; }).join(" · ")]);
+    rows.push(["Requests", r.requests != null ? esc(r.requests) : '<span class="faint">not counted</span>']);
+    if (r.attempt > 1) rows.push(["Attempt", esc(r.attempt)]);
+    return '<dl class="rc-meta">' + rows.map(function (x) { return "<dt>" + x[0] + "</dt><dd>" + x[1] + "</dd>"; }).join("") + "</dl>";
+  }
+  function render(id) {
+    if (cache[id]) return cache[id];
+    var r = data.runs[id];
+    if (!r) return "";
+    var job = data.jobs[r.job] || { tags: [], n: 0 };
+    return (cache[id] = '<div class="rc-head"><div class="rc-title"><b>' + esc(r.job) + "</b>" + (r.feed ? '<span class="muted">' + esc(r.feed) + "</span>" : "") + "</div>" +
+      '<span class="badge s-' + esc(r.state) + '"><i></i>' + stateWord(r) + "</span></div>" +
+      (job.tags.length ? '<div class="tags">' + job.tags.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div>" : "") +
+      '<div class="rc-trigger">' + trigger(r, id) + "</div>" +
+      '<div class="rc-time"><div><span>' + (r.state === "running" ? "Running for" : "Runtime") + "</span><b>" + dur(r.s) + "</b></div>" + usual(r, job) + "</div>" +
+      bar(r) + stages(r) + meta(r) +
+      (r.error ? '<div class="rc-err">' + esc(r.error) + "</div>" : "") +
+      '<div class="rc-foot"><span class="faint">' + esc(zone ? "Times in " + zone : "Local times") + '</span><a tabindex="-1" href="' +
+      data.url.replace("/0/", "/" + id + "/") + '">Open run #' + id + " →</a></div>");
+  }
+  function place(el, x) {
+    var b = el.getBoundingClientRect(), w = card.offsetWidth, h = card.offsetHeight, vw = innerWidth, vh = innerHeight;
+    var cx = b.width > 120 && x != null ? x : b.left + b.width / 2;
+    var left = Math.min(Math.max(8, cx - w / 2), vw - w - 8), top = b.bottom + 8;  /* below; else above; else beside */
+    if (top + h > vh - 8) {
+      if (b.top - h - 8 >= 8) top = b.top - h - 8;
+      else {
+        top = Math.min(Math.max(8, b.top + b.height / 2 - h / 2), Math.max(8, vh - h - 8));
+        left = b.right + 12 + w <= vw - 8 ? b.right + 12 : Math.max(8, b.left - w - 12);
+      }
+    }
+    card.style.left = Math.max(8, left) + "px"; card.style.top = top + "px";
+  }
+  function show(el, x) {
+    clearTimeout(showT); clearTimeout(hideT);
+    var html = render(el.getAttribute("data-run"));
+    if (!html) return;
+    if (current && current !== el) current.removeAttribute("aria-describedby");
+    if (current !== el) card.innerHTML = html;
+    current = el; el.setAttribute("aria-describedby", "run-card");
+    card.hidden = false; place(el, x);
+  }
+  function hide() {
+    clearTimeout(showT); clearTimeout(hideT);
+    if (current) current.removeAttribute("aria-describedby");
+    current = null; card.hidden = true;
+  }
+  function target(e) { return e.target.closest ? e.target.closest("[data-run]") : null; }
+  document.addEventListener("pointerdown", function (e) { touch = e.pointerType === "touch" || e.pointerType === "pen"; }, true);
+  document.addEventListener("pointerover", function (e) {
+    if (e.pointerType === "touch") return;
+    var el = target(e);
+    if (el) { clearTimeout(hideT); clearTimeout(showT); var x = e.clientX;
+      if (!card.hidden) show(el, x); else showT = setTimeout(function () { show(el, x); }, 80); }
+    else if (card.contains(e.target)) clearTimeout(hideT);
+  });
+  document.addEventListener("pointerout", function (e) {
+    if (e.pointerType === "touch") return;
+    if (target(e) || card.contains(e.target)) { clearTimeout(showT); hideT = setTimeout(hide, 120); }
+  });
+  document.addEventListener("click", function (e) {
+    var el = target(e);
+    if (el && touch && current !== el) { e.preventDefault(); show(el); return; }  /* first tap shows, a second opens the run */
+    if (!el && !card.contains(e.target)) hide();
+  });
+  document.addEventListener("focusin", function (e) { var el = target(e); if (el) show(el); });
+  document.addEventListener("focusout", function (e) { if (target(e)) hide(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && current) hide(); });
+  addEventListener("scroll", function () { if (current) place(current); }, { passive: true, capture: true });
+  addEventListener("resize", function () { if (current) place(current); });
+})();
+</script>
