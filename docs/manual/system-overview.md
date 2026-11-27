@@ -27,7 +27,7 @@ events and to examine sources. The owner examines what the agents write and deci
 | Reviews and edit files | An independent reviewer examines the agent drafts and writes an edit file. The owner applies it. | `var/reviews/`; `manage.py apply_edits` |
 | Releases | A release is a set of files that holds the published content and the page. A release never changes. | The `releases` bucket; the `Release` table |
 | The public page | The page that readers see. The `web` dyno serves it from the latest release. | `/` on the `web` dyno |
-| The admin and the console | Web pages for the owner. The admin edits rows. The console shows the health of the system and has a few actions. | `/admin/` and `/ops/` on the `web` dyno |
+| The admin and the console | Web pages for the owner. The admin edits rows. The console shows the health of the system and the content that the agents make. It has a few actions. | `/admin/` and `/ops/` on the `web` dyno |
 | GitHub and CI | The code, the pull requests and the checks that each pull request must pass | `dimays/humanitributary`; `.github/workflows/check.yml` |
 
 ## How data moves

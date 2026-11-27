@@ -297,6 +297,8 @@ ins { background: var(--ins); text-decoration: none; } del { background: var(--d
   <nav class="nav" aria-label="Console">
     <a href="{% url 'opsconsole:dashboard' %}" class="{% if section == 'dashboard' %}on{% endif %}"{% if section == 'dashboard' %} aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Dashboard</span></a>
+    <a href="{% url 'opsconsole:new_events' %}" class="{% if section == 'new_events' %}on{% endif %}"{% if section == 'new_events' %} aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>New events</span></a>
     <a href="{% url 'opsconsole:jobs' %}" class="{% if section == 'jobs' %}on{% endif %}"{% if section == 'jobs' %} aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>Jobs</span></a>
     <a href="{% url 'opsconsole:runs' %}" class="{% if section == 'runs' %}on{% endif %}"{% if section == 'runs' %} aria-current="page"{% endif %}>

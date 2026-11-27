@@ -52,9 +52,11 @@ one transaction, or none of them.
     ```
 
     Make sure that the last line says `applied as human:owner`.
-12. Open the list of entries in the admin and filter by the status `review`.
+12. Open the New events page of the console with the state "In review".
     Make sure that no approved draft stays in this list.
-13. If you do not need the token of the reviewer again, revoke it:
+13. Open the tab "Rejected & duplicates" on the New events page.
+    Make sure that each draft that the review rejected shows the verdict Rejected or Duplicate.
+14. If you do not need the token of the reviewer again, revoke it:
 
     ```bash
     heroku run python manage.py agent_token revoke <reviewer name> -a humanitributary-staging

@@ -205,6 +205,8 @@ AGENT_API_RATE_PER_MINUTE = int(os.getenv("AGENT_API_RATE_PER_MINUTE", "120"))
 # The operations console (/ops/, opsconsole/): when set, only these hosts serve it and every other host answers 404, so
 # the public page's domain has no /ops/ (comma-separated, e.g. data.humanitributary.com). Empty: any allowed host.
 OPS_HOSTS = [h.strip() for h in os.getenv("OPS_HOSTS", "").split(",") if h.strip()]
+# The public page, for the console's links to an entry on it (`<PUBLIC_SITE_URL>/#<slug>`; the New events page).
+PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", f"https://{SITE_NAME.lower()}.com").rstrip("/")
 
 # Tests never touch the object store or the network: the runner swaps both storages for temporary directories.
 TEST_RUNNER = "tests.runner.Runner"

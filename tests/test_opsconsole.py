@@ -40,7 +40,7 @@ from work.models import AgentTask
 from .fixtures import small
 from .runner import FreshStorage
 
-PAGES = ["dashboard", "jobs", "runs", "work", "releases", "docs"]
+PAGES = ["dashboard", "new_events", "jobs", "runs", "work", "releases", "docs"]
 
 
 def _log(run, lines):
@@ -223,11 +223,11 @@ class AccessTests(FreshStorage, TestCase):
         for name in PAGES:
             self.assertEqual(self.client.post(reverse(f"opsconsole:{name}")).status_code, 405, name)
 
-    def test_the_sidebar_has_six_items(self):
+    def test_the_sidebar_has_seven_items(self):
         staff_login(self)
         r = self.client.get(reverse("opsconsole:dashboard"))
         nav = r.content.decode().split('<nav class="nav"', 1)[1].split("</nav>", 1)[0]
-        self.assertEqual([x.split("</span>")[0] for x in nav.split("<span>")[1:]], ["Dashboard", "Jobs", "Runs", "Work", "Releases", "Docs"])
+        self.assertEqual([x.split("</span>")[0] for x in nav.split("<span>")[1:]], ["Dashboard", "New events", "Jobs", "Runs", "Work", "Releases", "Docs"])
 
     @override_settings(OPS_HOSTS=["data.example.org"])
     def test_other_hosts_have_no_console(self):

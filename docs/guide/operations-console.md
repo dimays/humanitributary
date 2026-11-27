@@ -1,19 +1,20 @@
 ---
 title: The operations console
-summary: The staff-only pages under /ops/, modeled on an orchestrator's console: a Dashboard that says whether anything is wrong, the jobs with their tags and run histories, every run with its log, the agents' queues, the releases, the docs rendered, and the few audited actions operators take from them.
+summary: The staff-only pages under /ops/, modeled on an orchestrator's console: a Dashboard that says whether anything is wrong, the content made day to day from fetched to published, the jobs with their tags and run histories, every run with its log, the agents' queues, the releases, the docs rendered, and the few audited actions operators take from them.
 order: 105
 covers:
   - opsconsole/**
   - tests/test_opsconsole.py
   - tests/test_opsconsole_actions.py
   - tests/test_opsconsole_cards.py
+  - tests/test_opsconsole_new_events.py
 ---
 
 The operations console is a handful of web pages for staff, at `/ops/` on the data host. Its shape is borrowed from
-an orchestrator's console (Prefect Cloud's, which the owner likes), cut down to one project: a left sidebar of six
+an orchestrator's console (Prefect Cloud's, which the owner likes), cut down to one project: a left sidebar of seven
 pages, state badges in a few colors, a run graph, and a page per run with its log
 ([ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md), which redesigned the first console of
-[ADR 0028](../adr/0028-operations-console.md)). Everything on it is read from the database, the releases store and
+[ADR 0028](../adr/0028-operations-console.md); [ADR 0033](../adr/0033-a-new-events-page-derived-from-existing-rows.md) added New events). Everything on it is read from the database, the releases store and
 the repository's `docs/`, and reading changes nothing. Staff with the `ops_operator` permission also get a few
 buttons: run or retry a job, pause or resume one, release a stuck lease (or extend one), requeue or cancel tasks,
 advance the content wave, publish, roll back ([actions](#actions)). Each is confirmed on a page that shows what will
@@ -44,13 +45,14 @@ Django's template of that name. It wins because `opsconsole` comes before `djang
 
 ## The pages
 
-The sidebar has six items and nothing else. The pages they lead to link on to the rest: a job, a run, a task, a
+The sidebar has seven items and nothing else. The pages they lead to link on to the rest: a job, a run, a task, a
 Revision, a release, an action and the action log.
 
 | Page | URL | What it shows |
 |---|---|---|
 | Dashboard | `/ops/` | **One status line**: "All good", or "N problems" with one sentence each, worst first (a store that can't be reached; no worker running and no run for 30 minutes; a job failing runs in a row, red at the alert threshold; stuck leases; jobs overdue by 30 minutes; no live release), each linking to where to look. **Runs, last 24 hours**: the run graph, one row per job that ran, a bar per run placed at its start and as wide as it took (at least a sliver), green Completed, amber completed with errors, red Failed, blue Running; each bar links to its run, and pointing at it
 (or focusing it, or tapping it once) shows its [run card](#run-cards). **Needs attention**: each job's (or feed's) last run that failed, with Retry. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck. Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
+| New events | `/ops/new/` | The content the platform makes, newest activity first: every current event (`write_event`), history-wave event (`fill_gap`) and branch addition (an edit file's `add_branch` or `add_event`), each with its five steps (Fetched, Queued, Drafted, Reviewed, Published) and their times, its branches, date, sources, agent and verdict, and its links; tabs, filters and a 14-day pulse above ([below](#new-events)). |
 | Jobs | `/ops/jobs/` | One row per job, in run order: its name and one-sentence description (the docstring's first sentence), its tags, its schedule in words ("every 15 minutes", "every hour" with "per feed · 1 of 1 on" for a feed job), its last run's state and age, its last ten runs as squares (oldest left, each its state's color and a link to the run, with its [run card](#run-cards) on hover, focus or tap; empty slots when it has run fewer times), its next run (or Paused, or Pending), and Run now / Pause, or Resume. Chips across the top filter by tag (`?tag=`), with counts. |
 | A job | `/ops/jobs/<name>/` | The description and tags; the schedule, next run, last run, failures in a row, console runs waiting; the ten-run strip and whether it may be run again straight away (`not_idempotent`); for a feed job its feeds (schedule, last fetched, next, a Run button each); its run history, 25 a page. |
 | Runs | `/ops/runs/` | Every run, newest first, 50 a page: state, run, job, started, duration, a counts summary (or the masked error's start). Filters: job, state and tag. Without a state, "Up next" (five) sits above the list; the states Scheduled and Paused list the jobs' next runs, Pending and Cancelled the console's run requests (waiting, or withdrawn), the others the runs. |
@@ -123,11 +125,79 @@ touch screen the first tap shows the card and a second tap on the same run opens
 is placed below its run, else above, else beside, always inside the window, and follows on scroll. Colors are the
 console's variables, so it follows the dark scheme. The Dashboard's auto-refresh waits while a card is open.
 
+## New events
+
+`/ops/new/` (`views.new_events`; the reading is all in `opsconsole/newevents.py`, the page in
+`templates/opsconsole/new_events.html`) follows each piece of content from the moment it came in to the release that
+put it on the page ([ADR 0033](../adr/0033-a-new-events-page-derived-from-existing-rows.md)). No table holds its
+states: each is derived, in SQL, from the rows that record it.
+
+**Items.** `ITEMS_CTE` makes one row per item:
+
+| Source | An item is | Found from |
+|---|---|---|
+| Current event (`current`) | a `write_event` task, with the event it wrote if any | the task; its entry through the insert Revision on `timeline_entry` linked to the task (`Revision.task_id`, set by `revising(task=…)` in the agent API), so a later rename keeps the link |
+| History wave (`wave`) | each event a `fill_gap` task wrote (1–3), or the task alone when it wrote none | the same |
+| Branch addition (`branch`) | an entry an edit file added | its insert Revision with no task and a reason starting `apply_edits` (only `add_branch` and `add_event` insert entries) |
+
+Audit tasks, branch proposals and candidates that never became a task are not items.
+
+**Steps.** Each item has five, each done, current, failed (where it stopped), skipped (not on its path) or pending:
+
+| Step | Time and words |
+|---|---|
+| Fetched | A current event: the earliest `created_at` of the candidates in the task's `payload.items`, and how many stories. A gap ("Gap found"): the task's `created_at`, with the wave and window (`gap_waves` finds and queues a gap at once). A branch addition: skipped. |
+| Queued | The task's `created_at` and priority; current while the task is `queued`. Skipped for a branch addition. |
+| Drafted | The task's `completed_at` and the agent (the API applies the result and completes the task in one transaction; the Revisions' `at` is the transaction's start). While an agent holds the task: "Drafting", current, since `claimed_at`. A task that wrote nothing stops here: Rejected, Duplicate (with the event it names), Nothing notable, Task failed or Cancelled. A branch addition: its insert Revision, with the op and the file. |
+| Reviewed | From the entry's Revisions on `timeline_entry`, `timeline_event` and `timeline_branch` (one `LATERAL` aggregate per item on `revision_row_idx`): the first that sets the status to `published` (Approved; **Approved with edits** when an `apply_edits` change came before it, the reason says "with edits", or an `edit` op on the entry is in the same transaction; "Added as published" when the add itself published it); the last that sets it to `retracted` (Rejected, or **Duplicate** when the reason says "duplicate"); else the first `apply_edits` change other than the insert's own op (**Held**: still in review). Who: the Revision's actor; the reason (after the file, op and slug) is the reviewer's words. |
+| Published | The first release whose `revision_high_water` is at or above the publishing Revision (`publish_release`, smallest high-water mark first), at the release's `created_at`. **LIVE** when the entry is still published and that Revision is at or below the live release's high-water mark (the pointer's version; the newest release when the store can't say). Approved and not in a release yet: current, "next release". |
+
+**States.** From the same rows (`STATES`, a badge each): Queued, Being written, In review, Held, Approved (published,
+no release yet), Published, Rejected by the agent, Duplicate, Rejected, Retracted (rejected after a release carried
+it), Nothing notable, Task failed, Cancelled.
+
+**What the page shows.** A card for the 14-day pulse, then tabs (All, Current events, History waves, Branch
+additions, Rejected & duplicates: rejected by the agent or a reviewer, duplicates and retractions; Waiting: queued or
+being written), each with its count; the time range (Today, 7 days by default, 30 days, Any time) over an item's
+last activity (its newest step time, so an item published today shows under Today); a state (with counts in the
+tab); and a branch (a datalist of every branch; an item matches on its branch, a linked branch, a branch's own
+entry, or for a task with no entry the gap's branch or the lead candidate's `top_branch`). Items are ordered by last
+activity, newest first, 25 a page. Each shows its source, state, LIVE, title (the event's or branch's; before
+drafting, the story's `title_hint` or the candidate's title), slug, how long ago, the date on the timeline, branch
+chips (each a filter), sources (supporting citations on the entry's claims: all, and not Wikipedia; "single source"
+when one independent publisher, `evidence.independence.witness`, as the snapshot's marker of ADR 0018), the wave,
+window and gap kind, the agent and the verdict; the stepper; the reviewer's reason or the agent's note; and links:
+On the page (`PUBLIC_SITE_URL/#<slug>`, only when live), the task, Revisions (the insert Revision's page, with the
+row's whole history), the release, the candidate (admin).
+
+**The pulse.** For each of the last 14 local days (`PULSE_DAYS`): candidates fetched (`ingest_candidate.created_at`),
+tasks queued (the items' tasks by `created_at`), drafts written (items by their Drafted time), published (items by
+their release's `created_at`) and rejected (by the agent, at `completed_at`; by a reviewer, at the retraction).
+Inline SVG, one row a series, each scaled to its own busiest day (small multiples, so a release day doesn't flatten
+the drafts), today's bar in the accent color, a `<title>` per bar, today's number and the 14-day total beside it,
+and "As a table" for the numbers.
+
+**Item cards.** Pointing at (or focusing, or tapping once) an item's title shows a card in the run card's style
+(`_item_cards.html`, `newevents.card()`): the state and what it means, the five steps with their times in the
+browser's time zone and the time between them, the agent and attempts, the verdict, the reviewer's reason, the
+agent's note, the wave, the edit file. Its data is embedded with the page (`{% json_data %}`); no request per hover.
+
+**How it stays fast.** Three statements and one lookup, whatever the tables hold: `COUNTS_SQL` (the items per source
+and state under the time range and branch, for the tabs, the states and the pager's total, and the pulse, in one
+statement over the same CTE), `PAGE_SQL` (the filtered, ordered page, cut by `LIMIT`/`OFFSET` in SQL; the tab and
+state predicates are constants, never built from input) and `DETAILS_SQL` (the shown items' entries, branches,
+citations, task payload fields, candidates and review Revisions, from the page's ids passed as one `jsonb`), plus the
+live release's high-water mark. Task payloads (a `write_event` payload carries up to 12 stories) are read only for the
+shown items. `newevents.Items` gives Django's `Paginator` the total and runs `PAGE_SQL` for a slice. On a copy with
+6,300 tasks and their entries, the counts and pulse take about 120 ms and a page about 65 ms; the page makes 10
+queries as staff (the session, the user, two permission reads, the branch filter, the three statements, the live
+release, the branch list).
+
 ## Where the numbers come from
 
 All reading is in `opsconsole/queries.py`; the views only arrange it. It computes totals in Postgres and never loads
 rows to count them in Python, so each page makes the same number of queries whatever the table sizes (a test seeds
-ten times the rows and compares; the six main pages make at most 25 queries, a detail page at most 15).
+ten times the rows and compares; the seven main pages make at most 25 queries, a detail page at most 15).
 
 | Figure | Query |
 |---|---|
@@ -145,6 +215,7 @@ ten times the rows and compares; the six main pages make at most 25 queries, a d
 | Release totals | Each release's `manifest.json` (its `changes` key), read once per process and cached, since release files are never rewritten. Page only: totals all zero and a page hash unlike the previous release's. |
 | Not released yet | Revisions after the newest release's `revision_high_water`, by actor kind. |
 | Fact base | Record claims (`as_written`, `why`, `origin`) on published entries by status: one aggregate. |
+| New events | `opsconsole/newevents.py` ([above](#new-events)): items, steps and states derived in three statements from tasks, Revisions and releases. |
 | Waves | `JobState` "gap_waves" read directly (`governance.waves.state()` would create the row). |
 | Paused jobs | `JobState` "paused_jobs" through `ingest.jobs.paused_jobs()`, which reads without creating the row. |
 
@@ -253,7 +324,7 @@ on Releases (and the unreleased changes); Roll back to this on each release that
 
 `opsconsole/templatetags/ops.py` holds the tags and filters the templates use: `badge` (a state badge), `task_state`
 and `action_state` (a task's or an action's status in state words), `history_strip` (the ten-run squares, each with
-`data-run` for its card and an `aria-label`), `json_data` (`json_script` without spaces, for the run cards),
+`data-run` for its card and an `aria-label`), `json_data` (`json_script` without spaces, for the run cards and the item cards),
 `level_class` and `logtime` (a log line's color and time), `every` (an interval in words), durations (`seconds`),
 ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `words` (a key as words), JSON
 (`pretty`), `act` (a one-button POST form for an action, only for operators) and `took` (how long an action ran).
@@ -264,7 +335,7 @@ ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `wor
 `tests/test_opsconsole.py` holds the line:
 
 - anonymous and non-staff users are redirected, a POST to a page is refused, staff get `noindex` and `no-store` on
-  every page, another host gets a 404 when `OPS_HOSTS` is set, the sidebar has exactly the six items, the admin
+  every page, another host gets a 404 when `OPS_HOSTS` is set, the sidebar has exactly the seven items, the admin
   links to the console, and the old addresses redirect;
 - every page and detail page renders against `seed()` (runs over the last day with their logs, most with the time
   they became due, a manual run from the console and a run retried twice, a job at the alert
@@ -296,6 +367,23 @@ ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `wor
 - the pages: every Dashboard bar and every strip square carries `data-run`, its card and an `aria-label`, no
   `title`; the script has the tooltip role, `aria-describedby`, Escape, focus, the 80 ms delay and no `fetch`.
 
+`tests/test_opsconsole_new_events.py` holds New events to its rules, against `seed_content()`, which makes the items
+through the real paths (candidates and `write_event` tasks as `process` makes them, `fill_gap` tasks as `gap_waves`
+does, results through the agent API's appliers and `work.queue.complete`, a review round through `apply_edits`, a
+release, and one approval after it):
+
+- staff only, read only, `noindex`, `no-store`, and its place in the sidebar;
+- a current event's five steps and their times (the cluster's first candidate, the task's creation and completion,
+  the approval, the release), Approved with edits, LIVE and the page's link, sources and the single-source flag,
+  Held; a reviewer's rejection and a duplicate; the agent's rejection (the story's title, the note), duplicate,
+  failed, queued and being written;
+- a wave: one item per event a task wrote, Gap found, the wave and window, Approved after the release (no release
+  yet, not live), Nothing notable, a queued gap with its branch;
+- branch additions: the branch and its events, the op and the file, skipped Fetched and Queued, "Added as published";
+- every tab against its predicate, the state, branch and time filters, the order, bad input falling back; the pulse's
+  14 days against the rows; the page rendering every tab; reading writes nothing; the query count the same after the
+  content grows several times over, at most 10.
+
 `tests/test_opsconsole_actions.py` holds the actions to theirs:
 
 - staff without `ops_operator` see no action buttons and get 403 on every action URL; operators and superusers see
@@ -322,7 +410,8 @@ it on a development database only.
 |---|---|
 | Something new on a run card | A column in `RUN_CARDS_SQL` (never a second query per run), its key in `run_cards` (left out when empty), its line in `_run_cards.html`'s `render`, a test in `test_opsconsole_cards.py`; [ADR 0032](../adr/0032-run-cards-and-what-started-a-run.md) if it changes what is recorded |
 | A new figure | A function in `opsconsole/queries.py` that aggregates in SQL, its place on a page (a card, not a table, unless it is a list), a line in `test_opsconsole.py`'s page tests, and the query-count test still equal; this chapter |
-| A new page | Think twice: the sidebar is six items on purpose. A detail page linked from one of them, its test, the query-count test |
+| A new step, state or tab on New events | `opsconsole/newevents.py`: the column in `ITEMS_CTE` (never a query per item), the state in `STATES` and its `CASE`, the tab in `TABS` and `_in_tab`; a test in `test_opsconsole_new_events.py` through the real paths; this chapter and [ADR 0033](../adr/0033-a-new-events-page-derived-from-existing-rows.md) if it reads a new row |
+| A new page | Think twice: the sidebar is seven items on purpose. A detail page linked from one of them, its test, the query-count test |
 | A new problem on the Dashboard | `views.problems()`: one sentence, a level (`bad` or `warn`) and where to look; a test |
 | A table the console reads changes shape | Its query here and the test; the chapter that owns the table |
 | An index for a slow page | A migration in the app that owns the table, and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md) |

@@ -1,6 +1,6 @@
 """/ops/: the operations console (staff only; actions need ops_operator; ADR 0028, redesigned by ADR 0031).
 
-Six pages in the sidebar (Dashboard, Jobs, Runs, Work, Releases, Docs) and the pages they link to: a job, a run, a
+Seven pages in the sidebar (Dashboard, New events, Jobs, Runs, Work, Releases, Docs; ADR 0033 added New events) and the pages they link to: a job, a run, a
 task, a Revision, a release, an action and the action log. The old addresses redirect to their new places.
 """
 
@@ -12,6 +12,7 @@ app_name = "opsconsole"
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("new/", views.new_events, name="new_events"),
     path("jobs/", views.jobs, name="jobs"),
     path("jobs/<str:name>/", views.job_detail, name="job"),
     path("runs/", views.runs, name="runs"),

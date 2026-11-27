@@ -1,8 +1,9 @@
 """The operations console: pages for staff under /ops/, and the few actions operators take from them
 (docs/guide/operations-console.md; ADR 0028, redesigned by ADR 0031).
 
-Six pages are in the sidebar: Dashboard (is anything wrong, what ran in the last day, what needs attention, what
-runs next, the agents' queues), Jobs (one row per job, with its tags, schedule, last state and last ten runs),
+Seven pages are in the sidebar: Dashboard (is anything wrong, what ran in the last day, what needs attention, what
+runs next, the agents' queues), New events (the content made day to day, each item from fetched to published, and a
+14-day pulse; ADR 0033), Jobs (one row per job, with its tags, schedule, last state and last ten runs),
 Runs (every run, and a run's page with its log), Work (the agents' queues per task kind), Releases (and what each
 carried) and Docs (the maintainer manual, the developer reference and the decisions, rendered).
 
@@ -42,6 +43,7 @@ from work.models import AgentTask
 
 from . import actions as acts
 from . import docs as D
+from . import newevents as NE
 from . import queries as Q
 from .models import OpsAction
 from .templatetags.ops import field_diffs
@@ -180,6 +182,41 @@ def dashboard(request):
         "queue_active": [k for k in queue if k["active"]], "latest": latest, "today": Q.today(now),
         "open_actions": Q.open_actions(5), "recent_actions": Q.recent_actions(4),
     }, section="dashboard", refresh=REFRESH_SECONDS)
+
+
+# ── New events ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+@console
+def new_events(request):
+    """The content feed: every write_event and fill_gap task and every edit file's addition, newest activity first,
+    each with its five steps (opsconsole/newevents.py), the tabs and filters, and the 14-day pulse above them."""
+    from timeline.models import Branch
+
+    now = timezone.now()
+    f = NE.parse(request.GET)
+    data = NE.counts_and_pulse(f, now)
+    page, qs_rest = _page(request, NE.Items(f, now, data["total"]), size=NE.PAGE_SIZE)
+    items = list(page.object_list)
+
+    def link(**changes):
+        q = request.GET.copy()
+        q.pop("page", None)
+        for k, v in changes.items():
+            if v:
+                q[k] = v
+            else:
+                q.pop(k, None)
+        return "?" + q.urlencode() if q else "?"
+
+    return _render(request, "new_events.html", {
+        "f": f, "data": data, "page": page, "items": items, "qs": qs_rest,
+        "tabs": [(k, label, data["tabs"][k], link(tab=k if k != "all" else None, state=None)) for k, label, _ in NE.TABS],
+        "ranges": [(k, label, link(range=k if k != NE.DEFAULT_RANGE else None)) for k, (label, _) in NE.RANGES.items()],
+        "state_options": [(k, v[0], data["states"].get(k, 0)) for k, v in NE.STATES.items()],
+        "cards": {i["key"]: NE.card(i) for i in items},
+        "branches": Branch.objects.order_by("name").values_list("slug", "name"), "pulse_days": NE.PULSE_DAYS,
+        "public_site": settings.PUBLIC_SITE_URL,
+    }, section="new_events")
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────────────────────────────────────────
