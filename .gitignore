@@ -9,3 +9,4 @@ staticfiles/
 var/
 # The built page (node site/build.mjs) and the site's download caches
 site/timeline.html
+site/.cards-page.html

@@ -8,6 +8,9 @@ covers:
   - site/build.mjs
   - site/canonical.mjs
   - site/template.html
+  - site/brand/**
+  - scripts/build_brand.py
+  - site/cards.mjs
   - evidence/publishing.py
   - tests/test_import_and_roundtrip.py
   - archive/README.md
@@ -498,11 +501,62 @@ published it, but a deploy of the page still takes `site/images/` and
 content, read a snapshot too (`--from-json`, default
 `var/releases/latest/content.json`).
 
+### The page's head
+
+`site/template.html`'s `<head>` is the page's public face: the title ("Humanitributary — all of history, cited":
+the name exactly as `SITE_NAME` has it, then a short description), a one-sentence `description`, the canonical URL
+`https://humanitributary.com/`, the icons (`favicon.ico` for 16 to 48 pixels, `favicon.svg` for every other size,
+`apple-touch-icon.png`), the web manifest, a light (`#ffffff`, the header) and a dark (`#1c1d21`) `theme-color`, and
+the Open Graph and Twitter card tags a link preview reads (`og:site_name`, `og:title`, `og:description`, `og:url`,
+`og:image` with its size and alt text; `summary_large_image` with `twitter:image` and its alt text). The icon and manifest links are relative, like
+`images/` and `outlines.js`; the canonical URL and the preview image are absolute, since crawlers need them so.
+The template is a page input, so a change to the head publishes like any other page-only change
+([above](#a-releases-identity-the-content-and-the-page)), and the next publish after a deploy puts it live.
+`tests/test_platform.py` builds a page and checks every tag.
+
+### The brand files
+
+`site/brand/` holds what browsers, phones and link previews ask a site for: `favicon.svg` (the mark, with a
+`prefers-color-scheme` style: a dark tile on a light tab, a light tile with the header logo's colors on a dark one),
+`favicon.ico` (16, 32 and 48 pixels), `favicon-32.png`, `apple-touch-icon.png` (180, on a solid tile: iOS rounds it),
+`icon-192.png` and `icon-512.png`, and `site.webmanifest` (the name, the icons, the page's colors). All are drawn by
+`scripts/build_brand.py` (`make brand`) from the one mark the page already had, the braided river of the template's
+old inline favicon: its paths and colors, nothing new ([ADR 0034](../adr/0034-brand-assets.md)). The name comes from
+`SITE_NAME`. Pillow, in the dev group, draws them at 8x and scales them down; `--preview var/brand-preview.png` also
+writes a contact sheet. The files are committed, and a test redraws them and compares the decoded pixels (`--check`
+does the same), so a change to the script and a stale file can't both land.
+
+The link-preview card, `og-image.png` (1200×630), is the page itself. `site/cards.mjs` (`make card`, Node and a
+Chrome on the machine, nothing installed: Node's own WebSocket drives Chrome's DevTools protocol) builds the page from
+a release snapshot (`var/releases/latest/content.json`, or `--from-json`), opens it in headless Chrome at 2x, hides
+the header, overview, hints, buttons and panel, shows `VIEW` (the Ancient era, scrolled to the Near East and Europe:
+Sumer, Egypt, Babylon, Phoenicia, Greece and Rome braided across the page), and puts that picture under the mark,
+the name, one line and the domain (`PUBLIC_SITE_URL`'s host), on the page's light background, at the page's own label
+size. It also writes `var/cards/card-small.png` (half size: what most chat apps show) and, with `--explore`, every
+era at five depths to choose another view. The card is committed, so a preview never waits on a render; it depends
+on the content and the browser's fonts, so no test redraws it (one checks its size). Make it again after a big
+content wave or a change to how the page draws (the manual's procedure 13).
+
+They are not page inputs (`PAGE_INPUTS`) and not in a release: like `site/images/`, they are served from the
+deploy, by `infra/site.py` `brand()`, at the root of every host (the public one and the data host, whose console
+and admin use the same icons), each with its content type (`image/x-icon`, `image/svg+xml`, `image/png`,
+`application/manifest+json`) and the assets' `Cache-Control` (a day). Only the names in `BRAND_FILES` are served.
+A changed icon needs a deploy, not a publish.
+
+### Single source
+
 The event panel in `site/template.html` reads `singleSource`: an event that
 has it shows a small "Single source" note under the Sources heading, above
 the list. There is no filter for it (the page has no filter controls).
 
 ## Changing it
+
+- **An icon.** Change `scripts/build_brand.py` (never the PNGs by hand), run `make brand` and commit `site/brand/`;
+  a new file also goes in `infra/site.py` `BRAND_FILES` and its test. The mark is the template's: change both
+  together.
+- **The preview card.** `make release-pull`, then `make card`; look at `site/brand/og-image.png` and
+  `var/cards/card-small.png`, and commit the card. Another view: `VIEW` in `site/cards.mjs` (`--explore` first); the
+  alt text in `site/template.html` names what it shows, so change it with the view.
 
 - **A new content field.** Change [site/SCHEMA.md](../../site/SCHEMA.md),
   `KEYS` in both `site/canonical.mjs` and `publish/content.py`, the model and

@@ -27,6 +27,7 @@ from django.utils import timezone
 from ingest import jobs, runlog
 from ingest.models import Candidate, Feed, FetchRun, JobState, RunLog
 from opsconsole import docs as D
+from opsconsole import queries as Q
 from opsconsole.models import OpsAction
 from publish.legacy import import_content
 from publish.models import Release
@@ -242,6 +243,26 @@ class AccessTests(FreshStorage, TestCase):
         self.client.login(username="boss", password="x")
         self.assertContains(self.client.get("/admin/"), 'href="/ops/"')
 
+    def test_titles_and_icons(self):
+        """Tabs read "<page> · <name> Operations" in the console and "<page> · <name> administration" in the admin, and
+        both carry the brand's icons (site/brand/, ADR 0034)."""
+        staff_login(self)
+        name = settings.SITE_NAME
+        for page, title in [("dashboard", "Dashboard"), ("jobs", "Jobs"), ("runs", "Runs"), ("work", "Work"), ("releases", "Releases"), ("docs", "Docs")]:
+            r = self.client.get(reverse(f"opsconsole:{page}"))
+            self.assertContains(r, f"<title>{title} · {name} Operations</title>", html=False)
+        dashboard = self.client.get(reverse("opsconsole:dashboard"))
+        self.client.logout()
+        login = self.client.get("/admin/login/")
+        self.assertContains(login, f"<title>Log in · {name} administration</title>", html=False)
+        for r in (dashboard, login):
+            self.assertContains(r, '<link rel="icon" href="/favicon.svg" type="image/svg+xml">', html=False)
+            self.assertContains(r, '<link rel="icon" href="/favicon.ico" sizes="48x48">', html=False)
+            self.assertContains(r, '<meta name="theme-color"', html=False)
+        User.objects.create_user("boss", password="x", is_staff=True, is_superuser=True)
+        self.client.login(username="boss", password="x")
+        self.assertContains(self.client.get("/admin/ingest/feed/"), f"· {name} administration</title>", html=False)
+
     def test_old_addresses_redirect(self):
         staff_login(self)
         for old, new in [("/ops/tasks/", "/ops/work/"), ("/ops/programs/", "/ops/"), ("/ops/changes/", "/ops/releases/unreleased/"),
@@ -290,6 +311,26 @@ class PagesTests(FreshStorage, TestCase):
         self.assertContains(r, Release.objects.get().version)
         self.assertContains(r, "Auto-refresh")
         self.assertContains(r, "location.reload()")
+
+    def test_a_paused_job_is_not_a_problem(self):
+        """link_health failed its last runs; paused, it is listed apart in amber, not counted and not to attend to;
+        resumed, it is a problem again."""
+        with mock.patch("opsconsole.queries.worker_holds_lock", return_value=True):
+            jobs.set_paused("link_health", True, by="human:owner", reason="its robots.txt now disallows us")
+            r = self.get("dashboard")
+            self.assertFalse(any("link_health" in p["text"] for p in r.context["problems"]), r.context["problems"])
+            self.assertEqual({j["name"] for j in r.context["paused"]}, {"link_health", "year_pages"})
+            self.assertNotIn("link_health", [a["job"]["name"] for a in r.context["attention"]])
+            self.assertContains(r, "2 paused")
+            self.assertContains(r, "not counted: 3 failed runs before the pause")
+            self.assertContains(r, '<span class="badge s-paused"><i></i>Paused</span>', html=False)
+            row = {j["name"]: j for j in Q.jobs(self.now)}["link_health"]
+            self.assertEqual((row["failures"], row["alerting"], row["failing"]), (3, False, []))
+            self.assertContains(self.get("job", "link_health"), "not counted as a problem or alerted while paused")
+            jobs.set_paused("link_health", False, by="human:owner", reason="allowed again")
+            r = self.get("dashboard")
+            self.assertTrue(any("link_health failed 3 runs in a row" in p["text"] and p["level"] == "bad" for p in r.context["problems"]))
+            self.assertIn("link_health", [a["job"]["name"] for a in r.context["attention"]])
 
     def test_all_good(self):
         FetchRun.objects.filter(job="link_health").delete()

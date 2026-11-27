@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 {% if refresh %}<meta http-equiv="refresh" content="{{ refresh }}">{% endif %}
-<title>{% block title %}Operations{% endblock %} · {{ site_name }}</title>
+<title>{% block title %}Console{% endblock %} · {{ site_name }} Operations</title>
+{% include "opsconsole/_icons.html" %}
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161920" media="(prefers-color-scheme: dark)">
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --text: #151a23; --muted: #667085; --faint: #98a2b3; --line: #e6e8ec; --hover: #f2f4f7;
@@ -290,8 +293,7 @@ ins { background: var(--ins); text-decoration: none; } del { background: var(--d
 <div class="app">
 <aside class="side">
   <a class="brand" href="{% url 'opsconsole:dashboard' %}" aria-label="{{ site_name }} operations">
-    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect width="26" height="26" rx="7" fill="var(--accent)"/>
-      <path d="M6 18c4 0 5-10 14-10M6 18c5 0 7-3 14-3M6 18h14" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    <img src="/favicon.svg" width="26" height="26" alt="">
     <span>{{ site_name }}<small>Operations</small></span>
   </a>
   <nav class="nav" aria-label="Console">

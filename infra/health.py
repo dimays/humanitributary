@@ -2,11 +2,16 @@
 
     {"ok": true, "db": {"ok": true}, "storage": {"raw": {"ok": true}, "releases": {"ok": true}}, "storage_backend": "s3",
      "latest_release": "2026.11.26.2",
-     "jobs": {"portal": {"last_ok": "…", "last_run": "…", "last_status": "ok", "consecutive_failures": 0}, …},
+     "jobs": {"portal": {"state": "ok", "last_ok": "…", "last_run": "…", "last_status": "ok", "consecutive_failures": 0},
+              "gazette": {"state": "paused", "paused": {"by": "human:owner", "at": "…", "reason": "…"}, …}, …},
+     "failing_jobs": [], "paused_jobs": ["gazette"],
      "queue": {"queued": {"write_event": 12, …}, "claimed": 3, "expired_leases": 0}}
 
 200 when the database and both stores answer, 503 otherwise (a load balancer or uptime check reads the status; the
 body says why). Job and queue figures are informational: a failing job alerts by email instead (infra/alerts.py).
+A job's `state` is "failing" when its last run failed (`consecutive_failures` counts them), "ok" when it completed,
+"never_run", or "paused" when it is paused from the console: a paused job isn't failing, whatever its last run did
+(its count is still shown), and only failing jobs are in `failing_jobs`. Resuming it brings its count back into play.
 Nothing secret is in it: names of jobs, counts and timestamps.
 """
 
@@ -47,26 +52,30 @@ def status() -> dict:
     except Exception:  # noqa: BLE001
         out["latest_release"] = None
     out["jobs"] = jobs()
+    out["failing_jobs"] = [n for n, j in out["jobs"].items() if j["state"] == "failing"]
+    out["paused_jobs"] = [n for n, j in out["jobs"].items() if j["state"] == "paused"]
     out["queue"] = queue()
     return out
 
 
 def jobs() -> dict:
     from infra.alerts import consecutive_failures
-    from ingest.jobs import REGISTRY, _load_registry
+    from ingest.jobs import REGISTRY, _load_registry, paused_jobs
     from ingest.models import FetchRun
 
     _load_registry()
     last_ok = dict(FetchRun.objects.filter(status__in=["ok", "partial"]).values("job").annotate(m=Max("started_at")).values_list("job", "m"))
     last_any = dict(FetchRun.objects.values("job").annotate(m=Max("started_at")).values_list("job", "m"))
+    paused = paused_jobs()
     out = {}
     for name in REGISTRY:
         last = FetchRun.objects.filter(job=name).exclude(status="running").order_by("-started_at", "-id").only("status", "feed_id").first()
+        failures = consecutive_failures(name, last.feed_id) if last else 0
+        state = "paused" if name in paused else "failing" if failures else "ok" if last else "never_run"
         out[name] = {
-            "last_ok": _iso(last_ok.get(name)), "last_run": _iso(last_any.get(name)),
-            "last_status": last.status if last else None,
-            "consecutive_failures": consecutive_failures(name, last.feed_id) if last else 0,
-        }
+            "state": state, "last_ok": _iso(last_ok.get(name)), "last_run": _iso(last_any.get(name)),
+            "last_status": last.status if last else None, "consecutive_failures": failures,
+        } | ({"paused": paused[name]} if name in paused else {})
     return out
 
 

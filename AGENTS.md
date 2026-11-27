@@ -22,7 +22,7 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 
 | Path | What |
 |---|---|
-| `site/` | The static site: `template.html`, `build.mjs` (builds `site/timeline.html` from a release snapshot, `--from-json`, and nothing else; `--dump-json` writes it back for the build gate; `--archive` reads the frozen legacy files for `import_legacy --archive`), `canonical.mjs` (the one content shape), `restructure.mjs` (the legacy files' move / patch / merge), `SCHEMA.md` (the content model and the citation rules), `images/` and `outlines.js` (inputs, kept beside the page), `globe-assets.json`, and the globe tools (`build-globe.mjs`, `build-outlines.mjs`, `build-paleo-points.mjs`, reading a snapshot). |
+| `site/` | The static site: `template.html`, `build.mjs` (builds `site/timeline.html` from a release snapshot, `--from-json`, and nothing else; `--dump-json` writes it back for the build gate; `--archive` reads the frozen legacy files for `import_legacy --archive`), `canonical.mjs` (the one content shape), `restructure.mjs` (the legacy files' move / patch / merge), `SCHEMA.md` (the content model and the citation rules), `images/` and `outlines.js` (inputs, kept beside the page), `brand/` (favicons, app icons, the web manifest and the link-preview card, served at the root of every host: ADR 0034), `cards.mjs` (renders that card from the page in headless Chrome), `globe-assets.json`, and the globe tools (`build-globe.mjs`, `build-outlines.mjs`, `build-paleo-points.mjs`, reading a snapshot). |
 | `archive/` | Frozen at the cutover (ADR 0021): `site-data/` (the legacy `TL.*` content files, held unchanged by a test) and `site-tools/` (the retired tools that rewrote them), with a README. Never edited. |
 | `config/` | Settings (`SITE_NAME`, `DATABASE_URL`, `VAR_DIR`, the two object storages and `S3_*`, `TASK_LEASE_MINUTES`, `WORKER_TICK_SECONDS`, alerts, `AGENT_API_RATE_PER_MINUTE`, the daily caps `WRITE_EVENT_TASKS_PER_DAY` and `FILL_GAP_TASKS_PER_DAY`), URLs (the admin, `/api/agent/`, `/healthz`), WSGI/ASGI. |
 | `timeline/` | Canonical content: `Region`, `Entry` (the shared id namespace) with `Branch` and `Event`, `BranchLink`, `EventLink`, `Connection`, `Location`, `PaleoPin`, `Image`. `services.py` is the write path (`save_branch`, `save_event`, `apply_changes`, `place`); `dates.py` derives precision and exact dates from date text; `ordering.py` is the snapshot order (`Entry.sort_key`, a fractional index: ADR 0008); `edits.py` is `manage.py apply_edits`, a reviewer's verdicts (and the branches, events and connections a review adds) applied as one audited, all-or-nothing edit file (ADR 0023, ADR 0025). |
@@ -179,6 +179,9 @@ make migrate
 make import-archive  # an EMPTY database only: load the frozen legacy files (or import_legacy <release content.json>)
 make publish      # a release in the store (gates first), latest → it; publish --rollback <version> repoints
 make build        # mirror the latest release (make release-pull), then site/timeline.html from it (= build-release)
+make brand        # the icons and the manifest in site/brand/ (scripts/build_brand.py, Pillow): after a change to the mark
+make card         # the link-preview card, site/brand/og-image.png, from the latest release in headless Chrome: after a big
+                  # content wave or a change to how the page draws; look at it (and var/cards/card-small.png), commit it
 make roundtrip    # the release gates on your content, writing nothing (publish --check: deterministic, build, contested, report)
 make test         # uv run python manage.py test (needs the database)
 make check        # Django checks and missing migrations

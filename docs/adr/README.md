@@ -54,6 +54,7 @@ things work now; an ADR says why, and what was given up.
 | [0031](0031-a-simpler-console-and-run-logs.md) | A simpler operations console, shaped like an orchestrator's, with every job run's log | accepted |
 | [0032](0032-run-cards-and-what-started-a-run.md) | Each run records what started it, and the console shows a card per run on hover | accepted |
 | [0033](0033-a-new-events-page-derived-from-existing-rows.md) | A New events page in the console, every state derived from the rows that already record it | proposed |
+| [0034](0034-brand-assets.md) | Brand files drawn from the page's mark, a preview card rendered from the page, served at the root of every host | proposed |
 <!-- index:end -->
 
 ## Template

@@ -9,12 +9,14 @@
 <div class="status {% if not problems %}good{% elif problems.0.level == 'bad' %}bad{% else %}warn{% endif %}">
   <span class="dot" aria-hidden="true"></span>
   <div style="min-width:0;flex:1">
-    <div class="line">{% if not problems %}All good{% else %}{{ problems|length }} problem{{ problems|length|pluralize }}{% endif %}
+    <div class="line">{% if not problems %}All good{% else %}{{ problems|length }} problem{{ problems|length|pluralize }}{% endif %}{% if paused %} · {{ paused|length }} paused{% endif %}
       <span>{% if health.worker %}worker running{% elif health.quiet %}no worker{% else %}jobs running{% endif %} ·
         {% if health.pointer %}release {{ health.pointer.version }} live{% else %}no live release{% endif %} ·
         last run {{ health.last_run_started|ago }}</span></div>
-    {% if problems %}<ul class="problems">{% for p in problems %}<li class="{{ p.level }}"><span class="lvl"></span>
-      <span>{% if p.href %}<a href="{{ p.href }}">{{ p.text }}</a>{% else %}{{ p.text }}{% endif %}</span></li>{% endfor %}</ul>{% endif %}
+    {% if problems or paused %}<ul class="problems">{% for p in problems %}<li class="{{ p.level }}"><span class="lvl"></span>
+      <span>{% if p.href %}<a href="{{ p.href }}">{{ p.text }}</a>{% else %}{{ p.text }}{% endif %}</span></li>{% endfor %}
+      {% for j in paused %}<li class="paused">{% badge "paused" %}
+      <span><a href="{% url 'opsconsole:job' j.name %}">{{ j.name }}</a> <span class="muted">by {{ j.paused.by }}: {{ j.paused.reason }}{% if j.failures %} · not counted: {{ j.failures }} failed run{{ j.failures|pluralize }} before the pause{% endif %}</span></span></li>{% endfor %}</ul>{% endif %}
   </div>
 </div>
 
