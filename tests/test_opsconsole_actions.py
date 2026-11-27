@@ -104,6 +104,21 @@ class GatingTests(ActionsBase):
         self.assertIn(b"Operator (op)", r.content)
         self.assertIn(b"/ops/act/publish_check/", self.client.get(reverse("opsconsole:releases")).content)
 
+    def test_work_kind_tabs_with_tasks_render_their_batch_buttons(self):
+        # Regression: the batch buttons pass the task kind as `kind=…`, which used to collide with the `act` tag's own
+        # first parameter and made every Work card with waiting, stuck or failed tasks answer 500 for operators.
+        from datetime import timedelta
+        from django.utils import timezone
+        for status in ("queued", "failed", "cancelled"):
+            self.task(status=status, kind="write_event")
+        self.task(status="claimed", kind="write_event", claimed_by="agent:writer-a", claimed_at=timezone.now() - timedelta(hours=3),
+                  lease_until=timezone.now() - timedelta(hours=2))
+        for tab, label in (("waiting", "Cancel these"), ("stuck", "Cancel these"), ("failed", "Requeue these"), ("cancelled", "Requeue these")):
+            r = self.client.get(reverse("opsconsole:work_kind", args=["write_event"]), {"tab": tab})
+            self.assertEqual(r.status_code, 200, (tab, r.content[:500]))
+            self.assertContains(r, label)
+            self.assertContains(r, 'name="kind" value="write_event"')
+
     def test_superusers_have_it_implicitly(self):
         boss = User.objects.create_superuser("boss", password="x")
         self.client.force_login(boss)
