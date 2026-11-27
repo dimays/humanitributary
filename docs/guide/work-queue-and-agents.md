@@ -189,7 +189,7 @@ matters and connections") has no producer yet.
 ### write_event
 
 Built by `ingest/process.py` `build_payload`, for each cluster whose priority
-is at least `WRITE_EVENT_THRESHOLD` (45.0) and that has a Wikipedia item
+is at least `WRITE_EVENT_THRESHOLD` (70) and that has a Wikipedia item
 (portal or year page) in it, at most `MAX_TASK_UPDATES` (150) a run. How
 clusters and priority are computed is in [ingestion](ingestion.md).
 

@@ -26,7 +26,9 @@ collection jobs every few minutes, checking that they are healthy, and what to d
 source changes its terms or a release has to be undone. It runs on one laptop, with production's patterns: Postgres
 and MinIO (a local stand-in for S3) in Docker, the `Procfile`'s `web` and `worker` processes (`make up`), a macOS
 launchd schedule for when they aren't running, and logs and a mirror of the latest release under `var/`. The same
-`Procfile` runs on Heroku as the staging app ([Hosted: Heroku](#hosted-heroku)).
+`Procfile` runs on Heroku as the staging app ([Hosted: Heroku](#hosted-heroku)). The owner's tasks (an agent round,
+applying an edit file, publishing, a rollback, a restore …) are also written as numbered procedures, in Simplified
+Technical English, in the Maintainer's Manual ([docs/manual/](../manual/README.md), `make check-manual`).
 
 ## Setting up a local copy
 
@@ -465,5 +467,6 @@ the database is reset, the day's counter starts again at 1, and `publish` skips 
 | A different worker tick | `WORKER_TICK_SECONDS` in `.env` or the environment; the code default is in `config/settings.py` |
 | A new process | A line in the `Procfile`, the `make up` target if it should run locally, its size and count in `app.json`'s `formation`, `heroku ps:scale` on each app, and this chapter |
 | A new `make` command | A target in the `Makefile` with a `## ` comment, so `make help` lists it, and `.PHONY` |
+| A changed procedure (a command, a cap's default, a job, a step) | The procedure and the tables in `docs/manual/` too, in its STE rules (`make check-manual`; AGENTS.md rule 16) |
 | A backup system | An ADR first: what is copied (the database and the `raw` store), where, how often, and how a restore is tested; then the Backups section |
 | A new runbook | A `###` section under Runbooks, written from the code it depends on, with that code in `covers` |

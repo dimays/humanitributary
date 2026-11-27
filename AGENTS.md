@@ -4,7 +4,8 @@ Read this before changing anything. It's the short version of how the data
 platform is put together and the rules that keep it that way. How each part
 works, from the code, is the technical guide (`docs/guide/`, starting at
 `docs/architecture.md`); the why behind each rule is in `docs/adr/`; every
-table, and how they connect, is in `docs/data-model.md`. The product's name lives in one place,
+table, and how they connect, is in `docs/data-model.md`. What the owner does to run and repair it, step by
+step, with diagrams, is the Maintainer's Manual (`docs/manual/`, in Simplified Technical English). The product's name lives in one place,
 `config/settings.py` `SITE_NAME` (plus this repo's README title, the page's
 `<title>` and header in `site/template.html`): never write the name anywhere
 else in code.
@@ -37,10 +38,11 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 | `tests/` | The suite: import idempotency, the round trip (DB → snapshot → DB), entry order, revision enforcement, the queue, dates, the fact base, branch governance, the docs' checks and hooks (`test_guide.py`) and ingestion (`test_ingest.py` on recorded cassettes in `fixtures/ingest/`: `cassette.py` replays them, `record_fixtures.py` re-records; `first_run.json`, the first real run's routing inputs, from `record_first_run.py`). |
 | `var/` | Gitignored: `gate-receipt.json` (the gate's last pass), `releases/<version>/` (a local mirror of a release from the store, `make release-pull`; `releases/latest` → it), `storage/` (the store itself with `STORAGE_BACKEND=local`), `logs/` (the scheduled runs). Raw documents and releases live in object storage (ADR 0016); an old `raw/` is copied there by `make storage-migrate`. |
 | `ops/` | The local schedule: `run-jobs.sh` (start Docker/Postgres and MinIO or skip, then `run_jobs`), `launchd/run-jobs.plist` (template), `schedule.sh` (install / uninstall / status). |
+| `docs/manual/` | The Maintainer's Manual (ADR 0030): the system overview, the architecture diagrams (context, components, data flow, deployment, the sequences of an agent round, a publish and a rollback), every scheduled job, the main tables, the numbered procedures (`procedures/`), troubleshooting and a glossary. Written in ASD-STE100 Simplified Technical English; `make check-manual` (`scripts/check_ste.py`) holds it to the rules its README states. |
 | `docs/guide/` | The technical guide: a chapter per part of the platform, each stamped against the code it `covers` (`stamps.json`); `README.md` lists the chapters and says how to write one. `docs/architecture.md` points into it. |
-| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015, object storage: 0016, the agent API: 0017, the single-source marker: 0018, processes and release gates: 0019, Heroku hosting: 0020, the cutover: 0021, ingestion tuning: 0022, edit files: 0023, the app serves the page: 0024, edit files' add ops and junk actor claims: 0025, content waves: 0026, caps after round 3: 0027, the operations console: 0028, a release's identity includes the page: 0029); the data model with an ER sketch; how claims are checked; the branch rules. |
+| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015, object storage: 0016, the agent API: 0017, the single-source marker: 0018, processes and release gates: 0019, Heroku hosting: 0020, the cutover: 0021, ingestion tuning: 0022, edit files: 0023, the app serves the page: 0024, edit files' add ops and junk actor claims: 0025, content waves: 0026, caps after round 3: 0027, the operations console: 0028, a release's identity includes the page: 0029, the Maintainer's Manual: 0030); the data model with an ER sketch; how claims are checked; the branch rules. |
 | `guide/` | The guide's tools behind `manage.py guide check / stamp / status / covers / index`: `chapters.py`, `coverage.py` (what a chapter covers, its hash), `checks.py`. No models. |
-| `scripts/` | `make_env.py` (writes `.env`, or adds the keys it lacks, printing no values); `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
+| `scripts/` | `make_env.py` (writes `.env`, or adds the keys it lacks, printing no values); `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_ste.py` (`make check-manual`: the manual's STE rules); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
 | `.claude/settings.json`, `.claude/hooks/` | Hooks only: before `git commit`, the guide must be fresh; before `gh pr create`, the gate must have passed on the committed code; at the end of a turn, a reminder. |
 | `.claude/skills/` | Agent skills: `drain-write-events`, `fill-gaps`, `review-branch-proposals`, `verify-claims`, `verify-stale-claims`; all work through the agent API (`HUMANITRIBUTARY_API`, `HUMANITRIBUTARY_API_TOKEN`). |
 | `Procfile`, `app.json`, `docker-compose.yml`, `.github/workflows/check.yml` | The processes (`release`, `web`, `worker`; `make up` runs web and worker with honcho), Heroku's description of the app (buildpack, formation, add-on, config vars: ADR 0020), the local services (Postgres on 5433, MinIO on 127.0.0.1:9000/9001), and CI (`make check-pr` on pull requests and pushes to main). |
@@ -155,6 +157,16 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
     supersedes the old one, with a link, and the old one's Status names it
     back. `make check-adr` enforces the form; `make adr-index` updates the
     index. (ADR 0014)
+16. **Maintainer-facing docs live in `docs/manual/`, written in STE.** The
+    guide (`docs/guide/`) stays the developer reference: how the code works.
+    The manual says what the owner does: procedures, troubleshooting,
+    diagrams. A change that alters a procedure, a job, a cap's default, a
+    command or a diagram's facts updates the manual in the same PR, in the
+    rules its README states (sentences of at most 20 words in a step and 25
+    elsewhere, active voice, present tense, no "-ing" forms, one instruction
+    per step, each step with a "Make sure that…" check). `make
+    check-manual` checks what a program can, and `make check-pr` runs it.
+    (ADR 0030)
 
 ## Working
 
@@ -236,9 +248,10 @@ archive into an empty database (`make import-archive`), about 20.
 3. **Guide and ADR.** `make check-guide` names the chapters your change
    touches: read the diff against each, update it, `make guide-stamp
    CHAPTER=<name>` (rule 14). A real decision gets an ADR, or amends one
-   (rule 15).
+   (rule 15). A change to what the owner does updates `docs/manual/`
+   (rule 16).
 4. **The gate.** `make check-pr` (`scripts/check_pr.py`): the guide's check
-   first, then the ADR check, Django's checks and missing migrations (and
+   first, then the ADR check, the manual's STE check, Django's checks and missing migrations (and
    ruff when configured) beside the test suite and the release gates on your
    database's content (`make roundtrip`). CI runs the same command, on the
    archive's content. A pass writes a receipt for the
@@ -256,6 +269,7 @@ make check-guide                       # what to review, and the diff
 make guide-stamp CHAPTER=ingestion     # after reviewing a chapter against the change
 make guide-status                      # every chapter, fresh or not
 make check-adr                         # the ADRs agree with each other
+make check-manual                      # the Maintainer's Manual obeys its STE rules
 make check-pr                          # the gate (about 30 seconds)
 ```
 
