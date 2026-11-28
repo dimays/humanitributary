@@ -16,6 +16,7 @@
     <dt>Last run</dt><dd>{% if j.run %}<a href="{% url 'opsconsole:run' j.run.pk %}">{% if j.partial %}{% badge "completed" "Completed" "with errors" %}{% else %}{% badge j.state %}{% endif %}</a> <span class="muted">{{ j.run.started_at|ago }}{% if j.duration is not None %} · {{ j.duration|seconds }}{% endif %}</span>{% else %}never{% endif %}</dd>
     {% if j.failures and j.paused %}<dt>Before the pause</dt><dd class="muted">{{ j.failures }} failed in a row{% if j.worst_feed %} ({{ j.worst_feed }}){% endif %}; not counted as a problem or alerted while paused</dd>
     {% elif j.failures %}<dt>Failing</dt><dd style="color:var(--bad)">{{ j.failures }} in a row{% if j.worst_feed %} ({{ j.worst_feed }}){% endif %}{% if j.alerting %}: the alert has been sent{% endif %}</dd>{% endif %}
+    {% for d in j.dismissed %}<dt>Dismissed</dt><dd class="muted"><a href="{% url 'opsconsole:run' d.pk %}">run #{{ d.pk }}</a>{% if d.feed_id %} ({{ d.feed.name }}){% endif %} by {{ d.dismissed_by }}, {{ d.dismissed_at|ago }}{% if d.dismiss_action %} (<a href="{% url 'opsconsole:action' d.dismiss_action %}">action #{{ d.dismiss_action }}</a>){% endif %}: not counted as failing until a newer run fails</dd>{% endfor %}
     {% if j.pending %}<dt>Queued here</dt><dd>{% for a in j.pending %}<a href="{% url 'opsconsole:action' a.pk %}">{% badge a.status|action_state %}</a> {% endfor %}</dd>{% endif %}
   </dl></div>
   <div class="card"><dl class="kv">

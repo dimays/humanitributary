@@ -59,6 +59,7 @@ things work now; an ADR says why, and what was given up.
 | [0036](0036-evidence-packs.md) | Evidence packs: a job pre-fetches the allowed pages a task needs, stores their text privately for a limited time, and the API checks every excerpt against it | proposed |
 | [0037](0037-source-ratings-2026-11-28.md) | The November 28 source ratings become Publisher policy, with two new policies: api_only and citation_only | proposed |
 | [0038](0038-larger-round-ceilings.md) | The round size's ceilings are settings, set by what the platform can carry | accepted |
+| [0039](0039-dismiss-a-failed-run.md) | A failed run follows its retry in Needs attention, and an operator can dismiss it | proposed |
 <!-- index:end -->
 
 ## Template

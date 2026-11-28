@@ -123,6 +123,11 @@ with no `scheduled_for`, except those an OpsAction's `result["runs"]` lists, whi
 `manual` or `retry` from the action. The console's run cards use all of it
 ([operations console](operations-console.md#run-cards)).
 
+**Dismissed.** A failed run an operator took out of the console's Needs attention without retrying it has
+`dismissed_at`, `dismissed_by` and `dismiss_action` (the console's `dismiss_run` OpsAction id, a plain integer like
+`ops_action`; [ADR 0039](../adr/0039-dismiss-a-failed-run.md)). Its status stays `failed`, and the failure count
+(`consecutive_failures`, the alerts) still counts it; `/healthz` and the console leave it out of what is failing.
+
 **Alerts.** After a failed run, `run_one` calls `infra.alerts.after_failure`. When that job (and feed) has now
 failed `ALERT_AFTER_FAILURES` (3) runs in a row, counted from `FetchRun` history, it sends one email to
 `ALERT_EMAILS`, else to `ADMINS`, through Django's mail settings (the console backend locally, so it shows in the
