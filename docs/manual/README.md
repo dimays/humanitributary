@@ -99,3 +99,4 @@ script. Write a comment that tells why.
 | 14 | [Control the daily round](procedures/14-control-the-daily-round.md) |
 | 15 | [Set up the daily round](procedures/15-set-up-the-daily-round.md) |
 | 16 | [Measure the evidence coverage](procedures/16-measure-the-evidence-coverage.md) |
+| 17 | [Archive and unarchive a job](procedures/17-archive-and-unarchive-a-job.md) |

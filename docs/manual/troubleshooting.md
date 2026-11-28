@@ -22,6 +22,8 @@ procedure.
 | A console action stays `pending`. | No worker holds the scheduler lock, or the worker is in a long job. | If the action page says that no worker runs, start the worker. Otherwise wait for the job to end. You can withdraw a `pending` action from its page. |
 | `run_job` prints `another run_jobs holds the lock; exiting`. | The worker runs a job now. Only one runner can hold the lock. | Wait some minutes and do the command again. Or use the console action, which runs between jobs. |
 | `run_jobs --list` shows a job as paused. | An operator paused it from the console. | Read who paused it and why on the page of the job in the console. Resume it with procedure [06](procedures/06-pause-and-resume-a-job.md). |
+| A job is not on the Jobs page or in `/healthz`. | An operator archived it. | Open the page "Archived jobs" of the console. Read who archived it and why. To bring it back, do procedure [17](procedures/17-archive-and-unarchive-a-job.md). |
+| A run shows as "Cancelled" on the Runs page, with an error that starts with `stopped:`. | An operator archived its job while it ran. The run stopped at its next request. | No action. The stop is not a failure. |
 | The Dashboard shows a job with an amber "Paused" badge, and its last runs failed. | An operator paused the job after the failures. A paused job is not a problem. | No action. When you correct the cause, resume the job with procedure [06](procedures/06-pause-and-resume-a-job.md). |
 
 ## The queue and the agents

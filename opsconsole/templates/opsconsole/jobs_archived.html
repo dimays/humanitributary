@@ -1,0 +1,20 @@
+{% extends "opsconsole/base.html" %}{% load ops %}
+{% block title %}Archived jobs{% endblock %}
+{% block content %}
+<div class="crumb"><a href="{% url 'opsconsole:jobs' %}">Jobs</a> /</div>
+<div class="head">
+  <div><h1>Archived jobs</h1><div class="sub">Retired from the console (ADR 0041). An archived job never runs. It is hidden from the Jobs list, the Dashboard, Needs attention, the Work page and /healthz. Its runs are kept on the Runs page. Unarchive brings it back paused.</div></div>
+</div>
+<div class="card flush"><div class="scroll"><table>
+<thead><tr><th>Job</th><th>Archived</th><th>Why</th><th class="n">Runs kept</th><th>Last run</th>{% if can_act %}<th></th>{% endif %}</tr></thead>
+<tbody>
+{% for j in rows %}<tr>
+  <td style="min-width:200px">{% if j.in_code %}<a href="{% url 'opsconsole:job' j.name %}"><b>{{ j.name }}</b></a>{% else %}<b>{{ j.name }}</b>{% endif %}{% if j.doc %}<div class="doc">{{ j.doc }}</div>{% endif %}{% if not j.in_code %}<div class="doc">no longer in <span class="mono">ingest/job_defs.py</span></div>{% endif %}</td>
+  <td class="small nowrap">{{ j.archived.at|slice:":16" }} UTC<div class="muted">by {{ j.archived.by }}{% if j.archived.action %} · <a href="{% url 'opsconsole:action' j.archived.action %}">action #{{ j.archived.action }}</a>{% endif %}</div></td>
+  <td class="small">{{ j.archived.reason }}{% if j.archived.paused_by_archive %}<div class="muted">the archive paused it</div>{% endif %}</td>
+  <td class="n"><a href="{% url 'opsconsole:runs' %}?job={{ j.name }}">{{ j.runs }}</a></td>
+  <td class="small nowrap">{% if j.last_run %}{{ j.last_run|ago }}{% else %}<span class="muted">never</span>{% endif %}</td>
+  {% if can_act %}<td style="width:1%"><div class="acts">{% act "unarchive_job" "Unarchive" "sm" job=j.name %}</div></td>{% endif %}
+</tr>{% empty %}<tr><td colspan="6" class="muted">No job is archived.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

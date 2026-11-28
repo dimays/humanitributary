@@ -12,6 +12,9 @@ Each action is an `Action` with:
   `governance.waves.set_active`, `publish.release`; a dismissal stamps the failed FetchRun, ADR 0039), re-checking what may have changed since the confirmation, and
   raises `Refused` (the action fails with that error) if it no longer holds.
 
+An action whose plan names `confirm_name` (archiving a job, ADR 0041) also needs the operator to type that name
+exactly: the confirmation page and the job page's dialog check it in the browser, and `views.confirm` checks it again.
+
 Quick actions (`runs_in="request"`) execute in the confirming request, in one transaction; the others are queued for
 the worker. Nothing here writes canonical rows: the queue, job runs, the release pointer and `JobState` are working
 state. A job run from here writes content the way the job always does, as `job:<name>` inside its own `revising()`;
@@ -60,6 +63,7 @@ class Plan:
     table: dict | None = None                      # {"head": [...], "rows": [[...], ...]} shown below them
     warnings: list = field(default_factory=list)
     fields: list = field(default_factory=list)     # extra inputs on the confirmation form: "notes", "force"
+    confirm_name: str = ""                         # the exact text the operator must type to confirm (archive: the job's name)
 
 
 def _registry():
@@ -96,13 +100,15 @@ def _revision_high() -> int:
 
 def job_refusal(name: str, feed_ids: list[int] | None = None, *, now=None, exclude_action: int | None = None) -> str:
     """Why `name` may not be run from the console now ("" when it may)."""
-    from ingest.jobs import paused_jobs
+    from ingest.jobs import archived_jobs, paused_jobs
 
     now = now or timezone.now()
     reg = _registry()
     if name not in reg:
         return f"no job {name!r}"
     j = reg[name]
+    if a := archived_jobs().get(name):
+        return f"{name} is archived (by {a.get('by')}: {a.get('reason')}); unarchive it first"
     p = paused_jobs().get(name)
     if p:
         return f"{name} is paused (by {p.get('by')}: {p.get('reason')}); resume it first"
@@ -197,10 +203,14 @@ def prepare_retry_run(data, actor):
 
 # ── dismiss a failed run from Needs attention (ADR 0039) ─────────────────────────────────────────────────────────
 
-def dismiss_refusal(run: FetchRun | None) -> str:
+_UNKNOWN = object()
+
+
+def dismiss_refusal(run: FetchRun | None, *, recovery=_UNKNOWN) -> str:
     """Why this run may not be dismissed now ("" when it may): only the failed run Needs attention shows for its job
     and feed (its last finished run), not one already dismissed, and not while a retry or a new run of it is under way
-    (its result decides)."""
+    (its result decides). `recovery`, when the caller has `queries.recoveries()`'s answer for this run already (a
+    run's page), saves reading it twice."""
     from . import queries as Q
 
     if run is None:
@@ -214,7 +224,7 @@ def dismiss_refusal(run: FetchRun | None) -> str:
     if later:
         return (f"a later run of {run.job} finished (#{later.pk}, {later.status} at {later.started_at:%Y-%m-%d %H:%M} UTC): "
                 f"run #{run.pk} is no longer the one in Needs attention")
-    rec = Q.recoveries([run]).get(run.pk)
+    rec = Q.recoveries([run]).get(run.pk) if recovery is _UNKNOWN else recovery
     if rec:
         what = f"run #{rec['run']}" if rec["run"] else f"action #{rec['action']}"
         return f"run #{run.pk} is being retried ({rec['label'].lower()}: {what}): wait for its result, or withdraw the retry first"
@@ -281,8 +291,12 @@ def execute_job(action: OpsAction, log) -> dict:
     out = {"runs": [{"id": r.pk, "feed": r.feed_id, "status": r.status, "counts": r.counts} for r in runs],
            "revisions": revs.count(), "revisions_after": before}
     failed = [r for r in runs if r.status == FetchRun.Status.FAILED]
+    stopped = [r for r in runs if r.status == FetchRun.Status.STOPPED]
     if failed:
         out["error"] = f"run #{failed[0].pk} failed: " + (failed[0].error.splitlines()[0][:500] if failed[0].error else "")
+    elif stopped:  # its job was archived while it ran (ADR 0041): the action is cancelled, not failed
+        out["stopped"] = [r.pk for r in stopped]
+        out["error"] = f"run #{stopped[0].pk} stopped at a safe point: {action.params['job']} was archived while it ran"
     return out
 
 
@@ -617,11 +631,13 @@ def execute_rollback(action, log):
 # ── pause, resume ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 def _pause_plan(kind, data):
-    from ingest.jobs import paused_jobs
+    from ingest.jobs import archived_jobs, paused_jobs
 
     name = (data.get("job") or "").strip()
     if name not in _registry():
         raise Refused(f"no job {name!r}")
+    if a := archived_jobs().get(name):
+        raise Refused(f"{name} is archived (by {a.get('by')}): unarchive it first; it comes back paused, and then it can be resumed")
     paused = paused_jobs()
     if kind == A.PAUSE_JOB and name in paused:
         raise Refused(f"{name} is already paused (by {paused[name].get('by')})")
@@ -638,9 +654,114 @@ def _pause_plan(kind, data):
 
 
 def execute_pause(action, log):
-    from ingest.jobs import set_paused
+    from ingest.jobs import archived_jobs, set_paused
 
+    if action.params["job"] in archived_jobs():
+        raise Refused(f"{action.params['job']} was archived since the confirmation: unarchive it first")
     return {"paused": sorted(set_paused(action.params["job"], action.kind == A.PAUSE_JOB, by=action.requested_by, reason=action.reason))}
+
+
+# ── archive, unarchive (ADR 0041) ─────────────────────────────────────────────────────────────────────────────────
+# Archiving retires a job without deleting anything: it pauses the job (the pause machinery above), records the
+# archive, withdraws its console runs still waiting for the worker, and leaves its running run to stop itself at its
+# next safe point (ingest.jobs.Context.check_stop). The job leaves the console's lists and /healthz; its runs stay.
+
+ARCHIVE_CONSEQUENCES = [  # what the confirmation dialog and page say, in this order
+    ("Paused", "it is paused first, if it is not paused already: the scheduler never runs it, and Run now is not offered"),
+    ("Runs stop", "a run in the worker stops at its next safe point and is marked Stopped; its console runs still waiting "
+                  "for the worker are withdrawn"),
+    ("Hidden", "from the console and from health: the Jobs list and tags, the Dashboard, Needs attention, the Work page's "
+               "“fed by” links, and /healthz (failing_jobs, paused_jobs)"),
+    ("Kept", "its history: its runs stay on the Runs page and in the database, and its page stays reachable"),
+    ("Undo", "unarchive it from Jobs › Archived jobs: it comes back paused; resume it when it should run again"),
+]
+
+
+def _waiting_runs(name: str):
+    return OpsAction.objects.filter(kind__in=[A.RUN_JOB, A.RETRY_RUN], target=f"job:{name}", status=OpsAction.Status.PENDING).order_by("created_at", "id")
+
+
+def prepare_archive_job(data, actor):
+    from ingest.jobs import archived_jobs, paused_jobs
+
+    name = (data.get("job") or "").strip()
+    if name not in _registry():
+        raise Refused(f"no job {name!r}")
+    if a := archived_jobs().get(name):
+        raise Refused(f"{name} is already archived (by {a.get('by')} at {a.get('at', '')[:16]})")
+    p = paused_jobs().get(name)
+    running = list(FetchRun.objects.filter(job=name, status=FetchRun.Status.RUNNING).select_related("feed").order_by("started_at"))
+    waiting = list(_waiting_runs(name))
+    taken = list(OpsAction.objects.filter(kind__in=[A.RUN_JOB, A.RETRY_RUN], target=f"job:{name}", status=OpsAction.Status.RUNNING))
+    rows = [("Job", f"{name}: {_registry()[name].doc}"),
+            ("Pause", f"already paused by {p.get('by')}: {p.get('reason')}" if p else "not paused: archiving pauses it first, with your reason"),
+            ("Running now", "; ".join(f"run #{r.pk}{' (' + r.feed.name + ')' if r.feed_id else ''}, started {_ago(r.started_at)} ago" for r in running)
+             + ": it stops at its next safe point and is marked Stopped" if running else "nothing"),
+            ("Waiting for the worker", f"{len(waiting)} console run{'s' if len(waiting) != 1 else ''}: withdrawn" if waiting else "nothing")]
+    if taken:
+        rows.append(("Taken by the worker", ", ".join(f"action #{t.pk}" for t in taken) + ": its run stops at the next safe point"))
+    rows += list(ARCHIVE_CONSEQUENCES)
+    table = {"head": ["Action", "Kind", "Asked", "By", "Reason"],
+             "rows": [[f"#{w.pk}", w.kind, w.created_at.strftime("%Y-%m-%d %H:%M"), w.requested_by, w.reason[:80]] for w in waiting]}
+    return Plan(A.ARCHIVE_JOB, f"job:{name}", {"job": name}, f"Archive {name}", check_output="\n".join(f"{k}: {v}" for k, v in rows),
+                rows=rows, table=table, fields=["confirm_name"], confirm_name=name)
+
+
+def execute_archive_job(action, log):
+    from ingest.jobs import archived_jobs, paused_jobs, set_archived, set_paused
+
+    name = action.params["job"]
+    if name not in _registry():
+        raise Refused(f"no job {name!r}")
+    if name in archived_jobs():
+        raise Refused(f"{name} is already archived")
+    if action.params.get("confirmed_name") != name:  # views.confirm checked it; the row records what was typed
+        raise Refused("the job's name was not typed to confirm")
+    paused_now = name not in paused_jobs()
+    if paused_now:
+        set_paused(name, True, by=action.requested_by, reason=f"archived (action #{action.pk}): {action.reason}")
+        log(f"{name} paused")
+    now = timezone.now()
+    withdrawn = list(_waiting_runs(name).exclude(pk=action.pk).values_list("pk", flat=True))
+    OpsAction.objects.filter(pk__in=withdrawn, status=OpsAction.Status.PENDING).update(
+        status=OpsAction.Status.CANCELLED, finished_at=now, error=f"withdrawn: {name} was archived by {action.requested_by} (action #{action.pk})")
+    for pk in withdrawn:
+        log(f"action #{pk} withdrawn")
+    running = list(FetchRun.objects.filter(job=name, status=FetchRun.Status.RUNNING).values_list("pk", flat=True))
+    set_archived(name, True, by=action.requested_by, reason=action.reason, action=action.pk, paused_by_archive=paused_now)
+    for pk in running:
+        log(f"run #{pk} stops at its next safe point")
+    log(f"{name} archived")
+    return {"job": name, "paused_by_archive": paused_now, "withdrawn": withdrawn, "stopping": running}
+
+
+def prepare_unarchive_job(data, actor):
+    from ingest.jobs import archived_jobs, paused_jobs
+
+    name = (data.get("job") or "").strip()
+    a = archived_jobs().get(name)
+    if a is None:
+        raise Refused(f"{name or '?'} is not archived")
+    p = paused_jobs().get(name)
+    rows = [("Job", f"{name}: {_registry()[name].doc}" if name in _registry() else f"{name} (no longer in ingest/job_defs.py)"),
+            ("Archived", f"by {a.get('by')} at {a.get('at', '')[:16]}" + (f" (action #{a['action']})" if a.get("action") else "") + f": {a.get('reason')}"),
+            ("Then", "it is back in the Jobs list, the Dashboard and /healthz, paused: the scheduler still skips it until it is resumed"
+                     + ("" if p else " (it is paused again now: its pause was removed while it was archived)"))]
+    return Plan(A.UNARCHIVE_JOB, f"job:{name}", {"job": name}, f"Unarchive {name}", check_output="\n".join(f"{k}: {v}" for k, v in rows), rows=rows)
+
+
+def execute_unarchive_job(action, log):
+    from ingest.jobs import archived_jobs, paused_jobs, set_archived, set_paused
+
+    name = action.params["job"]
+    if name not in archived_jobs():
+        raise Refused(f"{name} is not archived")
+    set_archived(name, False, by=action.requested_by, reason=action.reason)
+    paused_again = name in _registry() and name not in paused_jobs()
+    if paused_again:
+        set_paused(name, True, by=action.requested_by, reason=f"unarchived (action #{action.pk}): resume it when it should run")
+    log(f"{name} unarchived; paused")
+    return {"job": name, "paused_again": paused_again}
 
 
 # ── the daily round: pause, resume, skip the next, its size, held drafts (ADR 0035) ─────────────────────────────
@@ -778,6 +899,8 @@ ACTIONS = {a.kind: a for a in [
     Action(A.ROUND_SIZE, R, prepare_round_size, execute_round_size),
     Action(A.REVIEW_HELD, R, prepare_review_held, execute_review_held),
     Action(A.DISMISS_RUN, R, prepare_dismiss_run, execute_dismiss_run),
+    Action(A.ARCHIVE_JOB, R, prepare_archive_job, execute_archive_job),
+    Action(A.UNARCHIVE_JOB, R, prepare_unarchive_job, execute_unarchive_job),
 ]}
 
 
@@ -806,7 +929,8 @@ def run_now(action: OpsAction, *, log=None) -> OpsAction:
         with transaction.atomic() if spec.runs_in == OpsAction.RunsIn.REQUEST else nullcontext():
             result = spec.execute(action, capture)
         action.result = result
-        action.status = OpsAction.Status.FAILED if (result or {}).get("error") else OpsAction.Status.DONE
+        action.status = (OpsAction.Status.CANCELLED if (result or {}).get("stopped") else
+                         OpsAction.Status.FAILED if (result or {}).get("error") else OpsAction.Status.DONE)
         action.error = mask_secrets((result or {}).get("error", ""))
     except Refused as e:
         action.status, action.error = OpsAction.Status.FAILED, mask_secrets(str(e))[:20000]

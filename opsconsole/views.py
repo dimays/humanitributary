@@ -176,13 +176,16 @@ def problems(now, health: dict, job_rows: list[dict], queue: list[dict]) -> list
 
 @console
 def dashboard(request):
+    from ingest.jobs import holds
+
     now = timezone.now()
     health = Q.health(now)
-    job_rows = Q.jobs(now, history=False)
-    queue = Q.queue(now)
+    held = holds()  # paused and archived, read once for the page (an archived job is left out of all of it: ADR 0041)
+    job_rows = Q.jobs(now, history=False, holds=held)
+    queue = Q.queue(now, archived=set(held[1]))
     attention = [{"job": r, "run": run, "recovery": r["recoveries"].get(run.pk)} for r in job_rows for run in r["failing"]][:8]
     latest = Release.objects.order_by("-created_at", "-id").first()
-    tl = Q.timeline(now)
+    tl = Q.timeline(now, archived=set(held[1]))
     return _render(request, "dashboard.html", {
         "health": health, "problems": problems(now, health, job_rows, queue), "timeline": tl,
         "paused": [r for r in job_rows if r["paused"]],
@@ -238,18 +241,33 @@ def jobs(request):
     tags = Q.tag_set()
     if tag not in tags:
         tag = ""
-    rows = Q.jobs(now)
+    from ingest.jobs import holds
+
+    held = holds()
+    rows = Q.jobs(now, holds=held)
     counts = {t: sum(t in r["tags"] for r in rows) for t in tags}
     shown = [r for r in rows if not tag or tag in r["tags"]]
     return _render(request, "jobs.html", {"rows": shown, "tag": tag, "tags": tags, "tag_counts": counts, "total": len(rows),
+                                          "archived_count": len(held[1]),
                                           "run_cards": Q.run_cards((h["id"] for r in shown for h in r["history"]), now)},
                    section="jobs")
 
 
 @console
+def jobs_archived(request):
+    """The archived jobs (ADR 0041), each with who archived it and why, its runs kept, and Unarchive."""
+    return _render(request, "jobs_archived.html", {"rows": Q.archived(timezone.now())}, section="jobs")
+
+
+@console
 def job_detail(request, name):
+    """A job's page, reachable for an archived job too (its banner, its history, Unarchive). For an operator it
+    carries the archive dialog (ADR 0041), its plan and signed token made now, like a publish check's page."""
     now = timezone.now()
-    row = next((r for r in Q.jobs(now) if r["name"] == name), None)
+    from ingest.jobs import holds
+
+    held = holds()
+    row = next((r for r in Q.jobs(now, include_archived=True, holds=held) if r["name"] == name), None)
     if row is None:
         raise Http404("no such job")
     page, qs_rest = _page(request, Q.fetch_runs(job=name), size=25)
@@ -260,8 +278,16 @@ def job_detail(request, name):
         feeds = list(Feed.objects.filter(config__job=name).only("id", "name", "enabled", "interval_minutes", "next_run_at", "last_run_at", "url").order_by("name"))
         for f in feeds:
             f.schedule = Q.every(f.interval_minutes or row["interval"])
+    archive = None
+    if can_act(request.user) and not row["archived"]:
+        try:
+            plan, token = plan_token(acts.prepare_archive_job({"job": name}, actor_of(request.user)), actor_of(request.user))
+            archive = {"plan": plan, "token": token}
+        except acts.Refused:
+            archive = None
     return _render(request, "job_detail.html", {"j": row, "page": page, "qs": qs_rest, "feeds": feeds, "tags": Q.tag_set(),
-                                                "run_cards": Q.run_cards((h["id"] for h in row["history"]), now)},
+                                                "run_cards": Q.run_cards((h["id"] for h in row["history"]), now),
+                                                "archive": archive},
                    section="jobs")
 
 
@@ -286,7 +312,7 @@ def runs(request):
         ctx["next_up"] = [x for x in nxt if not f["state"] or x["state"] == f["state"]]
     if f["state"] in ("pending", "cancelled"):
         ctx["console_runs"] = Q.console_runs(job=f["job"], tag=f["tag"], status=f["state"] if f["state"] == "cancelled" else "pending")
-    if f["state"] in ("", "running", "completed", "failed"):
+    if f["state"] in ("", "running", "completed", "failed", "cancelled"):  # cancelled: runs stopped by an archive (ADR 0041)
         page, qs_rest = _page(request, Q.fetch_runs(job=f["job"], state=f["state"], tag=f["tag"]))
         for r in page:
             r.state, r.duration, r.summary = Q.run_state(r.status), _duration(r), Q.counts_summary(r.counts)
@@ -314,10 +340,12 @@ def run_detail(request, pk):
     counts = sorted((run.counts or {}).items(), key=lambda kv: (kv[0] != "errors", kv[0]))
     error = mask_secrets(run.error)
     # A failed run: being retried (Retry and Dismiss give way to where the retry is), or one that may be dismissed.
+    # An archived job's failed run is neither retried nor dismissed from here (ADR 0041): its job is retired.
+    job_archived = run.job in Q.archived_names()
     recovery = Q.recoveries([run]).get(run.pk) if run.status == "failed" and not run.dismissed_at else None
-    dismissable = run.status == "failed" and not recovery and not acts.dismiss_refusal(run)
+    dismissable = run.status == "failed" and not recovery and not job_archived and not acts.dismiss_refusal(run, recovery=recovery)
     return _render(request, "run_detail.html", {
-        "recovery": recovery, "dismissable": dismissable,
+        "recovery": recovery, "dismissable": dismissable, "job_archived": job_archived,
         "r": run, "state": Q.run_state(run.status), "duration": _duration(run), "log": log, "lines": shown, "level": level if level in LOG_LEVELS else "",
         "problem_lines": sum(n for lv, n in levels.items() if LOG_LEVELS.get(str(lv).lower(), 20) >= 30), "counts": counts, "error": error, "error_head": Q.first_line(error, 300), "older": older, "newer": newer,
         "job": j, "content": Q.run_revisions(run),
@@ -483,9 +511,9 @@ def _refused(request, kind, message, *, status=409):
                                              "message": message}, section="actions", status=status)
 
 
-def _confirm_page(request, kind, plan: dict, token: str, *, error="", status=200, reason="", notes="", force=False):
+def _confirm_page(request, kind, plan: dict, token: str, *, error="", status=200, reason="", notes="", force=False, typed=""):
     return _render(request, "confirm.html", {"kind": kind, "label": OpsAction.Kind(kind).label, "plan": plan, "token": token,
-                                             "error": error, "reason": reason, "notes": notes, "force": force,
+                                             "error": error, "reason": reason, "notes": notes, "force": force, "typed": typed,
                                              "runs_in": acts.ACTIONS[kind].runs_in}, section="actions", status=status)
 
 
@@ -493,7 +521,7 @@ def plan_token(plan: acts.Plan, actor: str) -> tuple[dict, str]:
     """The confirmation's content and its signed token: the exact parameters, what the page showed, a new key."""
     data = {"kind": plan.kind, "target": plan.target, "params": plan.params, "summary": plan.summary, "check": plan.check_output,
             "rows": plan.rows, "table": plan.table, "warnings": plan.warnings, "fields": plan.fields,
-            "key": uuid.uuid4().hex, "by": actor}
+            "confirm_name": plan.confirm_name, "key": uuid.uuid4().hex, "by": actor}
     return data, signing.dumps(data, salt=TOKEN_SALT, compress=True)
 
 
@@ -556,9 +584,15 @@ def confirm(request, kind):
     reason = (request.POST.get("reason") or "").strip()
     notes = (request.POST.get("notes") or "").strip()
     force = request.POST.get("force") == "1"
+    typed = request.POST.get("confirm_name") or ""
+    # An action that asks for a typed name (archiving a job, ADR 0041) is checked here too, not only in the browser:
+    # exactly the name, as the signed token holds it.
+    if data.get("confirm_name") and typed != data["confirm_name"]:
+        return _confirm_page(request, kind, data, request.POST["token"], status=400, reason=reason, typed=typed,
+                             error=f"Type the job's name exactly, {data['confirm_name']}, to confirm.")
     if not reason:
         return _confirm_page(request, kind, data, request.POST["token"], error="Say why: the reason is recorded with the action.",
-                             status=400, notes=notes, force=force)
+                             status=400, notes=notes, force=force, typed=typed)
     if why := acts.rate_refusal(actor):
         return _refused(request, kind, why, status=429)
     if kind in acts.EXCLUSIVE and (why := acts.exclusive_refusal()):
@@ -568,6 +602,8 @@ def confirm(request, kind):
         params["notes"] = notes
     if "force" in data.get("fields", []):
         params["force"] = force
+    if data.get("confirm_name"):
+        params["confirmed_name"] = typed
     action, created = _create(kind, target=data["target"], params=params, reason=reason, actor=actor, key=data["key"], check_output=data.get("check", ""))
     if not created:
         return redirect("opsconsole:action", action.pk)

@@ -40,9 +40,9 @@ through the service layer.
 
 | Command | What it does |
 |---|---|
-| `manage.py run_jobs` | Runs every job that is due, once, in registry order, skipping paused jobs. `--only a,b` limits it; `--list` prints each job, its interval and when it is next due (or `paused`, by whom and why). `make jobs` runs it. |
+| `manage.py run_jobs` | Runs every job that is due, once, in registry order, skipping paused and archived jobs. `--only a,b` limits it; `--list` prints each job, its interval and when it is next due (or `paused` or `archived`, by whom and why). `make jobs` runs it. |
 | `manage.py run_jobs --loop [--tick N]` | The worker process (Procfile `worker`): runs what is due every `WORKER_TICK_SECONDS` (60), or every `--tick` seconds, until stopped. `make worker` runs it alone; `make up` runs it beside `web`. |
-| `manage.py run_job <name> [--feed F] [--opt k=v …]` | Runs one job now, due or not, paused or not (naming it is the owner's explicit choice). A feed job runs for every enabled feed, or for the one named by `--feed` (an id or exact name, even a disabled one; the Fetcher still applies the source policy). `--opt` values are parsed as JSON when they can be. |
+| `manage.py run_job <name> [--feed F] [--opt k=v …]` | Runs one job now, due or not, paused or not (naming it is the owner's explicit choice); an archived job is refused (unarchive it first). A feed job runs for every enabled feed, or for the one named by `--feed` (an id or exact name, even a disabled one; the Fetcher still applies the source policy). `--opt` values are parsed as JSON when they can be. |
 
 A **job** is a function `fn(ctx)` registered with `@job(name, interval=…, feed=…, not_idempotent=…, tags=…)`.
 Importing `ingest/job_defs.py` registers them all, and the order of that file is the order `run_due` runs them.
@@ -76,8 +76,15 @@ interval of the last run ([ADR 0028](../adr/0028-operations-console.md)).
   `scheduled_for`, so the wait between due and start can be told from the run itself.
 - **A paused job** is never due. `jobs.set_paused(name, paused, by=…, reason=…)` (the console's pause and resume)
   keeps the paused jobs in the `JobState` row "paused_jobs" (`{"jobs": {name: {"by", "at", "reason"}}}`), and
-  `run_due` reads it once per pass (`paused_jobs()`, which never creates the row). A run in progress finishes;
-  `run_named` still runs a paused job.
+  `run_due` reads it before each run (`held_jobs()`, one query, which never creates the row), so a job paused during
+  a pass is held from its next run. A run in progress finishes; `run_named` still runs a paused job.
+- **An archived job** ([ADR 0041](../adr/0041-archive-a-job.md)) is never due either, and never runs at all.
+  `jobs.set_archived(name, archived, by=…, reason=…, action=…, paused_by_archive=…)` (the console's archive and
+  unarchive, which also pause the job) keeps them in the `JobState` row "archived_jobs" (`{"jobs": {name: {"by",
+  "at", "reason", "action", "paused_by_archive"}}}`); `archived_jobs()` reads it, and `holds()` reads both rows in
+  one query. `run_named` raises `JobArchived` for one, and stops a feed job between feeds once its job is archived.
+  A run already under way stops at its next safe point (below). Unarchiving removes only the archive entry: the job
+  stays paused until it is resumed.
 
 **One runner at a time.** `run_due` and `run_named` take a Postgres advisory lock (`pg_try_advisory_lock` on
 `ingest/jobs.py` `LOCK_KEY`). A second runner finds it taken, prints "another run_jobs holds the lock; exiting" and
@@ -99,15 +106,23 @@ ones not yet started wait for the next run. A job cut off by SIGKILL is closed a
 ([ADR 0019](../adr/0019-processes-and-release-gates.md)).
 
 **Every run is a `FetchRun`** with its job, its feed (if any), start and finish times, counts and errors. The job
-gets a `Context`: the run, a `Fetcher`, the feed, the options, a `counts` counter and `error()`. `ctx.opt(key)` reads
-a `--opt` value first, then the feed's `config`. The status is:
+gets a `Context`: the run, a `Fetcher`, the feed, the options, a `counts` counter, `error()` and `check_stop()`.
+`ctx.opt(key)` reads a `--opt` value first, then the feed's `config`. The status is:
 
 | Status | When |
 |---|---|
 | `ok` | The job returned and recorded no errors. |
 | `partial` | The job returned but called `ctx.error()` at least once (one bad day or page doesn't stop the rest). |
 | `failed` | The job raised. The exception and the last 3,000 characters of its traceback are recorded, and the next job still runs. |
+| `stopped` | Its job was archived while it ran, and it stopped at a safe point (ADR 0041). The reason is in its error; it is not a failure. |
 | `running` | Still going, or left behind by a crash (closed as `failed` by the next runner). |
+
+**Safe points** ([ADR 0041](../adr/0041-archive-a-job.md)). `ctx.check_stop()` raises `jobs.RunStopped` when the
+run's job is archived; it reads the `JobState` at most once every `STOP_CHECK_SECONDS` (5). `run_one` sets it as the
+Fetcher's `stop_check`, so every request is a safe point (a network error could already end the job there), and a
+long job that fetches nothing may call it between items. `RunStopped` is a `BaseException`, so a job's own `except
+Exception` does not swallow it; any open transaction rolls back, and `run_one` records the run as `stopped`. A
+stopped run sends no alert and does not count in `consecutive_failures` (it neither fails nor resets the count).
 
 **What started it** ([ADR 0032](../adr/0032-run-cards-and-what-started-a-run.md)). Each run records its `trigger`:
 
@@ -144,7 +159,7 @@ runs as `ctx.actor`, which is `job:<name>`.
 every record at INFO and above from the running thread (the root's level is lowered to INFO for that time only, and
 other threads' records are ignored), and the runner adds its own lines: "<job> started", whatever the job prints
 through `ctx.log`, each `ctx.error` (as ERROR), the traceback of a failure, and "<job> finished: <status> in N s;
-counts {…}" (WARNING when partial, ERROR when failed). The fetcher logs one line per request without its query
+counts {…}" (WARNING when partial or stopped, ERROR when failed). The fetcher logs one line per request without its query
 string ("GET https://host/path?… → 200 (120 ms, 5120 bytes)"), retries and refusals as warnings. Each line is
 `[time (UTC, ms), level, logger, message]`, and goes through `runlog.mask`: `mask_secrets`, then bearer tokens,
 `password=`/`secret=`-style values and a URL's `user:password@`. `httpx` and `httpcore` records below WARNING are
@@ -233,7 +248,8 @@ requests it allows:
 - **Bot walls.** A response that looks like a CAPTCHA or challenge page is marked `blocked`, and its host (and the
   final host after redirects) is refused for the rest of the run.
 
-The Fetcher counts its requests (`fetcher.requests`), which the runner adds to the run's counts, and logs each
+Before each request the Fetcher calls its `stop_check`, when the runner has set one: the run's safe point
+(`Context.check_stop`, above). The Fetcher counts its requests (`fetcher.requests`), which the runner adds to the run's counts, and logs each
 (logger `ingest.http`, INFO; 4xx and 5xx, retries and refusals as WARNING or ERROR), with the query string shown as
 `?…`, so the run's log says what was fetched without a key.
 

@@ -24,7 +24,9 @@ How the jobs use these sources is in [ingestion](ingestion.md).
 Every job request goes through `ingest.http.Fetcher` ([ingest/http.py](../../ingest/http.py)). Its `refusal(url)`
 runs these checks in order; the first that fails raises `Refused` with the reason, and no request is made (a test,
 `test_never_fetch_hosts_and_browser_only_publishers_are_refused_before_any_request`, checks that the request count
-stays at zero).
+stays at zero). Before the checks, a Fetcher a job run holds calls its `stop_check`: the run's safe point, which
+raises `RunStopped` once the job is archived ([ADR 0041](../adr/0041-archive-a-job.md); see
+[ingestion](ingestion.md)).
 
 | # | Check | Where it lives | Refused when |
 |---|---|---|---|
