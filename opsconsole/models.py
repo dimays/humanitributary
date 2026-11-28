@@ -36,6 +36,7 @@ class OpsAction(models.Model):
         REVIEW_HELD = "review_held", "send held drafts to the next review"
         EDITS_CHECK = "edits_check", "check an edit file (agent API)"
         EDITS_APPLY = "edits_apply", "apply an edit file (agent API)"
+        DISMISS_RUN = "dismiss_run", "dismiss a failed run from Needs attention"
 
     class Status(models.TextChoices):
         PENDING = "pending"      # waiting for the worker

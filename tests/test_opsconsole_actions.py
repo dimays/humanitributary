@@ -434,3 +434,136 @@ class PublishActionTests(ActionsBase):
         self.assertEqual(a.status, "done", a.error)
         p = storage.read_pointer()
         self.assertEqual((p["version"], p["updated_by"], p["reason"]), (r1.version, "human:op", "rollback"))
+
+
+class NeedsAttentionTests(ActionsBase):
+    """A failed run in the Dashboard's Needs attention (ADR 0039): it follows its retry (Retry queued, Retrying, gone
+    when the retry completes, replaced when it fails), and an operator may dismiss it, with the same steps and audit
+    as every action; /healthz and the problems line agree with the card."""
+
+    def failed(self, minutes_ago=5, **kw):
+        t = timezone.now() - timedelta(minutes=minutes_ago)
+        return FetchRun.objects.create(job="test_write", started_at=t, finished_at=t + timedelta(seconds=3), status="failed", error="Boom: it broke", **kw)
+
+    def dashboard(self):
+        with mock.patch("opsconsole.queries.worker_holds_lock", return_value=True):
+            return self.client.get(reverse("opsconsole:dashboard"))
+
+    def attention(self, r=None):
+        r = r or self.dashboard()
+        return [(a["run"].pk, (a["recovery"] or {}).get("state")) for a in r.context["attention"] if a["job"]["name"] == "test_write"]
+
+    def problem(self, r) -> str:
+        return next((p["text"] for p in r.context["problems"] if p["text"].startswith("test_write")), "")
+
+    def health(self) -> dict:
+        body = self.client.get("/healthz").json()
+        return body["jobs"]["test_write"] | {"listed": [k for k in ("failing_jobs", "dismissed_jobs") if "test_write" in body[k]]}
+
+    def test_a_retried_run_shows_its_retry_then_leaves(self):
+        run = self.failed()
+        r = self.dashboard()
+        self.assertEqual(self.attention(r), [(run.pk, None)])
+        self.assertContains(r, "/ops/act/retry_run/")
+        self.assertContains(r, "/ops/act/dismiss_run/")
+        a = self.do("retry_run", run=run.pk)
+        r = self.dashboard()
+        self.assertEqual(self.attention(r), [(run.pk, "queued")])
+        self.assertContains(r, "Retry queued")
+        self.assertContains(r, reverse("opsconsole:action", args=[a.pk]))
+        self.assertNotContains(r, "/ops/act/retry_run/", msg_prefix="no Retry while one is queued")
+        self.assertNotContains(r, "/ops/act/dismiss_run/")
+        self.assertIn("Retry queued.", self.problem(r), "still a problem until the retry completes")
+        self.assertEqual((self.health()["state"], self.health()["listed"]), ("failing", ["failing_jobs"]))
+        # The worker has started the retry's run: Retrying, with the run and the action.
+        retry = FetchRun.objects.create(job="test_write", started_at=timezone.now(), status="running", trigger="retry", ops_action=a.pk, retry_of=run, attempt=2)
+        r = self.dashboard()
+        self.assertEqual(self.attention(r), [(run.pk, "running")])
+        self.assertContains(r, "Retrying")
+        self.assertContains(r, reverse("opsconsole:run", args=[retry.pk]))
+        self.assertContains(self.client.get(reverse("opsconsole:run", args=[run.pk])), "Retrying")
+        retry.delete()
+        self.pick_up()
+        a.refresh_from_db()
+        self.assertEqual(a.status, "done", a.error)
+        r = self.dashboard()
+        self.assertEqual(self.attention(r), [], "the retry completed: the row leaves the card")
+        self.assertEqual(self.problem(r), "")
+        self.assertEqual((self.health()["state"], self.health()["listed"]), ("ok", []))
+
+    def test_a_later_scheduled_run_counts_as_the_retry(self):
+        run = self.failed()
+        FetchRun.objects.create(job="test_write", started_at=timezone.now(), status="running")
+        self.assertEqual(self.attention(), [(run.pk, "running")])
+
+    def test_a_retry_that_fails_replaces_the_row(self):
+        jobs.REGISTRY["test_write"] = jobs.Job("test_write", lambda ctx: 1 / 0, 60)
+        run = self.failed()
+        self.do("retry_run", run=run.pk)
+        self.pick_up()
+        new = FetchRun.objects.filter(job="test_write").latest("started_at")
+        self.assertNotEqual(new.pk, run.pk)
+        r = self.dashboard()
+        self.assertEqual(self.attention(r), [(new.pk, None)], "the new failure, not both")
+        self.assertIn("failed 2 runs in a row", self.problem(r))
+
+    def test_dismiss_a_failed_run(self):
+        older = self.failed(minutes_ago=20)
+        run = self.failed()
+        r = self.act("dismiss_run", run=run.pk)
+        self.assertContains(r, f"Dismiss failed run #{run.pk} of test_write")
+        self.assertContains(r, "Boom: it broke")
+        self.assertContains(r, "has failed 2 runs in a row: dismissing does not fix it")
+        self.assertEqual(self.confirm("dismiss_run", self.token(r), reason="").status_code, 400, "a reason is required")
+        self.assertFalse(OpsAction.objects.exists())
+        a = self.do("dismiss_run", reason="the source was down for maintenance; known", run=run.pk)
+        self.assertEqual((a.kind, a.runs_in, a.status, a.target, a.requested_by), ("dismiss_run", "request", "done", f"run:{run.pk}", "human:op"), a.error)
+        self.assertEqual(a.reason, "the source was down for maintenance; known")
+        run.refresh_from_db()
+        self.assertEqual((run.dismissed_by, run.dismiss_action, run.status), ("human:op", a.pk, "failed"))
+        r = self.dashboard()
+        self.assertEqual(self.attention(r), [])
+        self.assertEqual(self.problem(r), "", "not a problem either")
+        self.assertContains(r, "or was dismissed (1)")
+        h = self.health()
+        self.assertEqual((h["state"], h["consecutive_failures"], h["dismissed"]["run"], h["dismissed"]["by"], h["listed"]),
+                         ("dismissed", 2, run.pk, "human:op", ["dismissed_jobs"]), "its count is kept")
+        # It stays in the history, marked.
+        runs = self.client.get(reverse("opsconsole:runs"), {"state": "failed", "job": "test_write"})
+        self.assertEqual([x.pk for x in runs.context["page"]], [run.pk, older.pk])
+        self.assertContains(runs, "Dismissed", count=1)
+        page = self.client.get(reverse("opsconsole:run", args=[run.pk]))
+        self.assertContains(page, "Dismissed</b> from Needs attention by human:op")
+        self.assertNotContains(page, "/ops/act/dismiss_run/")
+        self.assertContains(self.client.get(reverse("opsconsole:job", args=["test_write"])), "not counted as failing until a newer run fails")
+        self.assertContains(self.act("dismiss_run", run=run.pk), "already dismissed", status_code=409)
+        # A new failure of the same job comes back, counted with the earlier ones.
+        new = self.failed(minutes_ago=1)
+        r = self.dashboard()
+        self.assertEqual(self.attention(r), [(new.pk, None)])
+        self.assertIn("failed 3 runs in a row", self.problem(r))
+        self.assertEqual((self.health()["state"], self.health()["listed"]), ("failing", ["failing_jobs"]))
+
+    def test_dismiss_refusals(self):
+        self.client.force_login(self.staff)
+        run = self.failed()
+        self.assertEqual(self.act("dismiss_run", run=run.pk).status_code, 403, "ops_operator only")
+        self.client.force_login(self.op)
+        self.assertContains(self.act("dismiss_run", run=999999), "no such run", status_code=409)
+        ok = FetchRun.objects.create(job="test_write", started_at=timezone.now() - timedelta(minutes=1), finished_at=timezone.now(), status="ok")
+        self.assertContains(self.act("dismiss_run", run=ok.pk), "not failed", status_code=409)
+        self.assertContains(self.act("dismiss_run", run=run.pk), "no longer the one in Needs attention", status_code=409)
+        ok.delete()
+        a = self.do("retry_run", run=run.pk)
+        self.assertContains(self.act("dismiss_run", run=run.pk), "being retried", status_code=409)
+        # Confirmed before the retry was asked for: the request re-checks and refuses.
+        self.client.post(reverse("opsconsole:action_cancel", args=[a.pk]))
+        token = self.token(self.act("dismiss_run", run=run.pk))
+        a2 = self.do("retry_run", run=run.pk)
+        r = self.confirm("dismiss_run", token)
+        d = OpsAction.objects.get(kind="dismiss_run")
+        self.assertEqual((r.status_code, d.status), (303, "failed"))
+        self.assertIn("being retried", d.error)
+        run.refresh_from_db()
+        self.assertIsNone(run.dismissed_at)
+        self.assertEqual(a2.status, "pending")

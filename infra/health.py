@@ -4,14 +4,18 @@
      "latest_release": "2026.11.26.2",
      "jobs": {"portal": {"state": "ok", "last_ok": "…", "last_run": "…", "last_status": "ok", "consecutive_failures": 0},
               "gazette": {"state": "paused", "paused": {"by": "human:owner", "at": "…", "reason": "…"}, …}, …},
-     "failing_jobs": [], "paused_jobs": ["gazette"],
+     "failing_jobs": [], "paused_jobs": ["gazette"], "dismissed_jobs": [],
      "queue": {"queued": {"write_event": 12, …}, "claimed": 3, "expired_leases": 0}}
 
 200 when the database and both stores answer, 503 otherwise (a load balancer or uptime check reads the status; the
 body says why). Job and queue figures are informational: a failing job alerts by email instead (infra/alerts.py).
-A job's `state` is "failing" when its last run failed (`consecutive_failures` counts them), "ok" when it completed,
-"never_run", or "paused" when it is paused from the console: a paused job isn't failing, whatever its last run did
-(its count is still shown), and only failing jobs are in `failing_jobs`. Resuming it brings its count back into play.
+A job is judged by each of its feeds' last finished runs (its own, for a job without feeds), the same runs the
+console's "Needs attention" lists. Its `state` is "failing" when one of them failed (`consecutive_failures` counts
+the worst feed's failures in a row), "ok" when they completed, "never_run", "paused" when it is paused from the
+console (a paused job isn't failing, whatever its last runs did; its count is still shown), or "dismissed" when every
+one that failed was dismissed by an operator from the console (ADR 0039: with who, when and the run; the count is
+still shown). Only failing jobs are in `failing_jobs`. Resuming a job, or a newer failed run after a dismissal, brings
+it back. A failed run being retried stays failing until the retry completes.
 Nothing secret is in it: names of jobs, counts and timestamps.
 """
 
@@ -54,6 +58,7 @@ def status() -> dict:
     out["jobs"] = jobs()
     out["failing_jobs"] = [n for n, j in out["jobs"].items() if j["state"] == "failing"]
     out["paused_jobs"] = [n for n, j in out["jobs"].items() if j["state"] == "paused"]
+    out["dismissed_jobs"] = [n for n, j in out["jobs"].items() if j["state"] == "dismissed"]
     out["queue"] = queue()
     return out
 
@@ -66,16 +71,26 @@ def jobs() -> dict:
     _load_registry()
     last_ok = dict(FetchRun.objects.filter(status__in=["ok", "partial"]).values("job").annotate(m=Max("started_at")).values_list("job", "m"))
     last_any = dict(FetchRun.objects.values("job").annotate(m=Max("started_at")).values_list("job", "m"))
+    # Each job's and feed's last finished run (one query), as the console's Needs attention reads them.
+    lasts = {}
+    for r in (FetchRun.objects.exclude(status="running").only("id", "job", "feed_id", "status", "started_at", "dismissed_at", "dismissed_by")
+              .order_by("job", "feed_id", "-started_at", "-id").distinct("job", "feed_id")):
+        lasts.setdefault(r.job, []).append(r)
     paused = paused_jobs()
     out = {}
     for name in REGISTRY:
-        last = FetchRun.objects.filter(job=name).exclude(status="running").order_by("-started_at", "-id").only("status", "feed_id").first()
-        failures = consecutive_failures(name, last.feed_id) if last else 0
-        state = "paused" if name in paused else "failing" if failures else "ok" if last else "never_run"
+        mine = sorted(lasts.get(name, []), key=lambda r: (r.started_at, r.pk), reverse=True)
+        last = mine[0] if mine else None
+        failed = [r for r in mine if r.status == "failed"]
+        failing = [r for r in failed if not r.dismissed_at]
+        counted = failing or failed
+        failures = max((consecutive_failures(name, r.feed_id) for r in counted), default=0)
+        state = ("paused" if name in paused else "failing" if failing else "dismissed" if failed else "ok" if last else "never_run")
         out[name] = {
             "state": state, "last_ok": _iso(last_ok.get(name)), "last_run": _iso(last_any.get(name)),
             "last_status": last.status if last else None, "consecutive_failures": failures,
-        } | ({"paused": paused[name]} if name in paused else {})
+        } | ({"paused": paused[name]} if name in paused else {}) | (
+            {"dismissed": {"run": failed[0].pk, "by": failed[0].dismissed_by, "at": _iso(failed[0].dismissed_at)}} if state == "dismissed" else {})
     return out
 
 

@@ -1,7 +1,7 @@
 {% load ops %}<div class="scroll"><table>
 <thead><tr><th>State</th><th>Run</th>{% if not hide_job %}<th>Job</th>{% endif %}<th>Started</th><th class="n">Duration</th><th>Counts</th></tr></thead>
 <tbody>{% for r in page %}<tr>
-  <td>{% if r.status == 'partial' %}{% badge "completed" "Completed" "with errors" %}{% else %}{% badge r.state %}{% endif %}</td>
+  <td>{% if r.status == 'partial' %}{% badge "completed" "Completed" "with errors" %}{% else %}{% badge r.state %}{% endif %}{% if r.dismissed_at %} <span class="small muted" title="dismissed by {{ r.dismissed_by }}, {{ r.dismissed_at|date:'M j, H:i' }} UTC">Dismissed</span>{% endif %}</td>
   <td class="nowrap"><a href="{% url 'opsconsole:run' r.pk %}" class="mono">#{{ r.pk }}</a>{% if r.feed_id %} <span class="muted small">{{ r.feed.name|truncatechars:34 }}</span>{% endif %}</td>
   {% if not hide_job %}<td><a href="{% url 'opsconsole:job' r.job %}">{{ r.job }}</a></td>{% endif %}
   <td class="nowrap" title="{{ r.started_at|date:'Y-m-d H:i:s' }} UTC">{{ r.started_at|ago }}<div class="small muted">{{ r.started_at|date:"M j, H:i" }}</div></td>

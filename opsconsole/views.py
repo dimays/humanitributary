@@ -138,7 +138,9 @@ def _duration(r):
 
 def problems(now, health: dict, job_rows: list[dict], queue: list[dict]) -> list[dict]:
     """What is wrong, worst first, each in one sentence with where to look. A paused job is not a problem, whatever its
-    last run did: the Dashboard lists it apart, in amber (`paused`), and it counts again once resumed."""
+    last run did: the Dashboard lists it apart, in amber (`paused`), and it counts again once resumed. Nor is a failed
+    run an operator dismissed (ADR 0039): `failures` leaves it out, as Needs attention does. A failing job being
+    retried is still a problem until the retry completes; its sentence says so."""
     out = []
     for alias, s in health["storage"].items():
         if not s["ok"]:
@@ -151,6 +153,9 @@ def problems(now, health: dict, job_rows: list[dict], queue: list[dict]) -> list
             where = f" ({r['worst_feed']})" if r["worst_feed"] else ""
             text = f"{r['name']}{where} failed {r['failures']} run{'s' if r['failures'] != 1 else ''} in a row" + \
                 (" — alert threshold reached." if r["alerting"] else ".")
+            recovering = [r["recoveries"].get(x.pk) for x in r["failing"]]
+            if recovering and all(recovering):
+                text += f" {recovering[0]['label']}."
             out.append({"level": "bad" if r["alerting"] else "warn", "text": text, "href": reverse("opsconsole:job", args=[r["name"]])})
     stuck = sum(k["stuck"] for k in queue)
     if stuck:
@@ -174,14 +179,14 @@ def dashboard(request):
     health = Q.health(now)
     job_rows = Q.jobs(now, history=False)
     queue = Q.queue(now)
-    attention = [{"job": r, "run": run} for r in job_rows for run in r["failing"]][:8]
+    attention = [{"job": r, "run": run, "recovery": r["recoveries"].get(run.pk)} for r in job_rows for run in r["failing"]][:8]
     latest = Release.objects.order_by("-created_at", "-id").first()
     tl = Q.timeline(now)
     return _render(request, "dashboard.html", {
         "health": health, "problems": problems(now, health, job_rows, queue), "timeline": tl,
         "paused": [r for r in job_rows if r["paused"]],
         "run_cards": Q.run_cards((r["id"] for row in tl["rows"] for r in row["runs"]), now),
-        "attention": attention, "upcoming": Q.upcoming(job_rows, now, limit=7), "queue": queue,
+        "attention": attention, "dismissed_count": sum(len(r["dismissed"]) for r in job_rows if not r["paused"]), "upcoming": Q.upcoming(job_rows, now, limit=7), "queue": queue,
         "queue_active": [k for k in queue if k["active"]], "latest": latest, "today": Q.today(now),
         "open_actions": Q.open_actions(5), "recent_actions": Q.recent_actions(4),
         "round": Q.rounds_overview(now, queue),
@@ -307,7 +312,11 @@ def run_detail(request, pk):
     j = Q._registry().get(run.job)
     counts = sorted((run.counts or {}).items(), key=lambda kv: (kv[0] != "errors", kv[0]))
     error = mask_secrets(run.error)
+    # A failed run: being retried (Retry and Dismiss give way to where the retry is), or one that may be dismissed.
+    recovery = Q.recoveries([run]).get(run.pk) if run.status == "failed" and not run.dismissed_at else None
+    dismissable = run.status == "failed" and not recovery and not acts.dismiss_refusal(run)
     return _render(request, "run_detail.html", {
+        "recovery": recovery, "dismissable": dismissable,
         "r": run, "state": Q.run_state(run.status), "duration": _duration(run), "log": log, "lines": shown, "level": level if level in LOG_LEVELS else "",
         "problem_lines": sum(n for lv, n in levels.items() if LOG_LEVELS.get(str(lv).lower(), 20) >= 30), "counts": counts, "error": error, "error_head": Q.first_line(error, 300), "older": older, "newer": newer,
         "job": j, "content": Q.run_revisions(run),

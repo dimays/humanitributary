@@ -189,23 +189,62 @@ def pending_runs() -> dict[str, list]:
 
     out = defaultdict(list)
     for a in (OpsAction.objects.filter(kind__in=["run_job", "retry_run"], status__in=["pending", "running"])
-              .only("id", "kind", "target", "status", "created_at", "requested_by").order_by("created_at")):
+              .only("id", "kind", "target", "params", "status", "created_at", "requested_by").order_by("created_at")):
         out[a.target.removeprefix("job:")].append(a)
     return dict(out)
+
+
+RECOVERY_LABEL = {"queued": "Retry queued", "running": "Retrying"}
+
+
+def _covers(action, run) -> bool:
+    """Does this console run (or retry) run the failed run's job and feed again?"""
+    p = action.params or {}
+    if action.kind == "retry_run" and p.get("run") == run.pk:
+        return True
+    feeds = p.get("feeds")
+    return not feeds or run.feed_id in feeds
+
+
+def recoveries(failed: list, pending: dict[str, list] | None = None) -> dict[int, dict]:
+    """failed run id → how it is being recovered, for the failed runs that are (the others are left out): a run of the
+    same job and feed that started after it and is running now ("running", with that run and the action that started
+    it, if any: a scheduled run counts too), else a console retry of it, or a run of its job and feed, waiting for the
+    worker ("queued") or just taken by it ("running"), with the action. Its row in Needs attention shows this instead
+    of Retry and Dismiss; once that run finishes it is the job's last run, so an ok one takes the row off the card and
+    a failed one replaces it. One query (and `pending_runs()`'s when not given)."""
+    if not failed:
+        return {}
+    pending = pending_runs() if pending is None else pending
+    running = list(FetchRun.objects.filter(status="running", job__in={r.job for r in failed})
+                   .only("id", "job", "feed_id", "started_at", "ops_action").order_by("started_at", "id"))
+    out = {}
+    for r in failed:
+        now_running = next((x for x in running if x.job == r.job and x.feed_id == r.feed_id and x.started_at >= r.started_at), None)
+        if now_running is not None:
+            out[r.pk] = {"state": "running", "label": RECOVERY_LABEL["running"], "run": now_running.pk, "action": now_running.ops_action}
+            continue
+        a = next((a for a in pending.get(r.job, []) if _covers(a, r)), None)
+        if a is not None:
+            state = "queued" if a.status == "pending" else "running"
+            out[r.pk] = {"state": state, "label": RECOVERY_LABEL[state], "run": None, "action": a.pk}
+    return out
 
 
 def jobs(now, *, history: bool = True) -> list[dict]:
     """One row per registered job, in run order: tags, schedule, its last finished run (the newest across its feeds),
     failures in a row (the worst feed's), the next due time, whether it is paused (by whom, why; a paused job has no
     failing runs to attend to and never alerts), console runs waiting for the worker, and the last HISTORY_RUNS runs.
-    Six queries."""
+    A feed whose last run failed and was dismissed (ADR 0039) is not failing: it is out of `failing`, `failures` and
+    `alerting`, and listed in `dismissed` (its count in `dismissed_failures`) until a newer run replaces it. Each
+    failing run that is being retried is in `recoveries` (`recoveries()`). Seven queries."""
     from ingest.jobs import paused_jobs
 
     reg = _registry()
     paused = paused_jobs()
     last = {}
     for r in (FetchRun.objects.exclude(status="running").select_related("feed")
-              .only("id", "job", "feed_id", "feed__name", "status", "started_at", "finished_at", "counts", "error")
+              .only("id", "job", "feed_id", "feed__name", "status", "started_at", "finished_at", "counts", "error", "dismissed_at", "dismissed_by", "dismiss_action")
               .order_by("job", "feed_id", "-started_at", "-id").distinct("job", "feed_id")):
         last[(r.job, r.feed_id)] = r
     streaks = failure_streaks()
@@ -228,9 +267,13 @@ def jobs(now, *, history: bool = True) -> list[dict]:
         if not j.feed:
             mine = [r for r in mine if r.feed_id is None]
         run = mine[0] if mine else None
-        worst_feed, worst = None, 0
+        worst_feed, worst, worst_dismissed = None, 0, 0
         for (job, feed_id), n in streaks.items():
-            if job == name and n > worst:
+            if job != name:
+                continue
+            if getattr(last.get((job, feed_id)), "dismissed_at", None):  # its last run failed and was dismissed
+                worst_dismissed = max(worst_dismissed, n)
+            elif n > worst:
                 worst, worst_feed = n, feed_id
         if j.feed:
             f = feeds[name]
@@ -242,9 +285,11 @@ def jobs(now, *, history: bool = True) -> list[dict]:
             schedule, schedule_note = every(j.interval), ""
             next_due = (run.started_at + timedelta(minutes=j.interval)) if run else now
         tags = list(j.tags) + (["paused"] if name in paused else [])
-        # Its feeds' (or its own) last runs that failed: what "needs attention" lists, with a Retry each.
-        failing = sorted((r for (job, feed_id), r in last.items() if job == name and r.status == "failed" and (feed_id is not None) == j.feed),
-                         key=lambda r: r.started_at, reverse=True)
+        # Its feeds' (or its own) last runs that failed: what "needs attention" lists, with a Retry and a Dismiss each,
+        # except those an operator dismissed (ADR 0039).
+        failed = sorted((r for (job, feed_id), r in last.items() if job == name and r.status == "failed" and (feed_id is not None) == j.feed),
+                        key=lambda r: r.started_at, reverse=True)
+        failing = [r for r in failed if r.dismissed_at is None]
         rows.append({
             "name": name, "doc": j.doc, "interval": j.interval, "feed": j.feed, "tags": tags, "schedule": schedule, "schedule_note": schedule_note,
             "feeds_enabled": feeds[name]["enabled"] if j.feed else None, "feeds_total": feeds[name]["total"] if j.feed else None,
@@ -256,11 +301,15 @@ def jobs(now, *, history: bool = True) -> list[dict]:
             # A paused job isn't failing (what it did before the pause stays in its history and in `failures`): it is
             # left out of "needs attention" and never alerting; resuming it brings both back.
             "failing": [] if name in paused else failing, "alerting": name not in paused and worst >= alert_after, "next_due": next_due,
+            "dismissed": [r for r in failed if r.dismissed_at], "dismissed_failures": worst_dismissed,
             "overdue": name not in paused and bool(next_due and next_due < now - OVERDUE),
             "paused": paused.get(name), "not_idempotent": j.not_idempotent,
             "history": hist.get(name, []), "pending": pending.get(name, []),
             "creates": [kind for kind, by in FED_BY.items() if name in by],
         })
+    rec = recoveries([run for row in rows for run in row["failing"]], pending)
+    for row in rows:
+        row["recoveries"] = {run.pk: rec[run.pk] for run in row["failing"] if run.pk in rec}
     return rows
 
 
@@ -441,9 +490,10 @@ def run_cards(ids, now) -> dict:
 
 
 def fetch_runs(*, job="", state="", tag="", feed=None):
-    """FetchRuns, newest first, by job, state (running, completed, failed) and tag."""
+    """FetchRuns, newest first, by job, state (running, completed, failed) and tag. A dismissed failed run is still
+    here (and still Failed), marked by its `dismissed_at`."""
     qs = (FetchRun.objects.select_related("feed")
-          .only("id", "job", "feed_id", "feed__name", "status", "started_at", "finished_at", "counts", "error")
+          .only("id", "job", "feed_id", "feed__name", "status", "started_at", "finished_at", "counts", "error", "dismissed_at", "dismissed_by")
           .order_by("-started_at", "-id"))
     if job:
         qs = qs.filter(job=job)

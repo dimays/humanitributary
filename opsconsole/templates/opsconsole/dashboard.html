@@ -47,12 +47,13 @@
     <div class="card-head"><h2>Needs attention<span class="count">{{ attention|length }}</span></h2>
       <a class="more" href="{% url 'opsconsole:runs' %}?state=failed">Failed runs →</a></div>
     {% if attention %}<ul class="list">{% for a in attention %}<li>
-      {% badge "failed" %}
+      {% if a.recovery %}{% if a.recovery.state == 'queued' %}{% badge "pending" a.recovery.label %}{% else %}{% badge "running" a.recovery.label %}{% endif %}{% else %}{% badge "failed" %}{% endif %}
       <div class="grow"><div class="t"><a href="{% url 'opsconsole:run' a.run.pk %}">{{ a.job.name }}</a>{% if a.run.feed_id %} <span class="muted">· {{ a.run.feed.name }}</span>{% endif %}</div>
-        <div class="small muted t" title="{{ a.run.error|masked|truncatechars:400 }}">{{ a.run.started_at|ago }}{% if a.job.failures > 1 %} · {{ a.job.failures }} in a row{% endif %}</div></div>
-      <div class="end">{% act "retry_run" "Retry" "sm" run=a.run.pk %}</div>
+        <div class="small muted t" title="{{ a.run.error|masked|truncatechars:400 }}">{% if a.recovery %}failed {% endif %}{{ a.run.started_at|ago }}{% if a.job.failures > 1 %} · {{ a.job.failures }} in a row{% endif %}</div></div>
+      <div class="end small nowrap">{% if a.recovery %}{% if a.recovery.action %}<a href="{% url 'opsconsole:action' a.recovery.action %}">action #{{ a.recovery.action }}</a>{% endif %}{% if a.recovery.run %}{% if a.recovery.action %} · {% endif %}<a href="{% url 'opsconsole:run' a.recovery.run %}">run #{{ a.recovery.run }}</a>{% endif %}
+        {% else %}{% act "retry_run" "Retry" "sm" run=a.run.pk %} {% act "dismiss_run" "Dismiss" "sm quiet" run=a.run.pk %}{% endif %}</div>
     </li>{% endfor %}</ul>
-    {% else %}<p class="empty-note">Nothing failed: every job's last run completed.</p>{% endif %}
+    {% else %}<p class="empty-note">Nothing failed: every job's last run completed{% if dismissed_count %}, or was dismissed ({{ dismissed_count }}){% endif %}.</p>{% endif %}
   </div>
   <div class="card">
     <div class="card-head"><h2>Up next</h2><a class="more" href="{% url 'opsconsole:jobs' %}">Jobs →</a></div>
