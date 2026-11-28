@@ -459,3 +459,98 @@ class UnratedLookup(models.Model):
 
     def __str__(self):
         return f"{self.domain} ({self.lookups})"
+
+
+class ImageSearch(models.Model):
+    """The image_search job's pacing record for one entry (ingest/images.py, ADR 0048): how often it has looked for a
+    picture, what it found, and when it may look again. Not canonical: collection state, like PrefetchedPage. An
+    entry is searched at most MAX_ATTEMPTS times, each attempt COOLDOWN_DAYS[n] after the one before, so the job
+    never asks the same sources about the same entry over and over."""
+
+    class Outcome(models.TextChoices):
+        ATTACHED = "attached"    # a high-confidence picture was attached
+        REVIEW = "review"        # a candidate waits on the owner's Review page
+        NONE = "none"            # nothing acceptable found
+        ERROR = "error"          # a source failed: the attempt counts, the next one comes after the cooldown
+
+    entry = models.OneToOneField("timeline.Entry", on_delete=models.CASCADE, related_name="image_search")
+    attempts = models.PositiveSmallIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    next_attempt_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Not searched again before this; empty once attempts are used up.")
+    outcome = models.CharField(max_length=10, choices=Outcome.choices, blank=True)
+    note = models.CharField(max_length=500, blank=True, help_text="The last attempt in one line: sources asked, candidates seen, why none was kept.")
+    history = models.JSONField(default=list, blank=True, help_text='The attempts, newest last (capped): [{"at", "outcome", "sources": {name: hits}, "best": score, "kept": n}].')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["next_attempt_at"]
+        constraints = [models.CheckConstraint(condition=Q(outcome__in=["", "attached", "review", "none", "error"]), name="imagesearch_outcome_valid")]
+
+    def __str__(self):
+        return f"{self.entry_id}: {self.attempts} attempt(s), {self.outcome or 'never'}"
+
+
+class ImageCandidate(models.Model):
+    """A picture the image_search job found for an entry: a reference to the source's copy (its file page, its image
+    URL, the license, the author and the attribution), never the image itself (ADR 0048). High-confidence ones are
+    attached at once (a timeline.Image row, as the job); the rest wait on the owner's Review page (/ops/review/,
+    item `image-<id>`), approved, denied or deferred there. `kind` "flag" is not a new picture: the job's signals
+    say an image already attached may disturb, so it was blurred, and the owner confirms or clears that."""
+
+    class Kind(models.TextChoices):
+        PICTURE = "picture"     # a picture to attach
+        FLAG = "flag"           # the sensitive flag the job set on an attached image, to confirm or clear
+
+    class Status(models.TextChoices):
+        REVIEW = "review"        # on the owner's Review page
+        ALTERNATE = "alternate"  # a runner-up, promoted to review if the owner denies the one before it
+        ATTACHED = "attached"    # a timeline.Image row was made from it (or, for a flag, the owner confirmed it)
+        DENIED = "denied"        # the owner said no: never proposed again for this entry
+        SUPERSEDED = "superseded"  # the entry got another picture first
+
+    entry = models.ForeignKey("timeline.Entry", on_delete=models.CASCADE, related_name="image_candidates")
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.PICTURE)
+    status = models.CharField(max_length=12, choices=Status.choices, db_index=True)
+    source = models.CharField(max_length=20, help_text="commons, loc, smithsonian, nasa (ingest/images.py SOURCES).")
+    source_id = models.CharField(max_length=300, help_text='The source\'s id: "File:Death of Caesar.jpg", a LoC item id, an EDAN id, a NASA id.')
+    file_page = models.URLField(max_length=1000, help_text="The picture's page at the source (shown as its source link).")
+    image_url = models.URLField(max_length=1000, blank=True, help_text="The source's full-size file.")
+    thumb_url = models.URLField(max_length=1000, blank=True, help_text="What the page shows: the source's own resized copy, by its URL (empty for a flag on a picture kept in site/images/).")
+    thumb_width = models.PositiveIntegerField(null=True, blank=True)
+    thumb_height = models.PositiveIntegerField(null=True, blank=True)
+    width = models.PositiveIntegerField(null=True, blank=True, help_text="The original's size, as the source states it.")
+    height = models.PositiveIntegerField(null=True, blank=True)
+    mime = models.CharField(max_length=60, blank=True)
+    title = models.TextField(help_text="The caption: the source's title for the picture.")
+    alt = models.TextField(blank=True)
+    creator = models.TextField(blank=True, help_text="The author or maker, as the source names them (HTML removed).")
+    credit = models.TextField(help_text="The credit line the page shows: the creator and, where the source asks, the institution.")
+    license = models.CharField(max_length=200, help_text="Normalized: Public domain, No known restrictions (Library of Congress), CC0 1.0, CC BY 4.0, CC BY-SA 3.0 …")
+    license_url = models.URLField(max_length=500, blank=True)
+    file_date = models.CharField(max_length=100, blank=True, help_text="When the picture was made, as the source gives it.")
+    score = models.FloatField(help_text="0–1: how well it matches the entry (ingest/images.py score()).")
+    match = models.JSONField(default=dict, blank=True, help_text='Why: {"via": "p18"|"depicts"|"search", "qid", "signals": {name: points}}.')
+    sensitive = models.BooleanField(default=False)
+    sensitive_signals = models.JSONField(default=list, blank=True, help_text="The deterministic signals behind the flag: categories, keywords, the branch.")
+    checks = models.JSONField(default=dict, blank=True, help_text='What was checked: {"license": …, "ai": {"clear": true, "rules": […]}, "restrictions": …}.')
+    thumbnail_note = models.CharField(max_length=300, blank=True, help_text="What resizing the page relies on (the source's own thumbnail at N px), and that nothing else is altered.")
+    image = models.ForeignKey("timeline.Image", null=True, blank=True, on_delete=models.SET_NULL, related_name="candidates",
+                              help_text="The Image made from it (a picture) or flagged (a flag).")
+    backlog = models.JSONField(default=dict, blank=True, help_text='Deferred by the owner: {"by", "at", "note", "action"}; out of the Review count until brought back.')
+    decided_by = models.CharField(max_length=200, blank=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(kind__in=["picture", "flag"]), name="imagecandidate_kind_valid"),
+            models.CheckConstraint(condition=Q(status__in=["review", "alternate", "attached", "denied", "superseded"]), name="imagecandidate_status_valid"),
+            models.CheckConstraint(condition=Q(score__gte=0, score__lte=1), name="imagecandidate_score_0_to_1"),
+            models.CheckConstraint(condition=Q(license__iregex=r"^(Public domain|No known restrictions|CC0|CC BY [0-9]|CC BY-SA [0-9])"), name="imagecandidate_license_open"),
+            models.UniqueConstraint(fields=["entry", "kind", "source", "source_id"], name="imagecandidate_unique"),
+        ]
+        indexes = [models.Index(fields=["entry", "status"], name="imagecandidate_entry_status")]
+
+    def __str__(self):
+        return f"{self.entry_id} ← {self.source}:{self.source_id} ({self.status})"

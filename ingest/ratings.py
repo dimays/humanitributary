@@ -52,7 +52,10 @@ BATCH_1 = Batch("2026-11-28", "ratings_2026_11_28", "ADR 0037", (_DIR / "2026-11
 # The second batch (ADR 0044, which amends 0037): the international bodies, sport, museums, reference and government sites
 # the first round left unrated or unread, and eight more. Same record format and the same rules.
 BATCH_2 = Batch("2026-11-28b", "ratings_2026_11_28b", "ADR 0044", (_DIR / "2026-11-28b-sources.json",))
-BATCHES = (BATCH_1, BATCH_2)
+# The third batch (ADR 0048): the two image sources the image_search job reads that had no rating of their own, the
+# Commons API and NASA's Image and Video Library API. Same record format and rules.
+BATCH_3 = Batch("2026-11-28c", "ratings_2026_11_28c", "ADR 0048", (_DIR / "2026-11-28c-images.json",))
+BATCHES = (BATCH_1, BATCH_2, BATCH_3)
 RATED_ON, STATE, FILES = BATCH_1.rated_on, BATCH_1.state, list(BATCH_1.files)
 RESTRICTIVE = ("browser_only", "citation_only", "forbidden")
 PERMISSIVE = ("allowed", "api_only")

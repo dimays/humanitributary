@@ -63,7 +63,8 @@ DEFAULT_HOST_DELAY = 1.0
 # Hosts whose robots.txt we don't apply: Wikimedia's APIs (robots.txt there is written for crawlers of the HTML pages
 # and disallows /w/, where api.php lives; Wikimedia's API etiquette asks bots to use the API, serially, with a
 # descriptive User-Agent, which we do) and the Wayback availability API. Every other host's robots.txt is honored.
-API_HOSTS = {"en.wikipedia.org", "www.wikidata.org", "query.wikidata.org", "wikimedia.org", "archive.org"}
+# commons.wikimedia.org joined for the image job's file metadata (api.php only; its robots.txt is Wikipedia's: ADR 0048).
+API_HOSTS = {"en.wikipedia.org", "www.wikidata.org", "query.wikidata.org", "wikimedia.org", "commons.wikimedia.org", "archive.org"}
 
 
 # Crawler names that mark a robots.txt group as addressed to AI readers (ADR 0037): a site that disallows one of these

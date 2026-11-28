@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Wikimedia Commons (MediaWiki API)",
+    "domains": ["commons.wikimedia.org"],
+    "verdict": "allowed",
+    "needs_key": false,
+    "license": "Per file. The image job keeps only public domain, CC0, CC BY and CC BY-SA files, with the license, its URL and the author",
+    "robots": "User-agent: * allows / but disallows /w/ (where api.php lives) and /api/, a group written for crawlers of the HTML pages (read 2026-11-28). Wikimedia's API etiquette asks bots to use the API, serially, with a descriptive User-Agent, so commons.wikimedia.org joins policy.API_HOSTS beside en.wikipedia.org (ADR 0013)",
+    "terms_url": "https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia",
+    "clause": "\"Directly using a Commons file via embedding its URL (\"hotlinking\") is also possible, but is not recommended.\" Attribution: \"it is the content creator who must be credited, not the uploader.\"",
+    "rate_limit": "Serial requests (policy.HOST_DELAY wikimedia.org), maxlag=5 on every API call",
+    "eras": "all",
+    "regions": "all",
+    "notes": "Read 2026-11-28: the reuse page and Commons:AI-generated media. Jobs read file metadata through api.php only (imageinfo, categories, search); the page shows Wikimedia's own thumbnail by its URL, never a copy we host. AI-generated files carry {{PD-algorithm}} and the AI-generated images categories, which the image job refuses (ADR 0048)."
+  },
+  {
+    "name": "NASA Image and Video Library API",
+    "domains": ["images-api.nasa.gov"],
+    "verdict": "allowed",
+    "needs_key": false,
+    "license": "NASA content is generally not subject to copyright in the United States; the insignia, logotype and third parties' copyrighted material are excluded",
+    "robots": "images-api.nasa.gov/robots.txt answers 404 (read 2026-11-28): no rules (RFC 9309)",
+    "terms_url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+    "clause": "\"NASA content used in a factual manner that does not imply endorsement may be used without needing explicit permission.\" Credit: \"NASA should be acknowledged as the source of the material.\"",
+    "rate_limit": "None stated in the API documentation (v1.22.0); the Fetcher's default of one request a second",
+    "eras": "1915 onward",
+    "regions": "all",
+    "notes": "API documentation read 2026-11-28 (images.nasa.gov/docs, v1.22.0): GET /search with q, media_type, year_start and year_end; no key. The image job refuses items whose description or keywords name a third party's copyright, and credits NASA and its center."
+  }
+]

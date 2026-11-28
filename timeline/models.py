@@ -312,23 +312,32 @@ class PaleoPin(models.Model):
 
 
 class Image(models.Model):
-    """A public-domain or CC0 picture from Wikimedia Commons (TL.image). Files stay in site/images/."""
+    """A picture on an entry (TL.image), public domain or openly licensed. Either a file kept in site/images/ (the
+    legacy set, `src` "images/…") or, since ADR 0048, a reference to the source's own copy (`src` an https URL: a
+    Wikimedia thumbnail, a museum's delivery URL), never re-hosted or altered. Attached by the image_search job or
+    the owner's Review page (ingest/images.py); `sensitive` blurs it on the page until the viewer chooses to see it."""
 
     entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name="images")
     position = models.PositiveSmallIntegerField(default=0)
-    src = models.CharField(max_length=300, help_text='Path relative to site/: "images/me-hastings.jpg".')
+    src = models.CharField(max_length=1000, help_text='Path relative to site/ ("images/me-hastings.jpg") or the source\'s https URL (ADR 0048).')
     width = models.PositiveIntegerField(null=True, blank=True)
     height = models.PositiveIntegerField(null=True, blank=True)
     title = models.TextField()
+    alt = models.TextField(blank=True, help_text="What the picture shows, for screen readers; empty: the title is used.")
     credit = models.TextField()
-    license = models.CharField(max_length=200, help_text="Public domain or CC0 only.")
-    page = models.URLField(max_length=1000, help_text="Its Wikimedia Commons page.")
+    license = models.CharField(max_length=200, help_text="Public domain, No known restrictions (the Library of Congress's rights advisory), CC0, CC BY or CC BY-SA (ADR 0048).")
+    license_url = models.URLField(max_length=500, blank=True, help_text="The license's deed; required for CC BY and CC BY-SA.")
+    page = models.URLField(max_length=1000, help_text="Its file page at the source (Wikimedia Commons, the museum's record).")
+    sensitive = models.BooleanField(default=False, help_text="Likely to disturb (war dead, atrocities, executions, victims, graphic medicine): blurred until the viewer asks.")
 
     class Meta:
         ordering = ["entry", "position"]
         constraints = [
             models.UniqueConstraint(fields=["entry", "position"], name="image_position_unique"),
-            models.CheckConstraint(condition=Q(license__iregex=r"^(PD|Public domain|CC0)"), name="image_license_pd_or_cc0"),
+            models.CheckConstraint(condition=Q(license__iregex=r"^(PD|Public domain|No known restrictions|CC0|CC BY [0-9]|CC BY-SA [0-9])"), name="image_license_open"),
+            # An attribution license is honored on the page: the author and the license's link travel with the picture.
+            models.CheckConstraint(condition=~Q(license__iregex=r"^CC BY") | (~Q(credit="") & ~Q(license_url="")), name="image_attribution_complete"),
+            models.CheckConstraint(condition=Q(src__startswith="images/") | Q(src__startswith="https://"), name="image_src_local_or_https"),
         ]
 
     def __str__(self):

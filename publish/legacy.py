@@ -200,7 +200,8 @@ def import_content(data: dict, *, actor: str = ACTOR, reason: str = "", globe: d
 
         # Images (TL.image).
         desired = {
-            (pk[x["id"]], i): {"src": im["src"], "width": im.get("w"), "height": im.get("h"), "title": im["title"], "credit": im["credit"], "license": im["license"], "page": im["page"]}
+            (pk[x["id"]], i): {"src": im["src"], "width": im.get("w"), "height": im.get("h"), "title": im["title"], "alt": im.get("alt", ""), "credit": im["credit"],
+                               "license": im["license"], "license_url": im.get("licenseUrl", ""), "page": im["page"], "sensitive": bool(im.get("sensitive"))}
             for x in branches + events for i, im in enumerate(x.get("images", []))
         }
         existing = {(r.entry_id, r.position): r for r in Image.objects.filter(entry_id__in=all_pks)}

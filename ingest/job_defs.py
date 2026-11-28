@@ -204,3 +204,15 @@ def prefetch_sources(ctx):
     from . import prefetch
 
     prefetch.run(ctx)
+
+
+@job("image_search", interval=60, tags="collect")
+def image_search(ctx):
+    """Looks for an openly licensed picture for events that have none, attaching sure matches and sending the rest to the Review page.
+
+    Wikidata's P18 and the Commons API first, then the Library of Congress, Smithsonian Open Access and NASA's image
+    library; each event at most MAX_ATTEMPTS times, days to weeks apart; never AI-generated imagery; pictures likely
+    to disturb are flagged and blurred (ingest/images.py, docs/adr/0048-event-images.md)."""
+    from . import images
+
+    images.run(ctx)

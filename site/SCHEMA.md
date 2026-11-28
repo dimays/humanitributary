@@ -131,10 +131,27 @@ TL.image("me-hastings", { src: "images/me-hastings.jpg", w: 480, h: 220, title: 
   license: "Public domain", page: "https://commons.wikimedia.org/wiki/File:…" });
 ```
 
-Written by `fetch-images.mjs`, not by hand. Only images whose Wikimedia Commons license is public domain or CC0 are
-accepted (the build rejects anything else), and never AI-generated or AI-"restored" imagery: candidates in AI-related
-Commons categories or dated 2020 or later are dropped, and the chooser is told to prefer contemporary artworks,
-artifacts, documents and photographs, then later historical artworks and maps, and to leave the slot empty when unsure.
+In a snapshot an event's or branch's `images` is a list of `{ src, w, h, title, alt, credit, license, licenseUrl, page,
+sensitive }`, in that key order; `alt`, `licenseUrl` and `sensitive` appear only when set (ADR 0048, additive under
+ADR 0007), so the older pictures' bytes are unchanged. The page shows the first one.
+
+- `src`: a file kept next to the page (`images/…`, the legacy set) or the source's own copy by its https URL (a
+  Wikimedia thumbnail, a museum's delivery URL): never re-hosted, cropped or altered.
+- `title`: the caption. `alt`: what the picture shows, for screen readers (empty: the title is read).
+- `credit`: the author and, where the source asks, the institution ("…, via Wikimedia Commons").
+- `license`: public domain, CC0, CC BY or CC BY-SA, or the Library of Congress's "No known restrictions"; nothing
+  else. `licenseUrl`: the license's deed, required for CC BY and CC BY-SA (the database refuses one without it, or
+  without a credit), and linked on the page.
+- `page`: the picture's page at its source, linked as "source".
+- `sensitive`: `true` for a picture likely to disturb (war dead, atrocities, executions, disasters with victims,
+  graphic medicine). The page blurs it behind a short notice and a "Show image" button; the viewer's choice reveals
+  that one picture only.
+
+New pictures come from the `image_search` job (`ingest/images.py`), never by hand: sure matches are attached, the
+rest wait on the owner's Review page. Never AI-generated or AI-"restored" imagery: candidates in AI-related Commons
+categories (or tagged {{PD-algorithm}}), colorized versions, files whose description names an image generator or a
+prompt, and pictures made in 2020 or later for events before 2015 are refused. The legacy set was written by
+`fetch-images.mjs` (now in `archive/site-tools/`), public domain or CC0 only, by the same AI rule.
 
 ## Style
 

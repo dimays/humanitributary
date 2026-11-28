@@ -198,7 +198,8 @@ seeded feed's `interval_minutes` (`ingest/seed.py` `FEEDS`), shown in the third 
 | `second_source` | day | — | Suggested second sources for claims only Wikipedia supports. |
 | `gap_waves` | day | — | Content waves (`governance/waves.py`, [content waves](content-waves.md)): gaps in each branch's windows become `fill_gap` tasks (at most `FILL_GAP_TASKS_PER_DAY` new a day); the active wave advances. No requests. |
 | `gap_pointers` | 60 min | — | Pointers for queued `fill_gap` tasks (`governance/pointers.py`): the branch's Wikipedia history sections that name years in the window, and lookup hits, 20 tasks a run. |
-| `prefetch_sources` | 15 min | — | Evidence packs ([below](#evidence-packs)): the `allowed` pages queued `write_event`, `fill_gap` and `verify_claim` tasks point at, fetched, stored privately and ranked into passages in the payload; 60 requests and 40 tasks a run, 8 a host. Last in the order, so every other job's sources and pointers are in. |
+| `prefetch_sources` | 15 min | — | Evidence packs ([below](#evidence-packs)): the `allowed` pages queued `write_event`, `fill_gap` and `verify_claim` tasks point at, fetched, stored privately and ranked into passages in the payload; 60 requests and 40 tasks a run, 8 a host. After every other job that feeds tasks, so their sources and pointers are in. |
+| `image_search` | 60 min | — | Pictures for events that have none ([below](#pictures-for-events-image_search)): Wikidata P18 and the Commons API, then the Library of Congress, Smithsonian Open Access and NASA; 25 events a run, each at most 3 times, 14 then 42 days apart; sure matches attached, the rest to the Review page; then the sensitivity of 50 attached pictures. |
 
 The lookup adapters also have `Feed` rows (`config.job` = `lookup`), but no job is named `lookup`: those rows are
 only on/off switches the adapters read.
@@ -770,6 +771,85 @@ the ones rated since; `--json` prints both lists, `{"cited_by_tasks", "asked_by_
 **Repacking.** `evidence_urls` hashes the candidate keys with `PACK_VERSION` (3): a change to what a pack holds bumps
 it, and every queued task is packed again on the next runs.
 
+## Pictures for events (image_search)
+
+`ingest/images.py`, the `image_search` job ([ADR 0048](../adr/0048-event-images.md)). Deterministic: no LLM
+calls, the same answers give the same candidates, scores and flags. Its models are `ImageSearch` (one per entry:
+`attempts`, `last_attempt_at`, `next_attempt_at`, `outcome` attached / review / none / error, a one-line `note`
+and the last `HISTORY_MAX` (10) attempts in `history`) and `ImageCandidate` (a picture found, by reference:
+`source`, `source_id`, `file_page`, `image_url`, `thumb_url` and its size, the original's size, `mime`, `title`,
+`alt`, `creator`, `credit`, `license`, `license_url`, `file_date`, `score` with `match` {via, qid, signals},
+`sensitive` with `sensitive_signals`, `checks` {license, restrictions, ai rules, categories}, `thumbnail_note`,
+`image` once attached, `backlog`, who decided). Neither is canonical (collection state, no Revision); the picture
+itself becomes a canonical `timeline.Image` through `services.apply_changes` inside `revising()`.
+
+**Which events** (`due`): published or in review, no `Image`, no candidate in review or kept as an alternate, and
+either never searched or past `next_attempt_at` with `attempts < MAX_ATTEMPTS` (3); never-searched first, then by
+`imp`, then timeline order; `per_run` (`PER_RUN`, 25). `--opt slugs=a,b` searches named events whatever their
+cooldown; `--opt sources=commons,nasa` limits the sources; `--opt dry_run=true` searches and scores and writes
+nothing (one log line per event: the outcome and the best candidate).
+
+**Pacing**: an attempt that keeps nothing (`none`) or fails (`error`) counts; the next one may come
+`COOLDOWN_DAYS` (14, then 42) days later; after the third there is none, ever (`next_attempt`). An attempt that
+attaches or sends a candidate to review sets no next attempt: the event leaves the queue. If the owner denies
+every candidate, the event waits the cooldown for its next attempt (`deny`).
+
+**Which entities** (`events_info`): the English Wikipedia articles the event's record claim cites (supports or
+partial, in evidence order), resolved through `wikidata.resolve` (`WikiTitle`, `Entity`, cached 30 days); the first
+is the event's **primary** entity. The entities of the candidate it was written from (kind event or work) follow,
+four at most.
+
+**The sources** (`preflight` asks the Fetcher's policy once a run about each `PROBES` URL; a refused source is
+counted `refused_source.<name>` and skipped; Smithsonian needs `SMITHSONIAN_API_KEY`):
+
+| Source | Requests | Kept |
+|---|---|---|
+| Wikidata | one SPARQL query for every event's entities' `wdt:P18` | the first P18 file of each entity |
+| Commons (`commons.wikimedia.org/w/api.php`, an `API_HOSTS` host) | `imageinfo` (url, size, mime, extmetadata, a 500 px thumbnail) 25 files a request; `list=search` for `haswbstatement:P180=<primary>` (files depicting it) and, as a fallback, the title's words with `filetype:bitmap` | public domain, CC0, CC BY, CC BY-SA (`commons_license`); not non-free; an attribution license needs an author |
+| Library of Congress | `/photos/?fo=json` within a year of the event (1840–1990), then each of the first two items' `?fo=json` | `rights_advisory` starting "No known restrictions"; the largest `.jpg` derivative up to 700 px |
+| Smithsonian | Open Access search with `online_media_type:"Images"` (key in `X-Api-Key`) | media `usage.access` CC0; IDS delivery at max 500 px; the record's accessibility alt text |
+| NASA | `images-api.nasa.gov/search`, the event's year, for events from 1915 whose words or branch are about space or flight | NASA's own items (none naming a third party's copyright); the `~small` rendition |
+
+The catalogs and the Commons title search are asked only when Wikidata and the depicts search found nothing at
+`REVIEW_SCORE`. Every failure of a source is caught, counted `errors.<source>` and recorded on the attempt.
+
+**Never AI-generated** (`ai_refusal`, the rules recorded on each candidate as `AI_RULES`): a Commons category
+matching `AI_CATEGORY_RE` (AI-generated, AI-misgenerated, PD-algorithm, AI-upscaled / -restored / -colorized,
+DALL-E, Midjourney, Stable Diffusion, generative AI, text-to-image), any colorized version, an author, credit,
+title or description matching `AI_TEXT_RE` (AI-generated, "prompted by", an image generator), and a picture made in
+`RECENT_YEAR` (2020) or later for an event before 2015. Counted `refused.ai`; a license refusal is `refused.license`.
+
+**Score** (`score`): the way it was found (`BASE`: the primary entity's P18 0.6, another entity's P18 0.45,
+depicts 0.5, a catalog 0.2, a Commons title search 0.15), the event title's words it shares (up to 0.2), the date
+(a photograph within two years of an event since 1830 +0.1; a work made before 1900 for an earlier event +0.05; a
+search or catalog hit made more than two years before the event −0.25) and the event's place in its text (+0.1).
+
+**Sensitivity** (`sensitivity`): a Commons category matching `SENSITIVE_CATEGORY_RE` (corpses, human remains,
+massacres, atrocities, genocide, the Holocaust, war crimes, executions, hangings, lynching, torture, mass graves,
+victims, the wounded, injuries, autopsies, surgery, medical photographs, concentration camps …) is enough alone;
+the picture's own text matching it counts with the event's words, its branch or a category agreeing; the event's
+words (`EVENT_WORD_RE`: massacre, execution, killed, famine, bombing …) count with the picture's text or its branch
+(`BRANCH_RE`: war, genocide, disaster, pandemic, terror …). Any signal sets `sensitive`.
+
+**Where it goes** (`auto_ok`): attached at once, as `job:image_search`, only the primary entity's own P18 when that
+entity is an event or a work, the license is public domain or CC0, `Restrictions` is empty, no sensitivity signal,
+and the score is at least `AUTO_SCORE` (0.7). Otherwise the best candidate at `REVIEW_SCORE` (0.35) or more goes to
+the owner's Review page (status `review`) and up to `KEEP` − 1 (2) runners-up wait as `alternate`; a denied one is
+never proposed again for the entry, and an alternate is promoted when the one before it is denied. Below 0.35 nothing
+is kept.
+
+**Attached pictures' flags** (`flag_pass`, `FLAG_PER_RUN` 50 a run, from the watermark in the JobState
+`image_flags`): the job reads the Commons categories of pictures already attached (the legacy set included) and,
+where the signals fire, sets `sensitive` (as the job) and adds a `flag` candidate the owner confirms or clears. A
+flag the owner cleared is never set again by the job (the candidate's key is kept).
+
+**What is stored**: references only. `src` is the source's own thumbnail URL (the `utm_` parameters the Commons API
+adds are dropped), and `thumbnail_note` says which resizing the page relies on; nothing is downloaded, cropped or
+altered.
+
+Counts: `events`, the outcomes, `attached_rows`, `flagged`, `best_via.<via>`, `refused.ai`, `refused.license`,
+`errors.<source>`, `refused_source.<source>`, `flags_read`, `flags_set`, and the entity lookups'.
+
 ## Link health
 
 [ingest/linkhealth.py](../../ingest/linkhealth.py) re-checks the URLs we cite, `limit` (200) a day.
@@ -812,7 +892,8 @@ so and points at `make schedule-status`.
 
 `tests/test_ingest.py` covers the whole pipeline with no network; `tests/test_evidence_packs.py` covers evidence
 packs (selection by policy, robots and blocked hosts, passages, the payload and its cap, retention, the API) with an
-`httpx.MockTransport`. `tests/cassette.py` replays recorded responses
+`httpx.MockTransport`; `tests/test_images.py` covers `image_search` the same way (the cooldown and the retry limit,
+the license and AI filters, routing, the sensitivity signals, the Review page's decisions, the snapshot's fields). `tests/cassette.py` replays recorded responses
 from `tests/fixtures/ingest/` and fails loudly on any request not in the cassette; unknown robots.txt requests answer
 404 (allow all). `tests/record_fixtures.py` re-records cassettes against the live services (not part of the suite).
 `tests/fixtures/ingest/first_run.json` is a recording of the first real run's routing inputs (three misrouted stories'
@@ -834,4 +915,5 @@ Hand-made responses (`cassette.response`) cover what live services won't reliabl
 | A new source | Read its terms first ([adding a source](sources-and-terms.md#adding-a-source)), then a reader in `sources_news.py` or `sources_wiki.py` using `NewsWriter` or `upsert_candidate`, and a recorded cassette and test. |
 | A new Wikidata property or kind class | `ingest/wikidata.py` `PROPS` or `KIND_CLASSES`; `refresh_entities` re-derives kinds on its next run. |
 | A new field on an ingest model | A migration (these tables aren't canonical, so no `audit_table()`), and `docs/data-model.md`. |
+| An image_search threshold or limit | `ingest/images.py` (`MAX_ATTEMPTS`, `COOLDOWN_DAYS`, `PER_RUN`, `AUTO_SCORE`, `REVIEW_SCORE`, `KEEP`, `BASE`, the regexes); this chapter, ADR 0048 and the manual's jobs chapter; `tests/test_images.py`. A new image source needs its rating first. |
 | The candidate key scheme | Careful: a changed `source_key` makes every existing item look new and its old candidate look gone. |

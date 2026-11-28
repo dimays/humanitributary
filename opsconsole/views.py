@@ -688,7 +688,7 @@ def review(request):
         "tab": tab, "agents": agents, "rows": rows, "item": current, "d": RV.detail(current) if current else None, "next_key": nxt,
         "people": sum(1 for i in rows if i.kind != "agent"), "agent_rows": sum(1 for i in rows if i.kind == "agent"),
         "backlog_count": RV.count(backlog=True),
-        "me": actor_of(request.user), "key": uuid.uuid4().hex, "done": done, "error": request.GET.get("error", "")[:300],
+        "me": actor_of(request.user), "key": uuid.uuid4().hex, "flag_key": uuid.uuid4().hex, "done": done, "error": request.GET.get("error", "")[:300],
         "lease_minutes": work_queue.HUMAN_LEASE_MINUTES, "excerpt_words": RV.EXCERPT_WORDS, "public_site": settings.PUBLIC_SITE_URL,
     }, section="review")
 

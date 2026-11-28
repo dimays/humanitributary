@@ -11,6 +11,8 @@ Items, each named by a key the page and the actions share:
 | `draft-<slug>` | a draft in review whose only support besides Wikipedia is a page only a person reads | work/rounds.py `owner_read_drafts` |
 | `task-<id>` (task) | a `fill_gap` or `write_event` task released with `needs: browser` | the same release |
 | `task-<id>` (agent) | a `verify_claim` task agents can still claim, shown only with the filter on | `queue.available_q` |
+| `image-<id>` (image) | a picture the image_search job found but may not attach alone (ADR 0048) | ingest/images.py, `ImageCandidate` |
+| `image-<id>` (flag) | a picture already attached that the job's signals blurred, to confirm or clear | ingest/images.py `flag_pass` |
 
 Decisions (each an `OpsAction`, made in the request without a confirmation page: opsconsole/actions.py):
 
@@ -25,6 +27,10 @@ Decisions (each an `OpsAction`, made in the request without a confirmation page:
 - **defer**: the item goes to the backlog, out of the Review count, the sidebar badge, the health counts and every
   agent's queue, until the owner brings it back. A task records it in `payload["needs"]["backlog"]`; a draft in the
   `owner_review` JobState row.
+- **pictures** (ADR 0048): approve attaches the picture (a `timeline.Image`, as `human:<username>`), blurred on the
+  page when the Sensitive box is ticked (the job's signals tick it); deny refuses it for good (the next runner-up, if
+  any, takes its place); a flag item's approve keeps the flag as the box says, its deny clears it. **flag** (its own
+  form, any entry with a picture) sets or clears a picture's sensitive flag directly.
 - **restore**: brings a backlog item back where it was: an item that needed a person to Review, an item agents could
   do to the agents' queue.
 
@@ -43,7 +49,7 @@ from django.db.models.functions import Cast
 from django.utils import timezone
 
 from evidence.models import Claim, Evidence
-from ingest.models import JobState
+from ingest.models import ImageCandidate, JobState
 from timeline.models import Entry
 from work import queue
 from work import rounds as WR
@@ -55,9 +61,10 @@ AGENT_KINDS = ("verify_claim",)            # kinds an agent may still do that fi
 AGENT_LIMIT = 50                           # agent-workable items listed under the filter, in the agents' order
 NOTE_MAX = 500
 EXCERPT_WORDS = 25
-DECISIONS = ("approve", "deny", "defer", "restore")
+DECISIONS = ("approve", "deny", "defer", "restore", "flag")
 URL_RE = re.compile(r"https?://[^\s<>\"'()\[\]]+[^\s<>\"'()\[\].,;:!?]")
-KIND_LABEL = {"claim": "Claim", "draft": "Draft", "task": "Task", "agent": "Agents can do"}
+KIND_LABEL = {"claim": "Claim", "draft": "Draft", "task": "Task", "agent": "Agents can do", "image": "Image", "flag": "Image flag"}
+TRUE = ("1", "on", "true", True)
 
 
 class ReviewError(Exception):
@@ -111,11 +118,18 @@ def _drafts(*, backlog: bool):
     return _draft_qs(backlog=backlog).annotate(held_at=Subquery(last[:1]))
 
 
+def image_qs(*, backlog: bool = False):
+    """Pictures and flags waiting for the owner (ADR 0048), or the deferred ones."""
+    qs = ImageCandidate.objects.filter(status=ImageCandidate.Status.REVIEW)
+    return qs.exclude(backlog={}) if backlog else qs.filter(backlog={})
+
+
 def count(*, backlog: bool = False) -> int:
     """The Review page's count and the sidebar's badge: items waiting for the owner (never the backlog, never the
     items agents can still do). One query: the sidebar reads it on every console page."""
     tasks = person_tasks(backlog=backlog).order_by().values_list("pk")
-    return tasks.union(_draft_qs(backlog=backlog).order_by().values_list("pk"), all=True).order_by().count()
+    return tasks.union(_draft_qs(backlog=backlog).order_by().values_list("pk"), image_qs(backlog=backlog).order_by().values_list("pk"),
+                       all=True).order_by().count()
 
 
 @dataclass
@@ -128,6 +142,7 @@ class Item:
     entry: Entry | None = None
     holder: str = ""                # a live lease's holder (agent-workable items)
     backlog: dict = field(default_factory=dict)
+    image: ImageCandidate | None = None  # a picture or a flag (ADR 0048)
 
     @property
     def kind_label(self) -> str:
@@ -160,6 +175,14 @@ def _task_item(t: AgentTask, kind: str, now) -> Item:
                 backlog=needs.get("backlog") or {})
 
 
+def _image_item(c: ImageCandidate) -> Item:
+    x = c.entry.concrete
+    what = getattr(x, "title", None) or getattr(x, "name", c.entry.slug)
+    kind = "flag" if c.kind == ImageCandidate.Kind.FLAG else "image"
+    return Item(f"image-{c.pk}", kind, f"{what} · {c.source}" if kind == "image" else what, c.created_at, entry=c.entry, image=c,
+                backlog=c.backlog or {})
+
+
 def items(now, *, backlog: bool = False, agents: bool = False) -> list[Item]:
     """The queue, oldest first; with `agents`, then the agent-workable items in the agents' order. The backlog tab
     lists the deferred ones, oldest deferral first."""
@@ -171,6 +194,8 @@ def items(now, *, backlog: bool = False, agents: bool = False) -> list[Item]:
         x = e.concrete
         out.append(Item(f"draft-{e.slug}", "draft", getattr(x, "title", None) or getattr(x, "name", e.slug), e.held_at or e.created_at, entry=e,
                         backlog=held.get(e.slug) or {}))
+    for c in image_qs(backlog=backlog).select_related("entry__as_event", "entry__as_branch"):
+        out.append(_image_item(c))
     if backlog:
         out.sort(key=lambda i: (_parse(i.backlog.get("at")) or i.since, i.key))
         return out
@@ -191,6 +216,9 @@ def find(key: str, now) -> Item | None:
         if t.kind in AGENT_KINDS and agent_tasks(now).filter(pk=t.pk).exists():
             return _task_item(t, "agent", now)
         return None
+    if key.startswith("image-") and key[6:].isdigit():
+        c = ImageCandidate.objects.select_related("entry__as_event", "entry__as_branch").filter(pk=int(key[6:]), status=ImageCandidate.Status.REVIEW).first()
+        return _image_item(c) if c else None
     if key.startswith("draft-"):
         slug = key[6:]
         e = WR.owner_read_drafts().filter(slug=slug).select_related("as_event", "as_branch").first()
@@ -286,8 +314,29 @@ def _hold_note(entry: Entry) -> dict | None:
     return {"text": (m.group(1) if m else pick["reason"]).strip(), "by": pick["actor"], "at": pick["at"]}
 
 
+def preview_src(src: str) -> str:
+    """A picture's URL for the console: the source's own (https), or the public page's copy of a file in site/images/."""
+    from django.conf import settings
+
+    return src if src.startswith("https://") else f"{settings.PUBLIC_SITE_URL}/{src.lstrip('/')}" if src else ""
+
+
+def _image_detail(item: Item) -> dict:
+    c = item.image
+    x = c.entry.concrete
+    im = c.image
+    return {"c": c, "entry": c.entry, "entry_title": getattr(x, "title", None) or getattr(x, "name", ""),
+            "entry_when": getattr(x, "when", None) or getattr(x, "start_when", ""), "entry_text": c.entry.text,
+            "branch": getattr(getattr(x, "branch", None), "name", ""), "preview": preview_src(c.thumb_url or (im.src if im else "")),
+            "signals": (c.match or {}).get("signals") or {}, "via": (c.match or {}).get("via", ""), "qid": (c.match or {}).get("qid", ""),
+            "alternates": ImageCandidate.objects.filter(entry_id=c.entry_id, kind=c.kind, status=ImageCandidate.Status.ALTERNATE).count(),
+            "attached": im}
+
+
 def detail(item: Item) -> dict:
     """Everything the page shows for the current item."""
+    if item.kind in ("image", "flag"):
+        return _image_detail(item)
     if item.kind in ("claim", "agent"):
         t = item.task
         claim = _claim(t)
@@ -332,9 +381,32 @@ def clean_note(s) -> str:
     return " ".join(str(s or "").split())[:NOTE_MAX]
 
 
+def _entry_picture(slug: str):
+    from timeline.models import Image
+
+    return Image.objects.select_related("entry").filter(entry__slug=slug).order_by("position").first()
+
+
+def check_flag(data, now) -> tuple[Item, dict]:
+    """The flag form: set or clear the sensitive flag of an entry's picture (the first one, the one the page shows)."""
+    slug = (data.get("entry") or "").strip().lstrip("#")
+    im = _entry_picture(slug) if slug else None
+    if im is None:
+        raise ReviewError(f"{slug or '(no entry)'} has no picture" if slug else "name the entry whose picture to flag")
+    want = data.get("sensitive") in TRUE
+    if im.sensitive == want:
+        raise ReviewError(f"{slug}'s picture is already {'blurred' if want else 'shown unblurred'}")
+    x = im.entry.concrete
+    item = Item(f"picture-{slug}", "flag", getattr(x, "title", None) or getattr(x, "name", slug), now, entry=im.entry)
+    return item, {"item": item.key, "kind": "flag", "decision": "flag", "entry": slug, "image": im.pk, "sensitive": want,
+                  "note": clean_note(data.get("note"))}
+
+
 def check(data, actor: str, decision: str, now=None) -> tuple[Item, dict]:
     """Validate a decision against the database now (before the OpsAction is written). → (item, params)"""
     now = now or timezone.now()
+    if decision == "flag":
+        return check_flag(data, now)
     key = (data.get("item") or "").strip()
     item = find(key, now)
     if item is None:
@@ -347,6 +419,8 @@ def check(data, actor: str, decision: str, now=None) -> tuple[Item, dict]:
     if item.kind == "agent" and item.holder and item.holder != actor:
         raise ReviewError(f"{item.holder} holds {key} now (until its lease ends or it is done): an agent is on it")
     params = {"item": key, "kind": item.kind, "decision": decision, "note": clean_note(data.get("note"))}
+    if item.kind in ("image", "flag") and decision == "approve":
+        params["sensitive"] = data.get("sensitive") in TRUE
     if decision in ("approve", "deny") and item.kind in ("claim", "agent"):
         url = (data.get("url") or "").strip()
         d = detail(item)
@@ -519,15 +593,64 @@ def _set_draft_backlog(slug: str, mark: dict | None) -> None:
         row.save(update_fields=["state", "updated_at"])
 
 
+def _decide_image(c: ImageCandidate, params: dict, actor: str, action_pk: int, now) -> dict:
+    from ingest import images as I
+
+    d = params["decision"]
+    c = ImageCandidate.objects.select_for_update().get(pk=c.pk)
+    if d == "defer":
+        c.backlog = {"by": actor, "at": now.isoformat(timespec="seconds"), "note": params["note"], "action": action_pk}
+        c.save(update_fields=["backlog"])
+        return {"image": c.pk, "backlog": True}
+    if d == "restore":
+        c.backlog = {}
+        c.save(update_fields=["backlog"])
+        return {"image": c.pk, "to": "review"}
+    if c.kind == ImageCandidate.Kind.FLAG:
+        keep = params.get("sensitive", False) if d == "approve" else False
+        if c.image is None:
+            raise ReviewError(f"image-{c.pk}'s picture is no longer attached")
+        changed = I.set_flag(c.image, keep, actor=actor, reason=_reason(params, "sensitive flag " + ("kept" if keep else "cleared")))
+        ImageCandidate.objects.filter(pk=c.pk).update(status=ImageCandidate.Status.ATTACHED if keep else ImageCandidate.Status.DENIED,
+                                                      sensitive=keep, decided_by=actor, decided_at=now)
+        return {"image": c.image_id, "entry": c.entry.slug, "sensitive": keep, "changed": changed == "updated"}
+    if d == "approve":
+        if c.entry.images.exists():
+            raise ReviewError(f"{c.entry.slug} has a picture already: deny this one, or remove that one in the admin first")
+        im = I.attach(c, actor=actor, sensitive=params.get("sensitive", False),
+                      reason=_reason(params, f"picture {c.source} {c.source_id} attached ({c.license})" + (", blurred" if params.get("sensitive") else "")))
+        return {"image": im.pk, "entry": c.entry.slug, "sensitive": im.sensitive, "license": im.license}
+    nxt = I.deny(c, actor=actor, now=now)
+    return {"candidate": c.pk, "entry": c.entry.slug, "denied": True, "next": nxt.pk if nxt else None}
+
+
+def _decide_flag(params: dict, actor: str, now) -> dict:
+    from ingest import images as I
+    from timeline.models import Image
+
+    im = Image.objects.select_for_update().filter(pk=params["image"]).first()
+    if im is None:
+        raise ReviewError(f"{params['entry']}'s picture is gone")
+    changed = I.set_flag(im, params["sensitive"], actor=actor, reason=_reason(params, "sensitive flag " + ("set" if params["sensitive"] else "cleared")))
+    ImageCandidate.objects.filter(image=im, kind=ImageCandidate.Kind.FLAG, status=ImageCandidate.Status.REVIEW).update(
+        status=ImageCandidate.Status.ATTACHED if params["sensitive"] else ImageCandidate.Status.DENIED, sensitive=params["sensitive"],
+        decided_by=actor, decided_at=now)
+    return {"image": im.pk, "entry": params["entry"], "sensitive": params["sensitive"], "changed": changed == "updated"}
+
+
 def decide(params: dict, *, actor: str, action_pk: int) -> dict:
     """Carry out a checked decision (inside the action's transaction). Raises ReviewError."""
     now = timezone.now()
+    if params["decision"] == "flag":
+        return _decide_flag(params, actor, now)
     item = find(params["item"], now)
     if item is None:
         raise ReviewError(f"{params['item']} is no longer waiting for review")
     d = params["decision"]
     if bool(item.backlog) != (d == "restore"):
         raise ReviewError(f"{params['item']} " + ("is not in the backlog" if d == "restore" else "is in the backlog now"))
+    if item.image is not None:
+        return _decide_image(item.image, params, actor, action_pk, now)
     if item.task is not None:
         t = AgentTask.objects.select_for_update().get(pk=item.task.pk)
         if d == "defer":

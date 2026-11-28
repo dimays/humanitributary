@@ -412,6 +412,8 @@ happens. Its items, each named by a key the page and the decisions share:
 | Draft | `draft-<slug>` | a draft in review whose only support besides Wikipedia is a page only a person reads | `work.rounds.owner_read_drafts` |
 | Task | `task-<id>` | a `fill_gap` or `write_event` task released with `needs: browser` | `review.person_tasks` |
 | Agents can do | `task-<id>` | a `verify_claim` task agents may still claim (only with the filter on) | `review.agent_tasks` |
+| Image | `image-<id>` | a picture the `image_search` job found but may not attach alone ([ADR 0048](../adr/0048-event-images.md)) | `review.image_qs` (`ImageCandidate` in review) |
+| Image flag | `image-<id>` | a picture already attached that the job's sensitivity signals blurred, to confirm or clear | the same, `kind` flag |
 
 **The page.** One item at a time (`?item=<key>`; the first when none is named), and on the left a compact list of
 them all with each one's kind and age. The queue is oldest first: a task by when it was released with its need, a
@@ -421,7 +423,11 @@ next for Claude), at most `AGENT_LIMIT` (50), with the ones an agent holds now m
 decision rests on: for a claim, its entry, the claim's text, its status and confidence, and the agent's release
 reason; for a draft, its title, date, branch and text and the reviewer's **hold note** (the newest edit-file
 Revision on the entry or its evidence, one that says HOLD first, its reason after the op); for a task, its context
-(the branch and window of a `fill_gap`, the story and its items of a `write_event`). Then **Read these in your
+(the branch and window of a `fill_gap`, the story and its items of a `write_event`); for a picture or a flag, the
+event (its text, branch and a link to it on the public page), the picture's title, its page at the source, credit,
+license (linked to its deed), how it was found and its score's parts, the runners-up kept, the sensitivity signals,
+the thumbnailing it relies on, and the picture itself (`review.preview_src`: the source's URL, or the public page's
+copy of a file in `site/images/`), blurred behind "Show image" when it is flagged. Then, for the other kinds, **Read these in your
 browser**: the pages to read, each a prominent link (`target="_blank" rel="noopener"`) with its publisher, its
 policy (`agentapi.policy.decide`, what `GET policy` says) and why it is listed: the URLs in the agent's reason, the
 `PERSON_READ` citations (for an atomic claim, its record's too), the evidence pack's unreadable pages, a
@@ -436,6 +442,16 @@ disclosure. Nothing is chosen for the owner: a claim's page is picked only when 
 | Deny | evidence that the page does not support it (`unrelated`), or with "contradicts" checked, that it conflicts (`conflicts`: the claim may become contested); the task completes | a `reject` op: retracted | cancelled (`queue.cancel`) with the note |
 | Defer | the backlog: `payload["needs"]["backlog"]` (an item agents could do gets a need of kind `owner` marked `from_defer`) | the backlog: the `owner_review` JobState row | as a claim |
 
+**Pictures** (`review._decide_image`; the form's **Sensitive** box, ticked when the job's signals fired):
+Approve attaches the picture (`ingest.images.attach`: a `timeline.Image` through the services as
+`human:<username>`, `sensitive` as the box says; the entry's other candidates are superseded; refused if the entry
+has a picture already); Deny refuses it for good (`images.deny`: never proposed again for the entry; the best
+runner-up goes to review, or with none the event waits its cooldown); Defer and Bring back set and clear the
+candidate's `backlog`. A **flag** item's Approve keeps the flag as the box says and its Deny clears it
+(`images.set_flag`, audited); the job never sets a flag the owner cleared. Below the queue, **A picture's sensitive
+flag** sets or clears the flag of any entry's picture (decision `flag`, OpsAction `review_flag`; refused when the
+entry has no picture or the flag is already so). The next release carries every change.
+
 A deferred item leaves the count, the badge, `/healthz`'s queue counts and every agent's queue, and never comes
 back by itself. The **Backlog** tab lists the deferred items, oldest deferral first, each with who deferred it,
 when and why, and **Bring back** (`restore`), which returns it where it was: an item that needed a person to
@@ -443,8 +459,8 @@ the To review tab, an item agents could do to the agents' queue.
 
 **No confirmation page, still audited.** A decision POSTs to `/ops/review/decide/` (`views.review_decide`, the
 `ops_operator` permission and CSRF as every action). The form carries a fresh idempotency key, so a double submit
-acts once. `actions.ACTIONS` has the four kinds (`review_approve`, `review_deny`, `review_defer`, `review_restore`,
-`direct`: no confirmation step): `prepare` checks the item against the database now (`review.check`: still
+acts once. `actions.ACTIONS` has the five kinds (`review_approve`, `review_deny`, `review_defer`, `review_restore`, and
+`review_flag` for the flag form; `direct`: no confirmation step): `prepare` checks the item against the database now (`review.check`: still
 waiting, not in the backlog unless restoring, not held by an agent, a page that is the item's, the excerpt's
 length, a readable source for a task), and the OpsAction is created and run in the request, in one transaction
 (`run_now`), with the note as its reason (or a default per decision) and the item, decision, note and page in its

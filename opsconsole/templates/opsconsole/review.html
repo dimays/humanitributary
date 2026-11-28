@@ -10,6 +10,12 @@
 .rv-list .sep { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); padding: 12px 10px 4px; }
 .k-claim { background: var(--info-bg); color: var(--info); } .k-draft { background: var(--accent-bg); color: var(--accent); }
 .k-task { background: var(--warn-bg); color: var(--warn); } .k-agent { background: var(--gray-bg); color: var(--gray); }
+.k-image { background: var(--ok-bg, var(--accent-bg)); color: var(--ok, var(--accent)); } .k-flag { background: var(--bad-bg, var(--warn-bg)); color: var(--bad, var(--warn)); }
+.pic { position: relative; max-width: 520px; border-radius: 9px; overflow: hidden; background: var(--hover); margin-top: 10px; }
+.pic img { display: block; width: 100%; height: auto; max-height: 420px; object-fit: contain; }
+.pic.blurred img { filter: blur(28px) saturate(.5); transform: scale(1.12); }
+.pic .veil { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; text-align: center; }
+.pic:not(.blurred) .veil { display: none; }
 .kind { font-size: 11px; font-weight: 600; padding: 0 7px; border-radius: 5px; line-height: 18px; display: inline-block; }
 .read { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .read li { border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; }
@@ -78,6 +84,20 @@
         <dt>Hold note</dt><dd>{% if d.hold %}{{ d.hold.text }} <span class="muted">({{ d.hold.by }}, {{ d.hold.at|date:"M j, H:i" }})</span>{% else %}<span class="muted">None recorded: the reviewer held it without an edit. The round's summary names held drafts.</span>{% endif %}</dd>
       </dl>
       <h3>The draft</h3><div class="quote"><b>{{ d.entry_title }}</b><br>{{ d.entry_text }}</div>
+    {% elif item.kind == 'image' or item.kind == 'flag' %}
+      <dl class="kv">
+        <dt>Entry</dt><dd><span class="mono">{{ d.entry.slug }}</span> · {{ d.entry_title }}{% if d.entry_when %} · {{ d.entry_when }}{% endif %} <span class="muted">({{ d.entry.status }}{% if d.branch %}, {{ d.branch }}{% endif %})</span>{% if public_site %} · <a href="{{ public_site }}/#{{ d.entry.slug }}" target="_blank" rel="noopener">on the page ↗</a>{% endif %}</dd>
+        <dt>Picture</dt><dd>{{ d.c.title }} · <a href="{{ d.c.file_page }}" target="_blank" rel="noopener">its page at {{ d.c.source }} ↗</a></dd>
+        <dt>Credit</dt><dd>{{ d.c.credit }}{% if d.c.file_date %} <span class="muted">({{ d.c.file_date }})</span>{% endif %}</dd>
+        <dt>License</dt><dd>{% if d.c.license_url %}<a href="{{ d.c.license_url }}" target="_blank" rel="noopener">{{ d.c.license }}</a>{% else %}{{ d.c.license }}{% endif %}</dd>
+        {% if item.kind == 'image' %}<dt>Match</dt><dd>score {{ d.c.score|floatformat:2 }} · found by {{ d.via }}{% if d.qid %} of <a href="https://www.wikidata.org/wiki/{{ d.qid }}" target="_blank" rel="noopener">{{ d.qid }}</a>{% endif %}
+          <span class="muted">({% for k, v in d.signals.items %}{{ k }} {{ v }}{% if not forloop.last %}, {% endif %}{% endfor %})</span>{% if d.alternates %} · {{ d.alternates }} runner{{ d.alternates|pluralize }}-up kept{% endif %}</dd>{% endif %}
+        <dt>Sensitive</dt><dd>{% if d.c.sensitive_signals %}{{ d.c.sensitive_signals|join:"; " }}{% else %}<span class="muted">no signal</span>{% endif %}</dd>
+        {% if d.c.thumbnail_note %}<dt>Shown as</dt><dd class="small">{{ d.c.thumbnail_note }}</dd>{% endif %}
+      </dl>
+      <h3>The event</h3><div class="quote"><b>{{ d.entry_title }}</b><br>{{ d.entry_text }}</div>
+      {% if d.preview %}<figure class="pic{% if d.c.sensitive %} blurred{% endif %}" id="rv-pic"><img src="{{ d.preview }}" alt="{{ d.c.alt|default:d.c.title }}" loading="lazy" referrerpolicy="no-referrer"{% if d.c.thumb_width %} width="{{ d.c.thumb_width }}" height="{{ d.c.thumb_height }}"{% endif %}>
+        <div class="veil"><span>This image may be disturbing.</span><button type="button" class="btn sm" onclick="document.getElementById('rv-pic').classList.remove('blurred')">Show image</button></div></figure>{% endif %}
     {% else %}
       <dl class="kv">{% for k, v in d.context %}<dt>{{ k }}</dt><dd>{{ v|default:"–" }}</dd>{% endfor %}
         <dt>The agent says</dt><dd>{{ d.needs.reason|default:"(no reason given)" }} <span class="muted">({{ d.needs.by }}, {{ d.needs.at|slice:":16" }} UTC)</span></dd>
@@ -86,6 +106,7 @@
       {% for t in d.items %}<div class="small muted" style="margin-top:8px">{{ t }}</div>{% endfor %}
     {% endif %}
 
+    {% if item.kind != 'image' and item.kind != 'flag' %}
     <h3>{% if item.kind == 'agent' %}Its sources{% else %}Read these in your browser{% endif %}<span class="count">{{ d.read|length }}</span></h3>
     {% if d.read %}<ul class="read">{% for r in d.read %}<li>
       {% if item.kind == 'claim' or item.kind == 'agent' %}<input type="radio" name="url" value="{{ r.url }}" form="rv-form" aria-label="I read this page"{% if d.read|length == 1 %} checked{% endif %}>{% endif %}
@@ -101,6 +122,7 @@
         <td class="small">{{ r.publisher }}{% if r.tier %} · tier {{ r.tier }}{% endif %}</td><td class="small">{{ r.fetch_policy }}</td><td class="small">{{ r.stance }}</td>
         <td class="small muted">{{ r.checked_by|default:"–" }}{% if r.method %} · {{ r.method }}{% endif %}</td></tr>{% endfor %}
       </tbody></table></div></details>{% endif %}
+    {% endif %}
 
     {% if can_act %}
     <form id="rv-form" class="decide" method="post" action="{% url 'opsconsole:review_decide' %}"
@@ -116,6 +138,9 @@
         {% if item.kind == 'claim' or item.kind == 'agent' %}
           <label for="rv-excerpt">Excerpt (optional, approve only): at most {{ excerpt_words }} words, copied from the page</label><input type="text" id="rv-excerpt" name="excerpt" maxlength="400">
           <label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" name="contradicts" value="1"> Deny: the page contradicts the claim (records a conflict, not only “does not support”)</label>
+        {% elif item.kind == 'image' or item.kind == 'flag' %}
+          <label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input type="checkbox" name="sensitive" value="1"{% if d.c.sensitive %} checked{% endif %}>
+            Sensitive: blur it on the page until a viewer chooses to see it (approve only)</label>
         {% elif item.kind == 'task' %}
           <label for="rv-source">Approve: a page agents may read that says what the unreadable one does (optional)</label><input type="url" id="rv-source" name="source" maxlength="1000" placeholder="https://…">
         {% endif %}
@@ -127,6 +152,8 @@
           <button class="btn" name="decision" value="defer"{% if item.kind == 'agent' and item.holder and item.holder != me %} disabled{% endif %}>Defer</button>
           <span class="small muted" id="rv-help">{% if item.kind == 'claim' or item.kind == 'agent' %}Approve records your read as evidence and completes the task. Deny records that the page doesn't support it.
             {% elif item.kind == 'draft' %}Approve publishes it with the next release (the publishing rule still applies). Deny retracts it.
+            {% elif item.kind == 'image' %}Approve attaches the picture (the next release carries it), blurred if Sensitive is ticked. Deny refuses it for good{% if d.alternates %}: the next runner-up takes its place{% endif %}.
+            {% elif item.kind == 'flag' %}Approve keeps the picture blurred if Sensitive is ticked, and clears the flag if not. Deny clears the flag.
             {% else %}Approve hands the task back to the agents with your page or summary. Deny cancels it.{% endif %} Defer moves it to the backlog.</span>
         </div>
         {% if item.kind == 'agent' %}<p class="small" id="rv-hold" style="margin-top:10px">{% if item.holder and item.holder != me %}<b style="color:var(--warn)">{{ item.holder }} holds this task now: an agent is on it.</b> The buttons wait until it lets go.
@@ -139,6 +166,15 @@
   </div>{% endif %}
 </div>
 {% endif %}
+{% if can_act %}<form class="card decide" method="post" action="{% url 'opsconsole:review_decide' %}" style="margin-top:18px" aria-labelledby="flag-h">
+  <h2 id="flag-h" style="margin:0">A picture's sensitive flag</h2>
+  <p class="small muted" style="margin:4px 0 0">Blur any entry's picture on the page (until a viewer chooses to see it), or show it unblurred again. The next release carries the change.</p>
+  {% csrf_token %}<input type="hidden" name="key" value="{{ flag_key }}"><input type="hidden" name="tab" value="{% if tab == 'backlog' %}backlog{% endif %}">
+  <label for="flag-entry">Entry id</label><input type="text" id="flag-entry" name="entry" maxlength="120" placeholder="ww2-liberation-of-bergen-belsen" required>
+  <label for="flag-note">Note (optional)</label><input type="text" id="flag-note" name="note" maxlength="500">
+  <div class="go"><input type="hidden" name="decision" value="flag">
+    <button class="btn danger" name="sensitive" value="1">Blur it</button><button class="btn" name="sensitive" value="0">Show it unblurred</button></div>
+</form>{% endif %}
 {% endblock %}
 {% block scripts %}{% if can_act and item %}<script>
 /* The review page's script (ADR 0046): approve and deny wait UNDO_SECONDS for an undo before they are sent (nothing is

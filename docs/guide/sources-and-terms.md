@@ -84,7 +84,7 @@ before the first "/". Its redirects are checked like any other request's, except
 
 Crawl-delay is honored: the wait before a request to a host is the longer of its `HOST_DELAY` and the Crawl-delay,
 capped at 30 seconds. `API_HOSTS` skip robots.txt: en.wikipedia.org, www.wikidata.org, query.wikidata.org,
-wikimedia.org and archive.org. Their robots.txt is written for crawlers of HTML pages (it disallows /w/, where the
+wikimedia.org, commons.wikimedia.org (the image job's file metadata, api.php only: ADR 0048) and archive.org. Their robots.txt is written for crawlers of HTML pages (it disallows /w/, where the
 MediaWiki API lives); what we follow there is Wikimedia's API etiquette: serial requests and a descriptive
 User-Agent with contact.
 
@@ -261,6 +261,17 @@ the NCBI site, through E-utilities, OAI-PMH and the ID converter; the Smithsonia
 confidence). Nine sites name AI crawlers in robots.txt (Nature, the African Union, UNESCO and its two sub-sites, the
 British Museum, africa.si.edu, americanhistory.si.edu, GlobalSecurity), and ten refused robots.txt. PMC's web pages
 stay closed to scripts: its robots.txt disallows `/`, and its copyright page bars bulk download from the pages.
+
+**Batch 3** (`ingest/ratings/2026-11-28c-images.json`, label "2026-11-28c", JobState "ratings_2026_11_28c"; ADR 0048)
+rates the two hosts the `image_search` job reads that had no record of their own, both confident and applied as
+`allowed`: the Commons API (`commons.wikimedia.org`; the reuse page's clause on hotlinking, which it allows but does
+not recommend, and on crediting the creator; robots.txt read, the same Wikimedia group that disallows `/w/`, so the
+host joins `API_HOSTS`) and NASA's Image and Video Library API (`images-api.nasa.gov`; NASA's media guidelines:
+factual use that implies no endorsement, NASA credited; no robots.txt). The image job's other sources were rated
+already: the Library of Congress (`api_only`, `?fo=json`, ADR 0037), Smithsonian Open Access (the ADR 0013 verdict;
+the 2026-11-28 api_only rating was low confidence) and Wikidata. The Met's, the Art Institute of Chicago's,
+Cleveland's and the Rijksmuseum's APIs stay unused: their ratings were low confidence, and metmuseum.org is
+`browser_only` (ADR 0044), so its terms wait for the owner's read.
 
 ## Citation-only sources and browser_only publishers
 

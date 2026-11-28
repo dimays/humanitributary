@@ -283,7 +283,7 @@ The job order in `ingest/job_defs.py`:
 | Sources | `portal`, `year_pages`, `rss`, `who_don`, `federal_register`, `gazette`, `nobel`, `historian_sync` |
 | Entities | `refresh_entities`, `pageviews` |
 | Processing | `process`, `entity_relations`, `enrich_tasks` |
-| Upkeep | `link_health`, `facts_sweep`, `branches_review`, `second_source`, `gap_waves`, `gap_pointers`, `prefetch_sources` (last, so the tasks' sources and pointers are in) |
+| Upkeep | `link_health`, `facts_sweep`, `branches_review`, `second_source`, `gap_waves`, `gap_pointers`, `prefetch_sources` (after them, so the tasks' sources and pointers are in), `image_search` (pictures for events that have none: [ADR 0048](../adr/0048-event-images.md)) |
 
 ## Environments
 

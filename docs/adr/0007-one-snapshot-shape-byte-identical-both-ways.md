@@ -1,6 +1,6 @@
 # 0007 — One snapshot shape, byte-identical both ways
 
-**Status:** accepted (November 2026); its last consequence amended by [0008](0008-entry-order.md); amended by [0018](0018-single-source-marker.md); amended by [0021](0021-the-cutover.md)
+**Status:** accepted (November 2026); its last consequence amended by [0008](0008-entry-order.md); amended by [0018](0018-single-source-marker.md); amended by [0021](0021-the-cutover.md); amended by [0048](0048-event-images.md) (three more image keys, written only when set)
 
 ## Context
 
