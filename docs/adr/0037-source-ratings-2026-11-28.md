@@ -1,6 +1,6 @@
 # 0037 — The November 28 source ratings become Publisher policy, with two new policies: api_only and citation_only
 
-**Status:** proposed (November 2026); amends [0013](0013-source-policy.md) (two more fetch policies, and 104 sources rated) and [0036](0036-evidence-packs.md) (what the evidence-pack job may fetch: API bases, keys, AI-crawler blocks); amended by [0042](0042-deferred-releases-and-the-fetch-policy-endpoint.md) (the ratings bind agents' scripted reads too) and [0044](0044-source-ratings-batch-2.md) (a second batch of ratings, applied the same way); amended by [0048](0048-event-images.md) (a third batch: the image sources)
+**Status:** proposed (November 2026); amends [0013](0013-source-policy.md) (two more fetch policies, and 104 sources rated) and [0036](0036-evidence-packs.md) (what the evidence-pack job may fetch: API bases, keys, AI-crawler blocks); amended by [0042](0042-deferred-releases-and-the-fetch-policy-endpoint.md) (the ratings bind agents' scripted reads too) and [0044](0044-source-ratings-batch-2.md) (a second batch of ratings, applied the same way); amended by [0048](0048-event-images.md) (a fourth batch: the image sources)
 
 ## Context
 

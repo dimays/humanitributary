@@ -1,0 +1,535 @@
+[
+ {
+  "name": "International DOI Foundation (doi.org resolver)",
+  "domains": [
+   "doi.org"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Resolver only; it holds no content",
+  "robots": "robots.txt returns 404, so no crawler rules are published (read)",
+  "terms_url": "https://www.doi.org/the-identifier/resources/factsheets/doi-resolution-documentation",
+  "clause": "\"allows programmatic access to DOI name resolution using HTTP\" (DOI resolution factsheet)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Resolves a DOI to its publisher's page. Following the redirect is checked against the publisher's own policy by the Fetcher. A separate terms-of-use page was not located; the resolution factsheet is the clause relied on. Use a descriptive User-Agent and a low rate."
+ },
+ {
+  "name": "Project Gutenberg",
+  "domains": [
+   "gutenberg.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Mostly US public domain; trademark license on files",
+  "robots": "robots.txt answered 503 with a long Retry-After: bot wall, not retried (fetch failed)",
+  "terms_url": "https://www.gutenberg.org/policy/permission.html",
+  "clause": "Terms page unread: the site refused the automated fetch",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "mostly Western",
+  "notes": "Do not script it. A person may read and cite it; for bulk text use a mirror once one is rated."
+ },
+ {
+  "name": "Bill Thayer's LacusCurtius (University of Chicago)",
+  "domains": [
+   "penelope.uchicago.edu"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Public domain where marked; otherwise (c) William P. Thayer",
+  "robots": "No AI crawlers named; old bots such as Wget are blocked; * is blocked only from /Thayer/Images/ (read)",
+  "terms_url": "https://penelope.uchicago.edu/Thayer/E/HELP/Copyright/general.html",
+  "clause": "Public-domain items: \"you are free to use either electronically, as on the Web\"",
+  "rate_limit": "",
+  "eras": "mainly ancient Rome and Greece",
+  "regions": "Mediterranean",
+  "notes": "Wget is blocked by name, so use an honest UA of our own at a slow rate. Store only pages marked public domain (one asterisk in the URL); cite the rest. The page says nothing on automated access."
+ },
+ {
+  "name": "The American Presidency Project (UC Santa Barbara)",
+  "domains": [
+   "presidency.ucsb.edu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "US government documents public domain; compilation (c) the Project",
+  "robots": "robots.txt disallows ClaudeBot, GPTBot, CCBot and others by name with Disallow: /; * has Crawl-delay 10 (read)",
+  "terms_url": "https://www.presidency.ucsb.edu/",
+  "clause": "Terms page not found; robots.txt names ClaudeBot with Disallow: /",
+  "rate_limit": "Crawl-delay: 10",
+  "eras": "1789 to present",
+  "regions": "United States",
+  "notes": "The presidential texts are public domain: fetch them from govinfo.gov or the Federal Register instead."
+ },
+ {
+  "name": "J. Paul Getty Trust (getty.edu, vocab.getty.edu)",
+  "domains": [
+   "getty.edu",
+   "vocab.getty.edu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Vocabularies data ODC-By 1.0; other content (c) Getty",
+  "robots": "www.getty.edu blocks only a few paths; vocab.getty.edu is User-agent * Disallow: / (read)",
+  "terms_url": "https://www.getty.edu/research-conservation/tools-databases/vocabularies/data-services/",
+  "clause": "vocab.getty.edu robots.txt: \"Disallow: /\" for every crawler",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms pages 404. Scripts must not fetch vocab.getty.edu; use the official ODC-By dumps by hand. Replaces batch 1's api_only, which was never applied."
+ },
+ {
+  "name": "World History Encyclopedia",
+  "domains": [
+   "worldhistory.org",
+   "ancient.eu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "CC BY-NC-SA 3.0 on articles (per site)",
+  "robots": "robots.txt names no AI bots; ancient.eu redirects to worldhistory.org (read)",
+  "terms_url": "https://www.worldhistory.org/terms/",
+  "clause": "Terms page refused an honest client (bot wall); not retried. A person reads it in a browser.",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "ancient.eu is the same publisher, so it takes the same rating as worldhistory.org (batch 2)."
+ },
+ {
+  "name": "Smithsonian Magazine",
+  "domains": [
+   "smithsonianmag.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt names no AI bots; blocks account, search and preview paths (read)",
+  "terms_url": "https://www.smithsonianmag.com/terms/",
+  "clause": "Terms page refused an honest client (bot wall); not retried. A person reads it in a browser.",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Journalism on history and science; cite it."
+ },
+ {
+  "name": "Khan Academy",
+  "domains": [
+   "khanacademy.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "CC BY-NC-SA for much content; terms otherwise all rights reserved",
+  "robots": "robots.txt did not load for our client (fetch failed)",
+  "terms_url": "https://www.khanacademy.org/about/docs/khan-academy-terms-of-service",
+  "clause": "Bars software used \"to scrape the Services or otherwise copy materials\" (via search snippet)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms seen only as a search snippet and robots.txt did not load: low confidence, so a person reads it and cites it."
+ },
+ {
+  "name": "Livius.org",
+  "domains": [
+   "livius.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Free reuse with attribution for texts; photos mixed",
+  "robots": "robots.txt returned only a content-signals preamble with no readable rules (fetch failed)",
+  "terms_url": "https://www.livius.org/contact/",
+  "clause": "Texts \"free to copy and redistribute\" with the author named (search summary)",
+  "rate_limit": "",
+  "eras": "ancient",
+  "regions": "Near East, Mediterranean",
+  "notes": "No automated-access clause found and the copyright page 404s; low confidence, so browser reading and citation."
+ },
+ {
+  "name": "Taylor & Francis Online",
+  "domains": [
+   "tandfonline.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved (some open access CC BY)",
+  "robots": "robots.txt blocks GPTBot with Disallow: / and sets Crawl-delay 1 for * with many paths disallowed (read)",
+  "terms_url": "https://www.tandfonline.com/terms-and-conditions",
+  "clause": "Terms page refused an honest client (bot wall); not retried. A person reads it in a browser.",
+  "rate_limit": "Crawl-delay: 1",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Cite by DOI."
+ },
+ {
+  "name": "Christianity Today",
+  "domains": [
+   "christianitytoday.com"
+  ],
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt disallows ClaudeBot, anthropic-ai, Claude-User, CCBot, GPTBot and others with Disallow: / (read)",
+  "terms_url": "https://www.christianitytoday.com/terms-of-use/",
+  "clause": "\"You will not copy, post, or transmit any Materials\" (terms of use, 4.1)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Personal non-commercial use only."
+ },
+ {
+  "name": "Vatican (Holy See web portal)",
+  "domains": [
+   "vatican.va"
+  ],
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "All rights reserved; personal and non-profit use",
+  "robots": "robots.txt allows all with Crawl-delay 2; no AI agents named (read)",
+  "terms_url": "https://www.vatican.va/content/vatican/en/legal-notes.html",
+  "clause": "\"reproduction and collection of Contents for reasons other than personal use is expressly prohibited\"",
+  "rate_limit": "Crawl-delay: 2",
+  "eras": "all",
+  "regions": "all",
+  "notes": "The terms do not mention scraping, but collecting content needs written authorization: cite and link only."
+ },
+ {
+  "name": "Christian Classics Ethereal Library",
+  "domains": [
+   "ccel.org"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Mostly US public domain; site and special contents copyrighted",
+  "robots": "Wildcard group blocks nothing, Crawl-delay 10; meta-externalagent is disallowed; no Claude or GPT agent named (read)",
+  "terms_url": "https://www.ccel.org/about/copyright.html",
+  "clause": "\"may be used for personal, educational, or non-profit purposes\" (copyright page)",
+  "rate_limit": "Crawl-delay: 10",
+  "eras": "all",
+  "regions": "all",
+  "notes": "The terms are silent on automated access. Non-commercial fact-checking only; keep the 10 s delay; skip copyrighted introductions and by-permission books."
+ },
+ {
+  "name": "New Advent",
+  "domains": [
+   "newadvent.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Site (c) New Advent LLC; 1913 Catholic Encyclopedia public domain",
+  "robots": "robots.txt blocks only /cgi-bin/ and /tmp/; no AI agents named (read)",
+  "terms_url": "",
+  "clause": "No terms page found (footer only: Copyright New Advent LLC)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Rated browser_only because no terms exist to rely on; the site sells a paid download."
+ },
+ {
+  "name": "LibreTexts",
+  "domains": [
+   "libretexts.org",
+   "human.libretexts.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "CC BY or CC BY-NC-SA per page; varies",
+  "robots": "human.libretexts.org: Crawl-delay 5, blocks /@api, Special: and action= URLs; no AI agents named (read)",
+  "terms_url": "https://libretexts.org/terms-of-service",
+  "clause": "Terms page unread: the URL returned 404",
+  "rate_limit": "Crawl-delay: 5",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Each page carries its own license; a person checks it in a browser."
+ },
+ {
+  "name": "JSTOR (ITHAKA)",
+  "domains": [
+   "jstor.org"
+  ],
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt disallows ClaudeBot, CCBot, GPTBot and Google-Extended with Disallow: / (read)",
+  "terms_url": "https://about.jstor.org/terms/",
+  "clause": "Bars anything that \"automatically downloads or exports Content, including activities involving web scraping\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Cite by title and DOI only; text analysis only through JSTOR's own service."
+ },
+ {
+  "name": "Cornell University Library Digital Collections",
+  "domains": [
+   "digital.library.cornell.edu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Varies by collection",
+  "robots": "robots.txt answered 403: bot wall, not retried (fetch failed)",
+  "terms_url": "https://digital.library.cornell.edu/collections/aerialny/terms",
+  "clause": "Terms unread for the site; some collections are limited to private study (search snippet)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Rights differ per collection."
+ },
+ {
+  "name": "Louvre Museum",
+  "domains": [
+   "louvre.fr"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved; ADAGP works excluded from reuse",
+  "robots": "robots.txt lists AI bots but disallows only image files for them (read)",
+  "terms_url": "https://www.louvre.fr/en/legal-information-and-terms-of-use",
+  "clause": "Bars mining ADAGP works \"to feed or train artificial intelligence tools\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "No explicit scraping clause, but reuse of site text needs permission, so a person reads and cites it. Never fetch images."
+ },
+ {
+  "name": "Business Insider",
+  "domains": [
+   "businessinsider.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt not fetched: our fetch tool refused the domain (bot wall)",
+  "terms_url": "",
+  "clause": "Terms unread",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Not retried."
+ },
+ {
+  "name": "Cambridge University Press (Cambridge Core)",
+  "domains": [
+   "cambridge.org"
+  ],
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt blocks ChatGPT-User and Yandex and many paths for * (read)",
+  "terms_url": "https://www.cambridge.org/core/terms",
+  "clause": "\"Cambridge does not currently provide access to Content via an API.\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "TDM only for non-commercial use with a link back; bulk access by written request."
+ },
+ {
+  "name": "Oxford Research Encyclopedias (Oxford University Press)",
+  "domains": [
+   "oxfordre.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt names no AI bots; blocks /api/, search and account paths (read)",
+  "terms_url": "",
+  "clause": "Terms page unread (404); OUP reserves text and data mining rights (search snippet)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Low confidence; cite it."
+ },
+ {
+  "name": "University of Chicago Library",
+  "domains": [
+   "lib.uchicago.edu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved; varies by collection",
+  "robots": "robots.txt disallows 23 AI crawlers including ClaudeBot with Disallow: / (read)",
+  "terms_url": "https://www.lib.uchicago.edu/about/website-policies/",
+  "clause": "robots.txt names ClaudeBot with Disallow: /; terms page behind a bot wall",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Not retried."
+ },
+ {
+  "name": "History Extra (BBC History Magazine)",
+  "domains": [
+   "historyextra.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt not fetched: our fetch tool refused the domain (bot wall)",
+  "terms_url": "",
+  "clause": "Terms unread",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Not retried."
+ },
+ {
+  "name": "Lumen Learning courses",
+  "domains": [
+   "courses.lumenlearning.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "CC BY 4.0 unless noted (search snippet)",
+  "robots": "robots.txt blocks only /wp-admin/; no AI bots named (read)",
+  "terms_url": "https://lumenlearning.com/policies/",
+  "clause": "Terms page unread: policy pages returned only titles",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Open course text; low confidence, pages carry their own attributions."
+ },
+ {
+  "name": "Institute for the Study of Ancient Cultures (Oriental Institute), University of Chicago",
+  "domains": [
+   "oi.uchicago.edu",
+   "isac.uchicago.edu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "(c) University of Chicago; PDFs for personal use, images need permission",
+  "robots": "oi.uchicago.edu redirects to isac.uchicago.edu; robots.txt blocks CMS paths only; no AI bots named (read)",
+  "terms_url": "https://isac.uchicago.edu/research/publications/egyptian-civilization",
+  "clause": "No site-wide terms found; footer says Copyright The University of Chicago",
+  "rate_limit": "",
+  "eras": "ancient",
+  "regions": "Near East, Egypt",
+  "notes": "Scholarly publications; read in a browser and cite."
+ },
+ {
+  "name": "TheCollector",
+  "domains": [
+   "thecollector.com"
+  ],
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt blocks /preview/ and search only; no AI bots named (read)",
+  "terms_url": "https://www.thecollector.com/terms-and-conditions/",
+  "clause": "Terms list \"Reproduce, duplicate or copy material\" as barred",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Secondary popular-history source; cite only."
+ },
+ {
+  "name": "Pressbooks network",
+  "domains": [
+   "pressbooks.pub"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Varies per book",
+  "robots": "robots.txt content signals say ai-train=no and disallow ClaudeBot, GPTBot, CCBot and others (read)",
+  "terms_url": "https://pressbooks.com/terms-of-service/",
+  "clause": "robots.txt names ClaudeBot with Disallow: /; terms page behind a bot wall",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Each book has its own license; cite the specific book."
+ },
+ {
+  "name": "Encyclopedia.com",
+  "domains": [
+   "encyclopedia.com"
+  ],
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "All rights reserved; personal use",
+  "robots": "robots.txt blocks CMS and search paths; no AI bots named (read)",
+  "terms_url": "http://www.encyclopedia.com/termsofservice",
+  "clause": "Terms 2.3: \"nor may you 'scrape' and/or reformat any information\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Also bars crawlers and systematic downloading; cite the underlying work where possible."
+ },
+ {
+  "name": "Harvard University web sites",
+  "domains": [
+   "harvard.edu",
+   "egyptology.fas.harvard.edu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Mixed; library text CC BY 4.0, other content (c) Harvard or third parties",
+  "robots": "harvard.edu robots.txt blocks nothing; egyptology.fas.harvard.edu did not resolve (read for harvard.edu only)",
+  "terms_url": "https://library.harvard.edu/privacy-terms-use-copyright-information",
+  "clause": "Library terms: \"may not copy, publish, post, distribute, display\" digitized content",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Many subsites with their own terms; web publishing terms were refused. Low confidence."
+ },
+ {
+  "name": "National Geographic (nationalgeographic.com)",
+  "domains": [
+   "nationalgeographic.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt names no AI bots; blocks search and some topic paths (read)",
+  "terms_url": "https://www.nationalgeographic.com/terms-of-use/",
+  "clause": "Terms page returned 404; the sister .org terms bar crawlers",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Low confidence; cite it."
+ },
+ {
+  "name": "National Geographic Society (nationalgeographic.org)",
+  "domains": [
+   "nationalgeographic.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt disallows ClaudeBot, anthropic-ai, GPTBot, CCBot and Google-Extended with Disallow: / (read)",
+  "terms_url": "https://www.nationalgeographic.org/terms-of-service/",
+  "clause": "\"Use no automated means, including spiders, robots, offline readers, crawlers, data mining tools\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms also bar text and data mining and AI training; a person may read and cite it."
+ },
+ {
+  "name": "University College London",
+  "domains": [
+   "ucl.ac.uk"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved; varies by subsite",
+  "robots": "robots.txt names no AI bots; blocks admin and search paths (read)",
+  "terms_url": "https://www.ucl.ac.uk/legal-services/privacy/website-terms-use",
+  "clause": "Terms page refused an honest client (bot wall); not retried",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Low confidence; cite it."
+ },
+ {
+  "name": "ushistory.org (Independence Hall Association)",
+  "domains": [
+   "ushistory.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved; public domain items noted per page",
+  "robots": "robots.txt blocks CMS paths only; no AI bots named (read)",
+  "terms_url": "https://store.ushistory.org/pages/terms-of-use",
+  "clause": "Terms unread (404); search snippet: no reproduction without prior written consent",
+  "rate_limit": "",
+  "eras": "1600s to present",
+  "regions": "United States",
+  "notes": "Low confidence; cite it."
+ }
+]

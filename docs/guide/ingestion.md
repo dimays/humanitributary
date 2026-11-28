@@ -669,7 +669,9 @@ disallows it) and no crawling ([sources and terms](sources-and-terms.md#the-verd
    or a parent has a tier) and `allowed`. A domain with no row, or a row without a tier, is never requested by this
    job (the Fetcher's own default for other jobs is unchanged). No request is made. The second batch of ratings
    ([ADR 0044](../adr/0044-source-ratings-batch-2.md)) gives a tier to only three more publishers (itu.int, nps.gov and
-   worldbank.org); most of its 45 domains are `browser_only` or `citation_only`.
+   worldbank.org); most of its 45 domains are `browser_only` or `citation_only`. The third
+   ([ADR 0049](../adr/0049-source-ratings-batch-3.md)) gives a tier to three more (penelope.uchicago.edu, ccel.org and
+   doi.org); its other domains are `browser_only` or `citation_only`.
 2. **An official API** (`ingest/prefetch_api.py` `route`): a catalog page that has one is read through it, and
    never as a page (below), even when its own domain is unrated (n2t.net). Reused like a page.
 3. **AI-crawler blocks** (`Fetcher.ai_blocked`, ADR 0037): a site whose robots.txt names an AI crawler

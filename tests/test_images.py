@@ -484,3 +484,24 @@ class Constraints(FreshStorage, TestCase):
             services.apply_changes(Image(entry=entry, position=6), {**ok, "license": "No known restrictions (Library of Congress)",
                                                                     "credit": "Library of Congress", "license_url": ""})
         self.assertEqual(Image.objects.filter(entry=entry).count(), 2)
+
+
+class Ratings(FreshStorage, TestCase):
+    def test_the_image_sources_batch_applies_both_once(self):
+        """Ratings batch 4 (ADR 0048): the Commons API and NASA's image API, confident and applied as allowed, once."""
+        from evidence.models import Publisher
+        from ingest import ratings
+        from ingest.models import JobState
+
+        self.assertEqual(ratings.BATCHES[-1], ratings.BATCH_4)
+        by = {d.name: d for d in ratings.decisions(ratings.BATCH_4)}
+        self.assertEqual(len(by), 2)
+        self.assertTrue(all(d.apply_policy and d.confident for d in by.values()))
+        import_content(small())
+        ratings.apply_all()
+        for dom in ("commons.wikimedia.org", "images-api.nasa.gov"):
+            p = Publisher.objects.get(domain=dom)
+            self.assertEqual(p.fetch_policy, "allowed")
+            self.assertIn("Rated 2026-11-28d (source discovery, ADR 0048)", p.access_notes)
+        self.assertTrue(JobState.objects.get(name="ratings_2026_11_28d").state["applied"])
+        self.assertEqual(ratings.apply_all(), Counter(), "each batch once per database")

@@ -1,6 +1,6 @@
 # 0048 — Events get openly licensed pictures by reference, found by a paced job; pictures that may disturb are blurred until the viewer asks
 
-**Status:** proposed (November 2026); amends [0007](0007-one-snapshot-shape-byte-identical-both-ways.md) (three more image keys, written only when set), [0013](0013-source-policy.md) (the Commons API joins `API_HOSTS`; two image sources rated), [0037](0037-source-ratings-2026-11-28.md) (a third batch of ratings) and [0046](0046-the-owners-review-queue.md) (pictures and their flags on the Review page, and a flag decision)
+**Status:** proposed (November 2026); amends [0007](0007-one-snapshot-shape-byte-identical-both-ways.md) (three more image keys, written only when set), [0013](0013-source-policy.md) (the Commons API joins `API_HOSTS`; two image sources rated), [0037](0037-source-ratings-2026-11-28.md) (a fourth batch of ratings, after ADR 0049's third) and [0046](0046-the-owners-review-queue.md) (pictures and their flags on the Review page, and a flag decision)
 
 ## Context
 
@@ -105,7 +105,7 @@ remembered.
 and a snapshot still loads and exports byte for byte ([0007](0007-one-snapshot-shape-byte-identical-both-ways.md)).
 `src` is a path under `site/images/` or an https URL (`image_src_local_or_https`).
 
-**Two ratings** (`ingest/ratings/2026-11-28c-images.json`, batch "2026-11-28c"), both confident and applied as
+**Two ratings** (`ingest/ratings/2026-11-28d-images.json`, batch "2026-11-28d"), both confident and applied as
 `allowed`:
 
 - The Commons API. The reuse page allows hotlinking but doesn't recommend it, and asks that the creator be

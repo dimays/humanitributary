@@ -524,6 +524,30 @@ class RatingsTests(FreshStorage, TestCase):
         self.assertTrue(JobState.objects.get(name="ratings_2026_11_28b").state["applied"])
         self.assertEqual(ratings.apply_all(), Counter(), "each batch once per database")
 
+    def test_third_batch_opens_only_what_was_read_and_applies_once(self):
+        """The 2026-11-28c ratings (ADR 0049): three permissive ones applied, the rest restrictive, nothing loosened."""
+        from ingest import ratings
+        from ingest.models import JobState
+
+        by = {d.name: d for d in ratings.decisions(ratings.BATCH_3)}
+        self.assertEqual(len(by), 33)
+        permissive = {n for n, d in by.items() if d.verdict in ratings.PERMISSIVE}
+        self.assertEqual(len(permissive), 3)
+        self.assertTrue(all(by[n].apply_policy and by[n].confident for n in permissive))
+        m = ratings.merged(ratings.BATCH_3)
+        self.assertEqual((m["ccel.org"]["policy"], m["penelope.uchicago.edu"]["policy"], m["doi.org"]["policy"]), ("allowed",) * 3)
+        self.assertEqual((m["jstor.org"]["policy"], m["ancient.eu"]["policy"], m["presidency.ucsb.edu"]["policy"]),
+                         ("citation_only", "browser_only", "browser_only"))
+        import_content(small())
+        with revising("human:test", reason="a closed publisher"):
+            Publisher.objects.create(domain="vatican.va", name="Vatican", fetch_policy="forbidden")
+        ratings.apply_all()
+        self.assertEqual(Publisher.objects.get(domain="ccel.org").fetch_policy, "allowed")
+        self.assertEqual(Publisher.objects.get(domain="vatican.va").fetch_policy, "forbidden", "never loosened")
+        self.assertIn("Rated 2026-11-28c (source discovery, ADR 0049)", Publisher.objects.get(domain="jstor.org").access_notes)
+        self.assertTrue(JobState.objects.get(name="ratings_2026_11_28c").state["applied"])
+        self.assertEqual(ratings.apply_all(), Counter(), "each batch once per database")
+
     def test_fetcher_api_only_citation_only_and_ai_blocks(self):
         with revising("human:test", reason="test publishers"):
             Publisher.objects.create(domain="loc.gov", name="LoC", tier=1, fetch_policy="api_only", api_base="https://www.loc.gov/ ?fo=json")

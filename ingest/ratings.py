@@ -52,10 +52,12 @@ BATCH_1 = Batch("2026-11-28", "ratings_2026_11_28", "ADR 0037", (_DIR / "2026-11
 # The second batch (ADR 0044, which amends 0037): the international bodies, sport, museums, reference and government sites
 # the first round left unrated or unread, and eight more. Same record format and the same rules.
 BATCH_2 = Batch("2026-11-28b", "ratings_2026_11_28b", "ADR 0044", (_DIR / "2026-11-28b-sources.json",))
-# The third batch (ADR 0048): the two image sources the image_search job reads that had no rating of their own, the
+# The third batch (ADR 0049, which amends 0044): thirty-three publishers agents asked about and were refused; the same rules.
+BATCH_3 = Batch("2026-11-28c", "ratings_2026_11_28c", "ADR 0049", (_DIR / "2026-11-28c-sources.json",))
+# The fourth batch (ADR 0048): the two image sources the image_search job reads that had no rating of their own, the
 # Commons API and NASA's Image and Video Library API. Same record format and rules.
-BATCH_3 = Batch("2026-11-28c", "ratings_2026_11_28c", "ADR 0048", (_DIR / "2026-11-28c-images.json",))
-BATCHES = (BATCH_1, BATCH_2, BATCH_3)
+BATCH_4 = Batch("2026-11-28d", "ratings_2026_11_28d", "ADR 0048", (_DIR / "2026-11-28d-images.json",))
+BATCHES = (BATCH_1, BATCH_2, BATCH_3, BATCH_4)
 RATED_ON, STATE, FILES = BATCH_1.rated_on, BATCH_1.state, list(BATCH_1.files)
 RESTRICTIVE = ("browser_only", "citation_only", "forbidden")
 PERMISSIVE = ("allowed", "api_only")
@@ -74,7 +76,7 @@ POLICY_FOR = {"forbidden": "citation_only"}
 # Reliability tiers for confident permissive ratings (1 primary, official; 2 scholarly or institutional; 3 general).
 TIERS = {"api.semanticscholar.org": 2, "loc.gov": 1, "plato.stanford.edu": 2, "wikidata.org": 3, "govinfo.gov": 1, "congress.gov": 1,
          "archives.gov": 1, "nasa.gov": 1, "usgs.gov": 1, "ourworldindata.org": 2, "open.canada.ca": 1,
-         "itu.int": 1, "nps.gov": 1, "worldbank.org": 1}
+         "itu.int": 1, "nps.gov": 1, "worldbank.org": 1, "penelope.uchicago.edu": 2, "ccel.org": 3, "doi.org": 3}
 # The API base a job may use for a confident api_only rating: a URL prefix, optionally a required query parameter.
 API_BASES = {
     "Semantic Scholar API": "https://api.semanticscholar.org/graph/v1/",
