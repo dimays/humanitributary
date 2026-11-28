@@ -225,7 +225,7 @@ jobs off it.
 
 ## The November 28 ratings
 
-[ingest/ratings.py](../../ingest/ratings.py) ([ADR 0037](../adr/0037-source-ratings-2026-11-28.md)). Each record of
+[ingest/ratings.py](../../ingest/ratings.py) ([ADR 0037](../adr/0037-source-ratings-2026-11-28.md), and a second batch, [ADR 0044](../adr/0044-source-ratings-batch-2.md); see the end of this section). Each record of
 the round names a source, its domains, a verdict, whether a key is needed, the license, what robots.txt said, the
 terms URL and clause, rate limits, eras, regions and notes. `decide()` makes each one a `Decision`:
 
@@ -244,6 +244,23 @@ through `timeline.services.apply_changes`: a missing row is created from `defaul
 2026-11-28 (source discovery, ADR 0037): <verdict>, applied | not applied: low confidence (…). Terms: … Clause: …
 robots.txt: … API: …") is appended to `access_notes`; a `forbidden` row is never changed. On the scratch database:
 117 domains, 6 `allowed`, 5 `api_only`, 26 `browser_only`, 26 `citation_only`, 54 notes only.
+
+**Batches.** Each round is a `Batch` (`BATCH_1`, `BATCH_2`, `BATCHES`): its label in the notes, its own JobState (a
+database that applied the first still applies the second once), its ADR and its files. `seed_sources` calls
+`apply_all`, which applies each batch in order; `decisions`, `merged`, `apply` and `follow_ups` take a batch and
+default to the first. A later rating never loosens a restrictive policy a row already has: `citation_only` stays
+when a batch says `browser_only` (the note is still added, and `kept_stricter` counts it).
+
+**Batch 2** (`ingest/ratings/2026-11-28b-sources.json`, label "2026-11-28b", JobState "ratings_2026_11_28b"; ADR 0044)
+has 44 records for the international bodies, sport, broadcasters, science, museums, reference, government and
+standards sites the first round did not read, and eight more. Its rule for a site that refused the fetch (403, 429,
+a TLS failure) or whose terms were unread is `browser_only`, and a permissive verdict there is not applied.
+Counts on the records: 26 `browser_only`, 3 `citation_only` (Iranica, ETSI, History.com), 11 `allowed` (3 applied:
+ITU, National Park Service, World Bank; the other 8 are low confidence), 4 `api_only` (2 applied: PubMed Central and
+the NCBI site, through E-utilities, OAI-PMH and the ID converter; the Smithsonian and the Internet Archive are low
+confidence). Nine sites name AI crawlers in robots.txt (Nature, the African Union, UNESCO and its two sub-sites, the
+British Museum, africa.si.edu, americanhistory.si.edu, GlobalSecurity), and ten refused robots.txt. PMC's web pages
+stay closed to scripts: its robots.txt disallows `/`, and its copyright page bars bulk download from the pages.
 
 ## Citation-only sources and browser_only publishers
 
