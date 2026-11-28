@@ -219,6 +219,11 @@ AGENT_API_PUBLISHES_PER_DAY = int(os.getenv("AGENT_API_PUBLISHES_PER_DAY", "4"))
 # round is due. ROUND_ROUTINE names where it runs.
 ROUND_SCHEDULE = os.getenv("ROUND_SCHEDULE", "0 6 * * *")
 ROUND_ROUTINE = os.getenv("ROUND_ROUTINE", "cloud routine")
+# The ceilings on the round size an operator may set (ADR 0038). A cloud session runs at most 20 subagents at once
+# (Claude Code's default), and the round's lead starts the role agents together, so the agents in all stay under it.
+ROUND_MAX_AGENTS_PER_ROLE = int(os.getenv("ROUND_MAX_AGENTS_PER_ROLE", "8"))
+ROUND_MAX_AGENTS = int(os.getenv("ROUND_MAX_AGENTS", "16"))
+ROUND_MAX_TASKS_PER_AGENT = int(os.getenv("ROUND_MAX_TASKS_PER_AGENT", "20"))
 
 # The operations console (/ops/, opsconsole/): when set, only these hosts serve it and every other host answers 404, so
 # the public page's domain has no /ops/ (comma-separated, e.g. data.humanitributary.com). Empty: any allowed host.
