@@ -230,7 +230,7 @@ release, the branch list).
 
 All reading is in `opsconsole/queries.py`; the views only arrange it. It computes totals in Postgres and never loads
 rows to count them in Python, so each page makes the same number of queries whatever the table sizes (a test seeds
-ten times the rows and compares; the eight main pages make at most 26 queries (25 and the sidebar's Review count), a detail page at most 15).
+ten times the rows and compares; the eight main pages make at most 26 queries and a detail page at most 16: one each is the sidebar's Review count).
 
 | Figure | Query |
 |---|---|

@@ -688,8 +688,8 @@ class QueryCountTests(FreshStorage, TestCase):
             self.assertLessEqual(big_counts[n], 26, n)  # 25, and the sidebar's Review count (one query, ADR 0046)
         for k in small_details:
             self.assertEqual(small_details[k], big_details[k], f"{k}: {small_details[k]} queries, then {big_details[k]}")
-            self.assertLessEqual(big_details[k], 15, k)
+            self.assertLessEqual(big_details[k], 16, k)  # 15, and the sidebar's Review count
         task = AgentTask.objects.order_by("id").first()
-        self.assertLessEqual(self.count("task", task.pk), 10)
+        self.assertLessEqual(self.count("task", task.pk), 11)
         rev = Revision.objects.order_by("-id").first()
         self.assertLessEqual(self.count("revision", rev.pk), 10)
