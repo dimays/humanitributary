@@ -37,7 +37,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from django.db import transaction
-from django.db.models import CharField, Max, OuterRef, Q, Subquery
+from django.db.models import BooleanField, CharField, Exists, Func, Max, OuterRef, Q, Subquery
+from django.db.models.fields.json import KeyTransform
 from django.db.models.functions import Cast
 from django.utils import timezone
 
@@ -91,21 +92,30 @@ def draft_backlog() -> dict:
     return dict(st.get("backlog") or {})
 
 
+def _in_backlog(slug_ref):
+    """An Exists for "the owner deferred this draft": its slug is a key of the `owner_review` row's backlog."""
+    return Exists(JobState.objects.filter(name=STATE).alias(
+        hit=Func(KeyTransform("backlog", "state"), slug_ref, function="jsonb_exists", output_field=BooleanField())).filter(hit=True))
+
+
+def _draft_qs(*, backlog: bool):
+    qs = WR.owner_read_drafts()
+    return qs.filter(_in_backlog(OuterRef("slug"))) if backlog else qs.filter(~_in_backlog(OuterRef("slug")))
+
+
 def _drafts(*, backlog: bool):
     from revisions.models import Revision
 
-    held = draft_backlog()
-    qs = WR.owner_read_drafts()
-    qs = qs.filter(slug__in=list(held)) if backlog else qs.exclude(slug__in=list(held))
     last = (Revision.objects.filter(table_name__in=WR.ENTRY_TABLES, row_pk=Cast(OuterRef("pk"), CharField()), reason__startswith="apply_edits")
             .order_by().values("row_pk").annotate(m=Max("at")).values("m"))
-    return qs.annotate(held_at=Subquery(last[:1]))
+    return _draft_qs(backlog=backlog).annotate(held_at=Subquery(last[:1]))
 
 
-def count() -> int:
+def count(*, backlog: bool = False) -> int:
     """The Review page's count and the sidebar's badge: items waiting for the owner (never the backlog, never the
-    items agents can still do)."""
-    return person_tasks().count() + _drafts(backlog=False).count()
+    items agents can still do). One query: the sidebar reads it on every console page."""
+    tasks = person_tasks(backlog=backlog).order_by().values_list("pk")
+    return tasks.union(_draft_qs(backlog=backlog).order_by().values_list("pk"), all=True).order_by().count()
 
 
 @dataclass

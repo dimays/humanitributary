@@ -798,7 +798,7 @@ reviewer's file touched them and left them there. Not the drafts that wait
 for the owner's own read (`rounds.owner_read_drafts`, ADR 0046): an entry in
 review whose record's support, besides Wikipedia, is only `PERSON_READ` pages
 (`browser_only`, `citation_only`) that nobody has read as `human:` yet, and
-that no open round is reviewing (`rounds.in_open_rounds`). Those go to the
+that no open round is reviewing (`rounds.in_open_round`). Those go to the
 console's Review page, never back to a round's reviewers, so neither
 `carry_over` nor `GET queue`'s `held` lists them.
 

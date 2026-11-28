@@ -196,12 +196,21 @@ def held_drafts():
 PERSON_READ = ("browser_only", "citation_only")
 
 
-def in_open_rounds() -> set[str]:
-    """The slugs an open round's reviewers have: its drafts and the held drafts carried over to it."""
-    out = set()
-    for drafts, plan in Round.objects.filter(status__in=Round.OPEN).values_list("drafts", "plan"):
-        out |= set(drafts or []) | set((plan or {}).get("carry_over") or [])
-    return out
+def _has(container, slug):
+    """SQL: the JSON array `container` holds the string `slug` (jsonb_contains, NULL-safe in a filter)."""
+    from django.db.models import BooleanField, Func, JSONField
+
+    return Func(container, Func(slug, function="jsonb_build_array", output_field=JSONField()), function="jsonb_contains", output_field=BooleanField())
+
+
+def in_open_round(slug_ref):
+    """An Exists for "an open round's reviewers have this slug": its drafts, or the held drafts carried over to it.
+    In SQL, so the console's count stays one query."""
+    from django.db.models import F
+    from django.db.models.fields.json import KeyTransform
+
+    return Exists(Round.objects.filter(status__in=Round.OPEN).alias(d=_has(F("drafts"), slug_ref), c=_has(KeyTransform("carry_over", "plan"), slug_ref))
+                  .filter(Q(d=True) | Q(c=True)))
 
 
 def owner_read_drafts():
@@ -216,7 +225,7 @@ def owner_read_drafts():
     wiki = Q(citation__publisher__domain="wikipedia.org") | Q(citation__publisher__domain__endswith=".wikipedia.org")
     person = record.filter(citation__publisher__fetch_policy__in=PERSON_READ).exclude(checked_by__startswith="human:")
     readable = record.exclude(wiki).filter(~Q(citation__publisher__fetch_policy__in=PERSON_READ) | Q(checked_by__startswith="human:"))
-    return Entry.objects.filter(status="review").filter(Exists(person)).filter(~Exists(readable)).exclude(slug__in=in_open_rounds())
+    return Entry.objects.filter(status="review").filter(Exists(person)).filter(~Exists(readable)).filter(~in_open_round(OuterRef("slug")))
 
 
 # ── starting and recording rounds ─────────────────────────────────────────────────────────────────────────────────

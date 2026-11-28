@@ -230,7 +230,7 @@ release, the branch list).
 
 All reading is in `opsconsole/queries.py`; the views only arrange it. It computes totals in Postgres and never loads
 rows to count them in Python, so each page makes the same number of queries whatever the table sizes (a test seeds
-ten times the rows and compares; the eight main pages make at most 25 queries, a detail page at most 15).
+ten times the rows and compares; the eight main pages make at most 26 queries (25 and the sidebar's Review count), a detail page at most 15).
 
 | Figure | Query |
 |---|---|
@@ -529,7 +529,7 @@ release, and one approval after it):
 - branch additions: the branch and its events, the op and the file, skipped Fetched and Queued, "Added as published";
 - every tab against its predicate, the state, branch and time filters, the order, bad input falling back; the pulse's
   14 days against the rows; the page rendering every tab; reading writes nothing; the query count the same after the
-  content grows several times over, at most 14 (10, and the sidebar's Review count).
+  content grows several times over, at most 11 (10, and the sidebar's Review count).
 
 `tests/test_review.py` holds the Review page to [its rules](#review), against the small fixture, a verify_claim task
 on an atomic date claim, drafts put in review, and tasks released with a need:

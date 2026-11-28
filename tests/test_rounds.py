@@ -320,13 +320,16 @@ class RoundTests(ApiBase):
         self.assertEqual(self.start(key="round-0002").status_code, 201)
 
     def test_held_drafts_carry_over_into_the_next_round(self):
-        self.set_status("un-charter", "review")
-        with revising("agent:reviewer", reason="apply_edits round-1/x.edits.json #0 edit un-charter: HOLD"):
-            services.save_event("un-charter", text=Event.objects.get(slug="un-charter").text + " (held)")
-        self.assertEqual(list(WR.held_drafts()), ["un-charter"])
-        WR.change(by="human:op", reason="look again", carry_over={"slugs": ["un-charter"]})
+        # an-punic-wars cites Wikipedia only; un-charter rests on un.org (browser_only), so it waits for the owner's
+        # read on the Review page instead (ADR 0046) and is never carried over to agents.
+        for slug in ("an-punic-wars", "un-charter"):
+            self.set_status(slug, "review")
+            with revising("agent:reviewer", reason=f"apply_edits round-1/x.edits.json #0 edit {slug}: HOLD"):
+                services.save_event(slug, text=Event.objects.get(slug=slug).text + " (held)")
+        self.assertEqual(list(WR.held_drafts()), ["an-punic-wars"])
+        WR.change(by="human:op", reason="look again", carry_over={"slugs": ["an-punic-wars"]})
         d = self.start().json()
-        self.assertEqual(d["carry_over"], ["un-charter"])
+        self.assertEqual(d["carry_over"], ["an-punic-wars"])
         self.assertIsNone(WR.current()["carry_over"])
 
     def test_a_stale_open_round_is_closed(self):
@@ -387,12 +390,12 @@ class ConsoleRoundTests(ActionsBase):
     def test_send_held_drafts_to_the_next_review(self):
         self.assertEqual(self.act("review_held").status_code, 409, "none held")
         with revising("human:test", reason="setup"):
-            Entry.objects.filter(slug="un-charter").update(status="review")
-        with revising("agent:reviewer", reason="apply_edits x.edits.json #0 edit un-charter: HOLD"):
-            services.save_event("un-charter", text=Event.objects.get(slug="un-charter").text + " (held)")
+            Entry.objects.filter(slug="an-punic-wars").update(status="review")
+        with revising("agent:reviewer", reason="apply_edits x.edits.json #0 edit an-punic-wars: HOLD"):
+            services.save_event("an-punic-wars", text=Event.objects.get(slug="an-punic-wars").text + " (held)")
         a = self.do("review_held", reason="look again")
-        self.assertEqual(a.params["slugs"], ["un-charter"])
-        self.assertEqual(WR.current()["carry_over"]["slugs"], ["un-charter"])
+        self.assertEqual(a.params["slugs"], ["an-punic-wars"])
+        self.assertEqual(WR.current()["carry_over"]["slugs"], ["an-punic-wars"])
 
 
 class CompleteConflictTests(ApiBase):

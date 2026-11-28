@@ -685,7 +685,7 @@ class QueryCountTests(FreshStorage, TestCase):
         big_details = {k: self.count(v[0], *v[1:]) for k, v in self.details().items()}
         for n in PAGES:
             self.assertEqual(small_counts[n], big_counts[n], f"{n}: {small_counts[n]} queries, then {big_counts[n]} with more rows")
-            self.assertLessEqual(big_counts[n], 25, n)
+            self.assertLessEqual(big_counts[n], 26, n)  # 25, and the sidebar's Review count (one query, ADR 0046)
         for k in small_details:
             self.assertEqual(small_details[k], big_details[k], f"{k}: {small_details[k]} queries, then {big_details[k]}")
             self.assertLessEqual(big_details[k], 15, k)

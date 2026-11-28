@@ -99,7 +99,7 @@ say a `needs` release waits for the owner, not a week.
   agent's script (ADR 0042). A draft resting on a page only a person may read waits for one.
 - A person's lease that lapses (the owner closed the laptop) is taken over like any expired lease, and is not
   counted as stuck on the Dashboard or as an expired lease in `/healthz`.
-- The sidebar's count costs four small queries on every console page.
+- The sidebar's count costs one query on every console page (a UNION of the tasks and the drafts, the open rounds and the backlog checked in SQL).
 - The role skills (`drain-write-events`, `fill-gaps`, `verify-claims`, `verify-stale-claims`) still let a desktop
   session's in-app browser read a `browser_only` page for an `unreadable` URL. Whether an agent driving a browser is
   "a person's read" is the owner's call; until they decide, this ADR changes only `run-round` and the wait.
