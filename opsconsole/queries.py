@@ -759,6 +759,54 @@ def rounds_overview(now, queue_rows: list[dict]) -> dict:
                       for role, (kind, skill) in WR.ROLES.items()]}
 
 
+# A round's progress bar, left to right (ADR 0040): what is finished, what is being worked, what came back, and what
+# the plan still expects. (key, label, the bar's color class.)
+PROGRESS_SEGMENTS = [("done", "done"), ("working", "in progress"), ("stuck", "stuck (lease ran out)"), ("failed", "failed"),
+                     ("released", "released back to the queue"), ("left", "planned, not claimed yet")]
+
+
+def progress_rows(progress: dict[str, dict]) -> list[dict]:
+    """A round's per-kind counts (work.rounds.progress) → one bar per kind: its counts and its segments' widths, in
+    percent of the larger of what was planned and what was claimed."""
+    out = []
+    for kind, c in progress.items():
+        left = max(0, c["planned"] - c["claimed"])
+        n = {"done": c["done"], "working": c["in_progress"] - c["stuck"], "stuck": c["stuck"], "failed": c["failed"],
+             "released": c["released"], "left": left}
+        total = sum(n.values()) or 1
+        out.append({"kind": kind, **c, "left": left,
+                    "segs": [{"key": k, "label": label, "n": n[k], "pct": round(100 * n[k] / total, 2)} for k, label in PROGRESS_SEGMENTS if n[k]]})
+    return out
+
+
+def live_round(now, r=None) -> dict | None:
+    """The Work page's live strip: the open round (or `r`, for its own page), how long it has run, its stage, and a
+    bar per task kind (two queries). None when no round is open."""
+    from work import rounds as WR
+
+    r = r if r is not None else WR.open_round(now)
+    if r is None:
+        return None
+    progress = WR.progress(r, now)
+    stage = next((s for s in WR.stages(r) if s["status"] == "current"), None)
+    end = r.finished_at or now
+    return {"round": r, "card": round_card(r), "open": r.open, "seconds": (end - r.started_at).total_seconds(),
+            "stage": stage["label"] if stage else r.get_status_display(), "progress": progress, "rows": progress_rows(progress),
+            "segments": [(k, label) for k, label in PROGRESS_SEGMENTS],
+            **{k: sum(c[k] for c in progress.values()) for k in ("planned", "claimed", "done")}}
+
+
+def round_tasks(r, limit: int = 300) -> list[dict]:
+    """The tasks a round's role agents claimed (the task → round link, ADR 0040), by the agent holding them: tasks
+    no one holds now (released, or failed) are grouped as handed back, since a hand-back clears the holder (one query)."""
+    rows = list(AgentTask.objects.filter(round=r).defer("payload", "result").order_by("kind", "id")[:limit])
+    by: dict[str, list] = {}
+    for t in rows:
+        t.subject = task_subject(t)
+        by.setdefault(t.claimed_by or "", []).append(t)
+    return [{"agent": a or None, "tasks": ts} for a, ts in sorted(by.items(), key=lambda x: (x[0] == "", x[0]))]
+
+
 def round_agents(r) -> list[dict]:
     """What the queue says each of the round's agents did while the round ran (claimed_by and completed_at in its
     window), beside what the round recorded: a check on the record (one query)."""

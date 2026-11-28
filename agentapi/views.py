@@ -47,7 +47,7 @@ from django.views.decorators.http import require_http_methods
 
 from evidence.models import Claim
 from timeline.models import Branch, Entry, Event
-from work import queue
+from work import queue, rounds
 from work.models import AgentTask
 
 from . import apply as appliers
@@ -129,7 +129,9 @@ def claim(request):
     lease = body.get("lease_minutes")
     if lease is not None and (not isinstance(lease, int) or not 1 <= lease <= 240):
         return error(400, "lease_minutes must be an integer from 1 to 240")
-    return _ok(_task_out(queue.next_task(agent=request.agent_token.actor, kinds=kinds, claim=True, lease_minutes=lease)))
+    actor = request.agent_token.actor
+    # A round's role token claiming while its round is open links the task to that round (ADR 0040).
+    return _ok(_task_out(queue.next_task(agent=actor, kinds=kinds, claim=True, lease_minutes=lease, round=rounds.round_for_claim(actor))))
 
 
 def _visible(request, task_id) -> tuple[AgentTask | None, JsonResponse | None]:

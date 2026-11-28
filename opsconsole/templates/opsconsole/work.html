@@ -5,6 +5,7 @@
   <div><h1>Work</h1><div class="sub">Claude agents do these tasks in rounds. Each round writes drafts, a reviewer checks them, and approved changes are published.</div></div>
 </div>
 {% include "opsconsole/_flow.html" %}
+{% include "opsconsole/_round_live.html" %}
 {% include "opsconsole/_round_bar.html" %}
 <div class="grid g4">{% for k in queue %}
   <div class="card qcard">
@@ -16,6 +17,7 @@
       <div class="{% if k.stuck %}warn{% else %}zero{% endif %}"><b>{{ k.stuck }}</b><span>stuck</span></div>
       <div class="{% if not k.done_today %}zero{% endif %}"><b>{{ k.done_today }}</b><span>done today</span></div>
     </div>
+    {% with p=live.progress|get:k.kind %}{% if p %}<div class="small inround" title="tasks of this kind the open round planned, and how many its agents have done">in this round: <b>{{ p.planned }}</b> planned / <b>{{ p.done }}</b> done{% if p.in_progress %} · {{ p.in_progress }} in progress{% endif %}{% if p.failed %} · {{ p.failed }} failed{% endif %}</div>{% endif %}{% endwith %}
     <div class="foot">{% with n=rounds.takes|get:k.kind %}{% if n is not None %}<span title="the round size times what waits">next round will take: {{ n }}</span>{% endif %}{% endwith %}
       {% if k.oldest_age %}<span>oldest waiting {{ k.oldest_age|span }}</span>{% endif %}
       <span title="done in the last seven days">{{ k.done_7d }} done in 7 days</span>

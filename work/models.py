@@ -51,6 +51,10 @@ class AgentTask(models.Model):
     created_by = models.CharField(max_length=200, help_text='The job (or person) that queued it: "job:<name>".')
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    # The round whose role agent last claimed it (docs/adr/0040-round-progress-from-a-task-link.md): set by a claim
+    # through the agent API with a round's role token (`round-writer`, `round-filler`, …) while that round is open,
+    # cleared by any other claim; kept when the task is released or fails. A round's progress is counted from it.
+    round = models.ForeignKey("work.Round", null=True, blank=True, on_delete=models.SET_NULL, related_name="worked_tasks")
 
     class Meta:
         ordering = ["-priority", "created_at", "id"]

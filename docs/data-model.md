@@ -54,6 +54,7 @@ erDiagram
     Revision }o--o| AgentTask : "made for"
     OpsAction }o--o| Round : "part of"
     Round }o--o| Release : "published"
+    AgentTask }o--o| Round : "claimed in"
 ```
 
 The flow: **feeds** are fetched by deterministic jobs into **documents**;
@@ -119,7 +120,7 @@ Working state, not canonical (ADR 0012). The jobs that fill these tables are lis
 
 | Table | What it's for |
 |---|---|
-| `AgentTask` | The queue: kind (write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation, map_branch_entities, fill_gap), target (entry, claim, candidate, proposal or a free reference), payload, priority, status, `dedupe_key` (one open task per kind and key), the lease (`claimed_by`, `claimed_at`, `lease_until`, attempts of `max_attempts`), result, error, and who created it. |
+| `AgentTask` | The queue: kind (write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation, map_branch_entities, fill_gap), target (entry, claim, candidate, proposal or a free reference), payload, priority, status, `dedupe_key` (one open task per kind and key), the lease (`claimed_by`, `claimed_at`, `lease_until`, attempts of `max_attempts`), result, error, who created it, and the `round` whose role agent last claimed it (ADR 0040). |
 | `Round` | One agent round (ADR 0035): when it started and finished, its trigger (schedule or manual), status (running, reviewing, release_ready, published, held, finished, failed, skipped), who started it, the planned mix, the agents, tasks per kind, drafts, review verdicts, the edit file's op counts, the release it published, a summary, notes, a history of every change and an idempotency key. Not canonical; its edits and release calls are `OpsAction` rows linked to it. The round settings (paused, skip the next, the size, held drafts sent on) are the `JobState` row `agent_rounds`. |
 
 ## agentapi

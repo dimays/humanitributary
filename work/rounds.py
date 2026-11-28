@@ -21,11 +21,11 @@ from datetime import timezone as dt_timezone
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import CharField, Exists, OuterRef
+from django.db.models import CharField, Count, Exists, OuterRef, Q
 from django.db.models.functions import Cast
 from django.utils import timezone
 
-from .models import Round
+from .models import AgentTask, Round
 
 STATE = "agent_rounds"
 ROLES = {  # role → (the task kind it works, the skill it follows)
@@ -252,6 +252,53 @@ def start(*, trigger: str, by: str, plan: dict | None = None, agents: list | Non
     return r, proceed
 
 
+# ── which round a claim belongs to, and a round's progress (ADR 0040) ────────────────────────────────────────────
+
+# A round's role tokens: `round-<role>` (procedure 15), or a replacement made when one is rotated (`round-writer-2`).
+ROUND_AGENT = re.compile(r"^agent:round-(" + "|".join(ROLES) + r")(?:-[\w.@+]+)?$")
+PROGRESS = ("planned", "claimed", "in_progress", "stuck", "done", "failed", "released")
+
+
+def is_round_agent(actor: str) -> bool:
+    return bool(ROUND_AGENT.match(actor or ""))
+
+
+def open_round(now=None) -> Round | None:
+    """The round now running, reviewing or release-ready, if any: the newest open one younger than STALE_HOURS (an
+    older one was interrupted, and the next start closes it as failed)."""
+    now = now or timezone.now()
+    return Round.objects.filter(status__in=Round.OPEN, started_at__gte=now - timedelta(hours=STALE_HOURS)).order_by("-started_at", "-id").first()
+
+
+def round_for_claim(actor: str, now=None) -> Round | None:
+    """The round a claim by `actor` links its task to: the open round, when the actor is one of a round's role
+    tokens; else None (an agent working outside a round, or a round token while no round is open)."""
+    return open_round(now) if is_round_agent(actor) else None
+
+
+def progress(r: Round, now=None) -> dict[str, dict]:
+    """Per task kind, a round's batch as it moves (one query): planned (the plan's mix), claimed (tasks its role
+    agents claimed: every task linked to it), in progress (still claimed; `stuck` the part whose lease ran out),
+    done, failed, and released (handed back to the queue: released, failed with attempts left, or cancelled). The
+    plan's kinds first, in its order, then any other kind its agents claimed."""
+    now = now or timezone.now()
+    rows = {x["kind"]: x for x in AgentTask.objects.filter(round=r).values("kind").annotate(
+        claimed=Count("id"), in_progress=Count("id", filter=Q(status="claimed")),
+        stuck=Count("id", filter=Q(status="claimed", lease_until__lt=now)), done=Count("id", filter=Q(status="done")),
+        failed=Count("id", filter=Q(status="failed")), released=Count("id", filter=Q(status__in=["queued", "cancelled"])))}
+    mix = {}
+    for k, n in ((r.plan or {}).get("mix") or {}).items():
+        try:
+            mix[str(k)] = max(0, int(n))
+        except (TypeError, ValueError):
+            mix[str(k)] = 0
+    out = {}
+    for kind in [*mix, *sorted(set(rows) - set(mix))]:
+        x = rows.get(kind) or {}
+        out[kind] = {"planned": mix.get(kind, 0), **{k: x.get(k, 0) for k in PROGRESS[1:]}}
+    return out
+
+
 PATCHABLE = {"status", "plan", "agents", "tasks", "drafts", "verdicts", "summary", "notes"}
 AGENT_STATUSES = {Round.Status.RUNNING, Round.Status.REVIEWING, Round.Status.RELEASE_READY, Round.Status.HELD, Round.Status.FINISHED, Round.Status.FAILED}
 VERDICTS = ("approve", "approve_with_edits", "hold", "reject")
@@ -357,6 +404,6 @@ def as_json(r: Round) -> dict:
     return {
         "id": r.pk, "status": r.status, "status_label": r.get_status_display(), "trigger": r.trigger, "started_by": r.started_by,
         "started_at": r.started_at.isoformat(timespec="seconds"), "finished_at": r.finished_at.isoformat(timespec="seconds") if r.finished_at else None,
-        "plan": r.plan, "agents": r.agents, "tasks": r.tasks, "drafts": r.drafts, "verdicts": r.verdicts, "edit_ops": r.edit_ops,
+        "plan": r.plan, "agents": r.agents, "tasks": progress(r), "tasks_reported": r.tasks, "drafts": r.drafts, "verdicts": r.verdicts, "edit_ops": r.edit_ops,
         "release": r.release.version if r.release_id else None, "summary": r.summary, "notes": r.notes, "history": r.history[-50:],
     }

@@ -52,6 +52,7 @@ from .templatetags.ops import field_diffs
 PAGE_SIZE = 50
 REFRESH_SECONDS = 30         # Dashboard, Runs and a running run's page reload themselves this often (a small script)
 ACTION_REFRESH_SECONDS = 3   # an open action's page reloads itself this often
+ROUND_REFRESH_SECONDS = 20   # Work and a round's page, while a round is open (the same small script as the Dashboard's)
 TOKEN_SALT = "opsconsole.action"
 TOKEN_MAX_AGE = 30 * 60      # a confirmation page is good for this long
 PERMISSION = "opsconsole.ops_operator"
@@ -320,9 +321,11 @@ def run_detail(request, pk):
 def work(request):
     now = timezone.now()
     queue = Q.queue(now)
-    return _render(request, "work.html", {"queue": queue, "stuck": Q.stuck_leases(now), "wave": Q.wave(now),
+    live = Q.live_round(now)  # the open round's batch as it moves (ADR 0040): the strip, and each kind card's line
+    return _render(request, "work.html", {"queue": queue, "stuck": Q.stuck_leases(now), "wave": Q.wave(now), "live": live,
                                           "rounds": Q.rounds_overview(now, queue), "max_agents": WR.MAX_AGENTS_PER_ROLE,
-                                          "max_tasks": WR.MAX_TASKS_PER_AGENT, "flow_doc": "jobs-and-work"}, section="work")
+                                          "max_tasks": WR.MAX_TASKS_PER_AGENT, "flow_doc": "jobs-and-work"},
+                   section="work", refresh=ROUND_REFRESH_SECONDS if live else None)
 
 
 @console
@@ -334,8 +337,9 @@ def rounds(request):
 
 @console
 def round_detail(request, pk):
-    """One round: its stages (plan → agents → review → apply → publish), the plan, each agent's counts (recorded, and
-    what the queue says), the verdicts, the edit file's ops and its actions, the release, and links to its drafts."""
+    """One round: its stages (plan → agents → review → apply → publish), its progress per task kind and the tasks its
+    agents claimed (ADR 0040), the plan, each agent's counts (recorded, and what the queue says), the verdicts, the
+    edit file's ops and its actions, the release, and links to its drafts."""
     from revisions.models import Revision
 
     r = get_object_or_404(Round.objects.select_related("release"), pk=pk)
@@ -345,8 +349,8 @@ def round_detail(request, pk):
     return _render(request, "round_detail.html", {
         "r": r, "card": Q.round_card(r), "stages": WR.stages(r, actions), "actions": actions, "agents": Q.round_agents(r),
         "revisions": revs, "carry_over": (r.plan or {}).get("carry_over") or [], "mix": (r.plan or {}).get("mix") or {},
-        "verdict_keys": WR.VERDICTS,
-    }, section="work")
+        "verdict_keys": WR.VERDICTS, "live": Q.live_round(timezone.now(), r), "round_tasks": Q.round_tasks(r),
+    }, section="work", refresh=ROUND_REFRESH_SECONDS if r.open else None)
 
 
 @console

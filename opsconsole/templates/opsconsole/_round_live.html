@@ -1,0 +1,13 @@
+{% load ops %}{% if live %}{# A round's batch as it moves (ADR 0040): one bar per task kind, counted from the tasks its role agents claimed. #}
+<div class="card rlive" style="margin-bottom:18px" aria-label="Round #{{ live.round.pk }} progress">
+  <div class="card-head"><h2>{% if on_page %}Progress{% else %}<a href="{% url 'opsconsole:round' live.round.pk %}">Round #{{ live.round.pk }}</a>{% endif %} {% badge live.card.state live.card.label %}</h2>
+    {% if live.open %}<div class="tools">{% include "opsconsole/_refresh.html" %}</div>{% endif %}</div>
+  <p class="small muted" style="margin:0 0 10px">{% if live.open %}Stage: <b>{{ live.stage }}</b> · running for {{ live.seconds|seconds }}{% else %}Took {{ live.seconds|seconds }}{% endif %} · started {{ live.round.started_at|date:"H:i" }} UTC · {{ live.done }} of {{ live.planned }} planned tasks done</p>
+  {% if live.rows %}<div class="rprog">{% for x in live.rows %}<div class="rrow">
+    <a class="mono k" href="{% url 'opsconsole:work_kind' x.kind %}">{{ x.kind }}</a>
+    <span class="rbar" role="img" aria-label="{{ x.kind }}: {% for s in x.segs %}{{ s.n }} {{ s.label }}{% if not forloop.last %}, {% endif %}{% empty %}nothing planned or claimed{% endfor %}">{% for s in x.segs %}<span class="seg g-{{ s.key }}" style="width:{{ s.pct }}%" title="{{ s.n }} {{ s.label }}"></span>{% endfor %}</span>
+    <span class="small n">{{ x.done }}/{{ x.planned }} done{% if x.in_progress %} · {{ x.in_progress }} in progress{% if x.stuck %} ({{ x.stuck }} stuck){% endif %}{% endif %}{% if x.failed %} · <span class="bad">{{ x.failed }} failed</span>{% endif %}{% if x.released %} · {{ x.released }} released{% endif %}{% if x.claimed > x.planned %} · {{ x.claimed }} claimed{% endif %}</span>
+  </div>{% endfor %}</div>
+  <div class="rkey small muted" aria-hidden="true">{% for k, label in live.segments %}<span><i class="seg g-{{ k }}"></i>{{ label }}</span>{% endfor %}</div>
+  {% else %}<p class="empty-note">No mix planned and no task claimed yet.</p>{% endif %}
+</div>{% endif %}

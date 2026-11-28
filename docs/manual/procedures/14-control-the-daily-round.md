@@ -1,7 +1,7 @@
 # 14. Control the daily round
 
-Purpose: This procedure tells how to pause, resume and skip the scheduled rounds, change their size, and send held
-drafts on.
+Purpose: This procedure tells how to watch a round, pause, resume and skip the scheduled rounds, change their size,
+and send held drafts on.
 
 The console does not start a round. It changes the round configuration. The routine reads it before it does work, and
 the API obeys it ([the daily round](../daily-round.md)).
@@ -10,6 +10,29 @@ the API obeys it ([the daily round](../daily-round.md)).
 
 - You have a staff user with the permission `ops_operator`.
 - You know why you make the change. The console records your reason with the action.
+
+## Watch a round
+
+You can watch a round while it runs. You do not need the permission `ops_operator` for this.
+
+1. Open the Work page of the console while a round is open.
+   Make sure that the card "Round #N" shows at the top, above the round strip.
+2. Read the stage and the time since the start.
+   Make sure that the stage is Agents, Review or Publish.
+3. Read the bar of each task kind. Green shows done tasks, blue tasks in progress, red failed tasks, gray released tasks.
+   Make sure that the line next to each bar shows the done tasks and the planned tasks.
+4. Look at the cards of the task kinds.
+   Make sure that each kind of the plan shows the line `in this round`.
+5. Wait 20 seconds.
+   Make sure that the page shows new numbers when the agents finish tasks.
+6. Click "Round #N" to open the page of the round.
+   Make sure that the table "Its tasks" shows the tasks of each agent.
+
+An amber segment shows a task with a lease that ran out. If it stays amber, use procedure
+[07](07-release-a-stuck-task.md). An outlined segment shows planned tasks that no agent has yet.
+
+> **NOTE:** The card shows only the tasks that the role tokens of the round get. A token with a different name gets
+> tasks, but they do not show in the card. Use the names of procedure [15](15-set-up-the-daily-round.md).
 
 ## Pause the scheduled rounds
 

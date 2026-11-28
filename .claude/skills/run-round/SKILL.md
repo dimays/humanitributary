@@ -130,6 +130,11 @@ When every agent has reported, `PATCH rounds/<id>`:
  "tasks": {"write_event": {"claimed": 8, "completed": 6, "failed": 1, "released": 1}}, "drafts": ["n92-sn-…", "ga10-…"]}
 ```
 
+The API links every task a role token claims while the round is open to the round, and `GET rounds/<id>` counts
+them per kind in `tasks` (planned, claimed, in progress, done, failed, released): the console's progress bars come
+from it, so the role agents must use the role tokens, never another. Still send your own counts as above; the round
+keeps them as `tasks_reported`.
+
 If no agent drafted anything and nothing was carried over, finish the round (`{"status": "finished", "finish":
 true, "summary": …}`) and post the summary: there is nothing to review or publish.
 
