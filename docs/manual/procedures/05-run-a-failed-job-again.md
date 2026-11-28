@@ -13,7 +13,7 @@ time, use this procedure.
 
 ## Procedure
 
-1. Open the Runs page of the console, `https://data.humanitributary.com/ops/runs/`, and filter by the state
+1. Open the Runs page of the console, `https://data.manyages.com/ops/runs/`, and filter by the state
    Failed.
    Make sure that you know the name of the job and, for a feed job, the name of the feed.
 2. On the Dashboard, put the pointer on the red bar of the run.

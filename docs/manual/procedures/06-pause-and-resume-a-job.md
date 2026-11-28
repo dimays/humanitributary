@@ -14,7 +14,7 @@ A paused job is not a problem. The Dashboard and `/healthz` show it as paused. T
 
 ## Pause a job
 
-1. Open the Jobs page of the console, `https://data.humanitributary.com/ops/jobs/`.
+1. Open the Jobs page of the console, `https://data.manyages.com/ops/jobs/`.
    Make sure that you can see the row of the job.
 2. Start the Pause action on the row of the job, and type a reason.
    Make sure that the reason tells why the job must stop.

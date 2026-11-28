@@ -1,4 +1,4 @@
-"""Settings for the Humanitributary data platform.
+"""Settings for the ManyAges data platform.
 
 Everything secret or environment-specific comes from the environment (`.env` locally, config vars on Heroku).
 Postgres only: the data model leans on JSONB, GIN and trigram indexes, check constraints and the revision triggers
@@ -15,7 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 # The product's name, in one place (with the README's title and the page template).
-SITE_NAME = "Humanitributary"
+SITE_NAME = "ManyAges"
 
 # "dev" locally, "prod" on Heroku. Anything but "dev" gets production safety.
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
@@ -177,7 +177,7 @@ WRITE_EVENT_THRESHOLD = float(os.getenv("WRITE_EVENT_THRESHOLD", "70"))
 
 # Ingestion (ingest/, docs/adr/0012-ingestion.md). The User-Agent names the bot and a generic contact, never a
 # person: the project's repository by default (Wikimedia asks for a contact).
-INGEST_CONTACT = os.getenv("INGEST_CONTACT", "https://github.com/dimays/humanitributary")
+INGEST_CONTACT = os.getenv("INGEST_CONTACT", "https://github.com/dimays/manyages")
 INGEST_USER_AGENT = os.getenv("INGEST_USER_AGENT", f"{SITE_NAME}Bot/0.1 (history timeline research; +{INGEST_CONTACT}) python-httpx")
 # Evidence packs (ingest/prefetch.py, docs/adr/0036-evidence-packs.md): the clean text of a page the prefetch_sources
 # job stored is deleted from the private store this many days after it was last fetched; a publisher whose license
@@ -226,7 +226,7 @@ ROUND_MAX_AGENTS = int(os.getenv("ROUND_MAX_AGENTS", "16"))
 ROUND_MAX_TASKS_PER_AGENT = int(os.getenv("ROUND_MAX_TASKS_PER_AGENT", "20"))
 
 # The operations console (/ops/, opsconsole/): when set, only these hosts serve it and every other host answers 404, so
-# the public page's domain has no /ops/ (comma-separated, e.g. data.humanitributary.com). Empty: any allowed host.
+# the public page's domain has no /ops/ (comma-separated, e.g. data.manyages.com). Empty: any allowed host.
 OPS_HOSTS = [h.strip() for h in os.getenv("OPS_HOSTS", "").split(",") if h.strip()]
 # The public page, for the console's links to an entry on it (`<PUBLIC_SITE_URL>/#<slug>`; the New events page).
 PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", f"https://{SITE_NAME.lower()}.com").rstrip("/")

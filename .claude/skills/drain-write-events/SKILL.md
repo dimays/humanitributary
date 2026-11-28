@@ -1,6 +1,6 @@
 ---
 name: drain-write-events
-description: Work the write_event queue in the Humanitributary repo through the agent API. Claim a story that ingestion clustered (Wikipedia Current events, "<Year> in X", official feeds), read its sources, draft one event in the SCHEMA style, cite pages actually read, and complete the task with the event, which lands in review. Use when asked to drain or work write_event tasks, add current events, or turn queued candidates into timeline events.
+description: Work the write_event queue in the ManyAges repo through the agent API. Claim a story that ingestion clustered (Wikipedia Current events, "<Year> in X", official feeds), read its sources, draft one event in the SCHEMA style, cite pages actually read, and complete the task with the event, which lands in review. Use when asked to drain or work write_event tasks, add current events, or turn queued candidates into timeline events.
 ---
 
 # Drain the write_event queue

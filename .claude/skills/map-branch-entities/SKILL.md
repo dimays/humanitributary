@@ -1,6 +1,6 @@
 ---
 name: map-branch-entities
-description: Work the map_branch_entities queue in the Humanitributary repo through the agent API. A branch the seed_branch_entities job could not match to Wikidata by exact title needs its Wikidata items (its polity, faith, movement, organization, or the member states of a group) so ingestion can route new stories to it. Read the payload, look the candidates up on Wikidata, pick only items the branch is about, and complete the task with them (or an empty list). Use when asked to map branches to Wikidata, fix routing, or work map_branch_entities tasks.
+description: Work the map_branch_entities queue in the ManyAges repo through the agent API. A branch the seed_branch_entities job could not match to Wikidata by exact title needs its Wikidata items (its polity, faith, movement, organization, or the member states of a group) so ingestion can route new stories to it. Read the payload, look the candidates up on Wikidata, pick only items the branch is about, and complete the task with them (or an empty list). Use when asked to map branches to Wikidata, fix routing, or work map_branch_entities tasks.
 ---
 
 # Map branches to their Wikidata items

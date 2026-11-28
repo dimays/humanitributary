@@ -46,7 +46,7 @@ Django's template of that name. It wins because `opsconsole` comes before `djang
 `INSTALLED_APPS`. The sidebar's foot links back to the admin.
 
 Every tab reads as the same project. A console page's title is "<page> · <SITE_NAME> Operations" ("Jobs ·
-Humanitributary Operations"), from `base.html`'s `title` block; the admin's is "<page> · <SITE_NAME> administration"
+ManyAges Operations"), from `base.html`'s `title` block; the admin's is "<page> · <SITE_NAME> administration"
 (its `site_title`, set in `config/urls.py`, and the same override's `title` block). Both heads include
 `opsconsole/templates/opsconsole/_icons.html`, the public page's favicon (`/favicon.ico`, `/favicon.svg`) and Apple touch icon, which
 `infra/site.py` serves at the root of every host ([Publishing](publishing.md#the-brand-files),

@@ -1,6 +1,6 @@
 ---
 name: review-branch-proposals
-description: Drain the review_branch_proposal queue in the Humanitributary repo through the agent API — read what a branch rule proposed (split, merge, end date, new branch), decide, and either accept it with the operations written out (names, texts and cites it leaves to you) for the owner to apply, or reject it with a reason. Use when asked to review branch proposals or to work review_branch_proposal tasks.
+description: Drain the review_branch_proposal queue in the ManyAges repo through the agent API — read what a branch rule proposed (split, merge, end date, new branch), decide, and either accept it with the operations written out (names, texts and cites it leaves to you) for the owner to apply, or reject it with a reason. Use when asked to review branch proposals or to work review_branch_proposal tasks.
 ---
 
 # Review branch proposals

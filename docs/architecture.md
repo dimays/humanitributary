@@ -1,6 +1,6 @@
 # Architecture
 
-Humanitributary turns outside material (news feeds, Wikipedia, open archives)
+ManyAges turns outside material (news feeds, Wikipedia, open archives)
 into a cited timeline of all history, published as a single static page.
 Scheduled, deterministic jobs collect and sort; Claude agents, working
 through a queue, do everything that needs judgment; Postgres keeps every

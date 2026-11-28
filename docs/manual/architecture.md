@@ -15,10 +15,10 @@ flowchart LR
     agents(["Claude agents<br/>writers, gap fillers, verifiers"])
     reviewer(["Independent reviewer<br/>a Claude session"])
     readers(["Readers"])
-    subgraph platform["Humanitributary platform, Heroku app humanitributary-staging"]
+    subgraph platform["ManyAges platform, Heroku app humanitributary-staging"]
         core["Jobs, Postgres, object storage,<br/>agent API, admin, console, releases"]
     end
-    page["Public page<br/>https://humanitributary.com"]
+    page["Public page<br/>https://manyages.com"]
     sources["Outside sources<br/>Wikipedia, Wikidata, WHO, Federal Register,<br/>The Gazette, Nobel, Office of the Historian,<br/>open lookup APIs"]
     cited["Cited pages<br/>some only in a browser"]
     github["GitHub<br/>code, pull requests, CI"]
@@ -75,7 +75,7 @@ flowchart TB
     pg[("Heroku Postgres")]
     raw[("S3 bucket humanitributary-staging-raw")]
     rel[("S3 bucket humanitributary-staging-releases")]
-    gh["GitHub dimays/humanitributary<br/>Actions: make check-pr"]
+    gh["GitHub dimays/manyages<br/>Actions: make check-pr"]
 
     admin & ops & api & health --> pg
     site -- "latest.json and timeline.html only" --> rel
@@ -144,9 +144,11 @@ flowchart TB
     agent(["Agent session"])
     ownerb(["Owner browser and shell"])
     subgraph cf["Cloudflare DNS, registrar Namecheap"]
-        dnsroot["humanitributary.com<br/>flattened CNAME, DNS only"]
-        dnswww["www.humanitributary.com<br/>CNAME, DNS only"]
-        dnsdata["data.humanitributary.com<br/>CNAME, DNS only"]
+        dnsroot["manyages.com<br/>flattened CNAME, DNS only"]
+        dnswww["www.manyages.com<br/>CNAME, DNS only"]
+        dnsdata["data.manyages.com<br/>CNAME, DNS only"]
+        dnsold["humanitributary.com and www<br/>proxied, 301 to manyages.com"]
+        dnsolddata["data.humanitributary.com<br/>CNAME, DNS only, until agents move"]
     end
     subgraph hk["Heroku pipeline humanitributary, region us"]
         router["Heroku router<br/>TLS with Heroku-managed certificates"]
@@ -163,13 +165,16 @@ flowchart TB
         rel[("S3 humanitributary-staging-releases")]
     end
     subgraph ghub["GitHub"]
-        repo["dimays/humanitributary"]
+        repo["dimays/manyages"]
         ci["Actions workflow check<br/>make check-pr"]
     end
     reader --> dnsroot & dnswww
+    reader -. "old links" .-> dnsold
+    dnsold -. "301" .-> dnsroot
     agent --> dnsdata
+    agent -. "old HUMANITRIBUTARY_API" .-> dnsolddata
     ownerb --> dnsdata
-    dnsroot & dnswww & dnsdata --> router
+    dnsroot & dnswww & dnsdata & dnsolddata --> router
     router --> web
     web & worker & rp --> pg
     web & worker --> raw & rel
@@ -184,9 +189,11 @@ flowchart TB
 | Dynos | `web` and `worker`, one Basic dyno each, as `app.json` states. `heroku ps -a humanitributary-staging` shows the real count. |
 | Database | Heroku Postgres Essential-1, Postgres 16, as `DATABASE_URL`, with TLS. Heroku keeps a backup each day. |
 | Object storage | AWS S3 in us-east-1: `humanitributary-staging-raw` and `humanitributary-staging-releases`. S3 blocks public access. |
-| DNS | Cloudflare holds the zone. Each name is a CNAME to its Heroku DNS target, with DNS only (no proxy). |
-| `data.humanitributary.com` | The admin, the console and the agent API |
-| `humanitributary.com` | The public page. The app sends `www.humanitributary.com` to this name. |
+| DNS | Cloudflare holds the two zones. Each `manyages.com` name is a CNAME to its Heroku DNS target, with DNS only (no proxy). |
+| `data.manyages.com` | The admin, the console and the agent API |
+| `manyages.com` | The public page. The app sends `www.manyages.com` to this name. |
+| `humanitributary.com` | The old name of the site. Cloudflare sends `humanitributary.com` and `www.humanitributary.com` to `https://manyages.com`, with the same path and query (301). The domain expires on November 26, 2027. |
+| `data.humanitributary.com` | The old data host. It serves the admin, the console and the agent API until all agent environments use `data.manyages.com`. |
 | Deploys | Heroku deploys `main` automatically after CI passes on it. |
 
 > **NOTE:** The public page and the data host are the same app. `OPS_HOSTS` can limit the console to the data host.

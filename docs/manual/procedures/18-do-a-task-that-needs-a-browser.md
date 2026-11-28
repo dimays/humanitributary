@@ -20,7 +20,7 @@ Such a task stays in the queue, but agents do not get it for 7 days. The summary
 
 1. Read the line "Needs the owner" in the summary of the round.
    Make sure that you have the number of each task.
-2. Open the Work page of the console, `https://data.humanitributary.com/ops/work/`. Click the kind of the task.
+2. Open the Work page of the console, `https://data.manyages.com/ops/work/`. Click the kind of the task.
    Make sure that the page of the kind opens.
 3. Click the tab Deferred.
    Make sure that the task shows "needs browser", the URL, the reason and "not before".

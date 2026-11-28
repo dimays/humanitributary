@@ -12,7 +12,7 @@ A task is stuck when its status is `claimed` but no agent does the work. The lea
 
 ## Procedure with the console
 
-1. Open the Work page of the console, `https://data.humanitributary.com/ops/work/`. Find the task in the list of
+1. Open the Work page of the console, `https://data.manyages.com/ops/work/`. Find the task in the list of
    stuck leases.
    Make sure that you can see the task, its holder and the end of its lease.
 2. Open the page of the task.

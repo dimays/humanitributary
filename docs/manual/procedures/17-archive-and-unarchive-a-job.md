@@ -19,7 +19,7 @@ time, pause it ([procedure 06](06-pause-and-resume-a-job.md)).
 
 ## Archive a job
 
-1. Open the page of the job, `https://data.humanitributary.com/ops/jobs/<name>/`.
+1. Open the page of the job, `https://data.manyages.com/ops/jobs/<name>/`.
    Make sure that the page shows the name of the job at the top.
 2. Click "Archive…".
    Make sure that a dialog with the title "Archive <name>" opens.
@@ -33,7 +33,7 @@ time, pause it ([procedure 06](06-pause-and-resume-a-job.md)).
    Make sure that the action page shows the status "Completed".
 7. Open the Jobs page of the console.
    Make sure that the job is not in the list.
-8. Open the page "Archived jobs", `https://data.humanitributary.com/ops/jobs/archived/`.
+8. Open the page "Archived jobs", `https://data.manyages.com/ops/jobs/archived/`.
    Make sure that the job is in the list, with your name and your reason.
 9. Show the job registry from the command line:
 
