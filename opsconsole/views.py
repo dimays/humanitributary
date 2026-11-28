@@ -362,7 +362,8 @@ def work(request):
     live = Q.live_round(now)  # the open round's batch as it moves (ADR 0040): the strip, and each kind card's line
     return _render(request, "work.html", {"queue": queue, "stuck": Q.stuck_leases(now), "wave": Q.wave(now), "live": live,
                                           "rounds": Q.rounds_overview(now, queue), "max_agents": WR.MAX_AGENTS_PER_ROLE,
-                                          "max_tasks": WR.MAX_TASKS_PER_AGENT, "flow_doc": "jobs-and-work"},
+                                          "max_tasks": WR.MAX_TASKS_PER_AGENT, "flow_doc": "jobs-and-work",
+                                          "unrated": Q.unrated_asked()},
                    section="work", refresh=ROUND_REFRESH_SECONDS if live else None)
 
 

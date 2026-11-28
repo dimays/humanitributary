@@ -328,3 +328,181 @@ class FetchPolicyApiTests(TestCase):
     @override_settings(AGENT_API_RATE_PER_MINUTE=2)
     def test_rate_limited_like_other_reads(self):
         self.assertEqual([self.ask("https://rated.example.org/x").status_code for _ in range(3)], [200, 200, 429])
+
+
+class CompleteErrorTests(TestCase):
+    """POST complete never answers Django's HTML 500 (ADR 0045): a value that doesn't fit its column is a JSON 422
+    naming the field, with the task still the agent's; anything else is a JSON 500."""
+
+    def setUp(self):
+        import_content(small())
+        _, self.token = create_token("writer", ["write_event", "fill_gap", "verify_claim"], created_by="human:owner")
+
+    def post(self, path, body=None):
+        return self.client.post(f"/api/agent/{path}", data=json.dumps(body or {}), content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.token}")
+
+    def claimed(self, kind):
+        task, _ = queue.enqueue(kind, created_by="job:test", dedupe_key=f"{kind}-{AgentTask.objects.count()}")
+        self.assertEqual(self.post("tasks/claim", {"kinds": [kind]}).json()["task"]["id"], task.pk)
+        return task
+
+    def assert_still_claimed(self, task):
+        task.refresh_from_db()
+        self.assertEqual((task.status, task.claimed_by), ("claimed", "agent:writer"))
+
+    def test_a_value_that_does_not_fit_is_a_422_naming_the_field(self):
+        from unittest import mock
+
+        from django.core.exceptions import ValidationError
+
+        for kind, result in (("fill_gap", {"decision": "written", "events": [EVENT]}), ("write_event", {"decision": "written", "event": EVENT})):
+            task = self.claimed(kind)
+            with mock.patch("agentapi.apply.apply", side_effect=ValidationError({"entry.sort_key": ["300 characters, at most 255"]})):
+                r = self.post(f"tasks/{task.pk}/complete", {"result": result})
+            self.assertEqual(r.status_code, 422, r.content)
+            self.assertEqual(r["Content-Type"], "application/json")
+            self.assertEqual(r.json()["fields"], {"entry.sort_key": ["300 characters, at most 255"]})
+            self.assertIn("entry.sort_key", r.json()["error"])
+            self.assert_still_claimed(task)
+            # The agent fixes it and sends it again: it goes through.
+            r = self.post(f"tasks/{task.pk}/complete", {"result": result if kind == "fill_gap" else {**result, "event": {**EVENT, "id": "un-new-member-2"}}})
+            self.assertEqual(r.status_code, 200, r.content)
+
+    def test_a_postgres_data_error_is_a_422(self):
+        from unittest import mock
+
+        from django.db import DataError
+
+        task = self.claimed("fill_gap")
+        with mock.patch("agentapi.apply.apply", side_effect=DataError("value too long for type character varying(64)")):
+            r = self.post(f"tasks/{task.pk}/complete", {"result": {"decision": "written", "events": [EVENT]}})
+        self.assertEqual(r.status_code, 422, r.content)
+        self.assertIn("value too long for type character varying(64)", r.json()["error"])
+        self.assertIn("value too long", next(iter(r.json()["fields"].values()))[0])
+        self.assert_still_claimed(task)
+        self.assertFalse(Event.objects.filter(slug=EVENT["id"]).exists(), "nothing was kept")
+
+    def test_anything_else_is_a_json_500(self):
+        from unittest import mock
+
+        task = self.claimed("fill_gap")
+        with mock.patch("agentapi.apply.apply", side_effect=RuntimeError("boom")), self.assertLogs("agentapi", "ERROR") as logs:
+            r = self.post(f"tasks/{task.pk}/complete", {"result": {"decision": "written", "events": [EVENT]}})
+        self.assertEqual(r.status_code, 500)
+        self.assertEqual(r["Content-Type"], "application/json")
+        self.assertEqual(r.json()["exception"], "RuntimeError")
+        self.assertIn("RuntimeError: boom", "\n".join(logs.output), "the traceback is logged for the owner")
+        self.assert_still_claimed(task)
+
+    def test_the_real_apply_keeps_sort_keys_short(self):
+        """The production traceback: fill_gap → _create_event → save_event, with the last keys near 64 characters."""
+        from fractions import Fraction
+        from unittest import mock
+
+        from revisions import revising
+        from timeline import ordering, services
+        from timeline.models import Entry
+
+        with revising("job:test", reason="crowd the end"), mock.patch.object(ordering, "MAX_LEN", 255):
+            key = Entry.objects.filter(kind="event").order_by("-sort_key").first().sort_key
+            for n in range(370):
+                key = ordering._shortest(ordering._value(key), Fraction(1))  # the old append: halfway to the end
+                services.save_event(f"crowd-{n:03d}", branch="un", y=2001, when="2001", title=f"Crowd {n}", text="t.", imp=3)
+                services.apply_changes(Entry.objects.get(slug=f"crowd-{n:03d}"), {"sort_key": key})
+        self.assertGreater(len(key), 50, "near the old column's 64 characters")
+        task = self.claimed("fill_gap")
+        r = self.post(f"tasks/{task.pk}/complete", {"result": {"decision": "written", "events": [EVENT]}})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertLessEqual(len(Entry.objects.get(slug=EVENT["id"]).sort_key), ordering.MAX_LEN)
+
+
+class ExcerptLimitTests(TestCase):
+    """Excerpts are at most 25 words (AGENTS.md rule 5): a longer one is a 422 naming it, in every kind that carries
+    one, and nothing is written (ADR 0045)."""
+
+    def setUp(self):
+        import_content(small())
+        _, self.token = create_token("writer", ["write_event", "fill_gap", "verify_claim", "audit"], created_by="human:owner")
+
+    def complete(self, kind, result, **task):
+        t, _ = queue.enqueue(kind, created_by="job:test", dedupe_key=f"{kind}-{AgentTask.objects.count()}", **task)
+        auth = {"HTTP_AUTHORIZATION": f"Bearer {self.token}"}
+        self.client.post("/api/agent/tasks/claim", data=json.dumps({"kinds": [kind]}), content_type="application/json", **auth)
+        return self.client.post(f"/api/agent/tasks/{t.pk}/complete", data=json.dumps({"result": result}), content_type="application/json", **auth), t
+
+    def test_a_30_word_verify_claim_excerpt_is_refused(self):
+        record = Claim.objects.get(entry__slug="an-punic-wars", field="as_written")
+        n = Evidence.objects.count()
+        long = " ".join(f"word{i}" for i in range(30))
+        r, task = self.complete("verify_claim", {"claim": record.pk, "evidence": [{"url": "https://www.worldhistory.org/Punic_Wars/", "stance": "supports", "excerpt": long}]},
+                                target_claim=record, target_entry_id=record.entry_id)
+        self.assertEqual(r.status_code, 422, r.content)
+        self.assertTrue(any(p.startswith("evidence/0/excerpt: the excerpt is 30 words; at most 25") for p in r.json()["problems"]), r.json())
+        self.assertEqual(Evidence.objects.count(), n)
+        task.refresh_from_db()
+        self.assertEqual(task.status, "claimed")
+
+    def test_every_kind_that_carries_excerpts_counts_them(self):
+        cite = {**EVENT["cites"][0], "excerpt": " ".join(["word"] * 26)}
+        ev = {**EVENT, "cites": [cite]}
+        for kind, result, path in (("write_event", {"decision": "written", "event": ev}, "event/cites/0/excerpt"),
+                                   ("fill_gap", {"decision": "written", "events": [ev]}, "events/0/cites/0/excerpt"),
+                                   ("audit", {"events": [ev]}, "events/0/cites/0/excerpt")):
+            r, _ = self.complete(kind, result)
+            self.assertEqual(r.status_code, 422, (kind, r.content))
+            self.assertIn(f"{path}: the excerpt is 26 words; at most 25", "\n".join(r.json()["problems"]), kind)
+        self.assertFalse(Event.objects.filter(slug=EVENT["id"]).exists())
+
+    def test_25_words_pass(self):
+        from agentapi import schemas
+
+        ok = {**EVENT, "cites": [{**EVENT["cites"][0], "excerpt": "  ".join(["word"] * 25)}]}
+        self.assertEqual(schemas.errors("write_event", {"decision": "written", "event": ok}), [])
+        r, _ = self.complete("write_event", {"decision": "written", "event": ok})
+        self.assertEqual(r.status_code, 200, r.content)
+
+
+class UnratedLookupTests(TestCase):
+    """GET policy records each unrated answer, per domain, for `manage.py unrated_domains` and the console (ADR 0045)."""
+
+    setUp, ask, verdict = FetchPolicyApiTests.setUp, FetchPolicyApiTests.ask, FetchPolicyApiTests.verdict
+
+    def test_unrated_lookups_are_counted_and_listed(self):
+        from django.contrib.auth.models import User
+        from django.urls import reverse
+
+        from evidence.models import Publisher
+        from ingest.models import UnratedLookup
+        from revisions import revising
+
+        for url in ("https://www.wto.org/english/news_e/a.htm", "https://www.wto.org/english/news_e/b.htm", "https://www.pbs.org/x",
+                    "https://unrated-row.example.org/c"):
+            self.assertEqual(self.verdict(url)["policy"], "unrated")
+        for url in ("https://rated.example.org/x", "https://www.un.org/en/about-us", "https://openstax.org/books/x", "https://www.theguardian.com/world/x"):
+            self.assertNotEqual(self.verdict(url)["policy"], "unrated")
+        rows = {r.domain: r for r in UnratedLookup.objects.all()}
+        self.assertEqual(set(rows), {"wto.org", "pbs.org", "unrated-row.example.org"}, "allowed and rated lookups are not recorded")
+        wto = rows["wto.org"]
+        self.assertEqual((wto.lookups, wto.example_url, wto.last_actor), (2, "https://www.wto.org/english/news_e/b.htm", "agent:reader"))
+        self.assertLessEqual(wto.first_seen, wto.last_seen)
+
+        out = StringIO()
+        call_command("unrated_domains", "--json", stdout=out)
+        asked = json.loads(out.getvalue())["asked_by_agents"]
+        self.assertEqual([(r["domain"], r["lookups"]) for r in asked][0], ("wto.org", 2), "most asked first")
+        self.assertEqual({r["domain"] for r in asked}, {"wto.org", "pbs.org", "unrated-row.example.org"})
+        text = StringIO()
+        call_command("unrated_domains", stdout=text)
+        self.assertIn("wto.org", text.getvalue())
+
+        with revising("human:test", reason="rated"):
+            Publisher.objects.update_or_create(domain="pbs.org", defaults={"name": "PBS", "tier": 2, "fetch_policy": "allowed"})
+        out = StringIO()
+        call_command("unrated_domains", "--json", stdout=out)
+        self.assertNotIn("pbs.org", {r["domain"] for r in json.loads(out.getvalue())["asked_by_agents"]}, "rated since: left out")
+
+        self.client.force_login(User.objects.create_user("staff", password="x", is_staff=True))
+        r = self.client.get(reverse("opsconsole:work"))
+        self.assertContains(r, "Unrated sites agents asked for")
+        self.assertContains(r, "wto.org")
+        self.assertNotContains(r, ">pbs.org<")

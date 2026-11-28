@@ -43,12 +43,18 @@ on a site that did not refuse the job.
    ```
 
    Make sure that you have the list of domains with the most tasks. Give each a tier only after you read its terms.
-8. Open the page of one task from a group with a low share.
+8. Find the second list in the output. It shows the unrated domains that agents asked about.
+   Make sure that you have the domains with the most lookups. Rate them first, after you read their terms.
+9. Open the page of one task from a group with a low share.
    Make sure that the evidence pack shows the stored pages and the pages to read by hand.
 
 > **NOTE:** A new source needs its terms first. Do procedure [12](12-add-a-data-source.md) for each new source.
 
 > **NOTE:** The report makes no requests. It reads only the queue and the `PrefetchedPage` rows.
+
+> **NOTE:** The API counts each `GET policy` answer that says `unrated`. The table `UnratedLookup` keeps one row for
+> each domain (ADR 0045). The Work page in the console shows the ten domains with the most lookups. A domain that
+> has a tier now is not in the list.
 
 > **NOTE:** The job `seed_sources` applied the source verdicts of November 28, 2026 (ADR 0037). A verdict with low
 > confidence did not change the publisher. Give such a publisher a tier only after you read its terms.

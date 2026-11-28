@@ -36,9 +36,24 @@ from pathlib import Path
 
 from django.conf import settings
 
-RATED_ON = "2026-11-28"
-STATE = "ratings_2026_11_28"
-FILES = [Path(__file__).parent / "ratings" / f"{RATED_ON}-scholarly.json", Path(__file__).parent / "ratings" / f"{RATED_ON}-gov-news.json"]
+
+
+@dataclass(frozen=True)
+class Batch:
+    """One rating round: its label in notes, its JobState key (applied once per database), its ADR and its files."""
+    rated_on: str
+    state: str
+    adr: str
+    files: tuple
+
+
+_DIR = Path(__file__).parent / "ratings"
+BATCH_1 = Batch("2026-11-28", "ratings_2026_11_28", "ADR 0037", (_DIR / "2026-11-28-scholarly.json", _DIR / "2026-11-28-gov-news.json"))
+# The second batch (ADR 0044, which amends 0037): the international bodies, sport, museums, reference and government sites
+# the first round left unrated or unread, and eight more. Same record format and the same rules.
+BATCH_2 = Batch("2026-11-28b", "ratings_2026_11_28b", "ADR 0044", (_DIR / "2026-11-28b-sources.json",))
+BATCHES = (BATCH_1, BATCH_2)
+RATED_ON, STATE, FILES = BATCH_1.rated_on, BATCH_1.state, list(BATCH_1.files)
 RESTRICTIVE = ("browser_only", "citation_only", "forbidden")
 PERMISSIVE = ("allowed", "api_only")
 LOW_CONFIDENCE = re.compile(
@@ -55,7 +70,8 @@ HOST_RE = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")
 POLICY_FOR = {"forbidden": "citation_only"}
 # Reliability tiers for confident permissive ratings (1 primary, official; 2 scholarly or institutional; 3 general).
 TIERS = {"api.semanticscholar.org": 2, "loc.gov": 1, "plato.stanford.edu": 2, "wikidata.org": 3, "govinfo.gov": 1, "congress.gov": 1,
-         "archives.gov": 1, "nasa.gov": 1, "usgs.gov": 1, "ourworldindata.org": 2, "open.canada.ca": 1}
+         "archives.gov": 1, "nasa.gov": 1, "usgs.gov": 1, "ourworldindata.org": 2, "open.canada.ca": 1,
+         "itu.int": 1, "nps.gov": 1, "worldbank.org": 1}
 # The API base a job may use for a confident api_only rating: a URL prefix, optionally a required query parameter.
 API_BASES = {
     "Semantic Scholar API": "https://api.semanticscholar.org/graph/v1/",
@@ -64,9 +80,16 @@ API_BASES = {
     "Congress.gov / Congress API": "https://api.congress.gov/v3/",
     "National Archives Catalog API": "https://catalog.archives.gov/api/v2/",
     "Open Government Canada (open.canada.ca)": "https://open.canada.ca/data/api/3/action/",
+    "PubMed Central and NCBI E-utilities": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/ | https://pmc.ncbi.nlm.nih.gov/api/oai/v1/mh/ | "
+                                           "https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/",
+    "NCBI web site (ncbi.nlm.nih.gov)": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/ | https://pmc.ncbi.nlm.nih.gov/api/oai/v1/mh/ | "
+                                        "https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/",
+    "Smithsonian Institution (si.edu)": "https://api.si.edu/openaccess/api/v1.0/",
+    "Internet Archive (site, second read)": "https://archive.org/advancedsearch.php | https://archive.org/metadata/ | https://archive.org/wayback/available",
 }
 # Settings holding a key for a keyed API (none of the confident keyed ones has one: they stay off).
 KEY_SETTINGS: dict[str, str] = {}
+ORDER = {"forbidden": 0, "citation_only": 1, "browser_only": 2, "api_only": 3, "allowed": 4}  # strictest first
 
 
 @dataclass
@@ -83,6 +106,7 @@ class Decision:
     key_setting: str = ""
     corpus: bool = False
     record: dict = field(default_factory=dict)
+    batch: Batch = BATCH_1
 
     @property
     def note(self) -> str:
@@ -93,7 +117,7 @@ class Decision:
             state = "applied" + (" (its API needs a key that isn't set: off)" if self.verdict == "api_only" and self.needs_key and not self._key_set else "")
         else:
             state = f"not applied: low confidence ({', '.join(self.flags[:4])})"
-        parts = [f"Rated {RATED_ON} (source discovery, ADR 0037): {self.verdict}, {state}.",
+        parts = [f"Rated {self.batch.rated_on} (source discovery, {self.batch.adr}): {self.verdict}, {state}.",
                  f"Terms: {r.get('terms_url') or 'none found'}.", f"Clause: {_short(r.get('clause'), 220)}.",
                  f"robots.txt: {_short(r.get('robots'), 200)}."]
         if self.api_base:
@@ -110,9 +134,9 @@ def _short(v, n: int) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
-def records() -> list[dict]:
+def records(batch: Batch = BATCH_1) -> list[dict]:
     out = []
-    for f in FILES:
+    for f in batch.files:
         out += json.loads(f.read_text())
     return out
 
@@ -135,13 +159,13 @@ def _needs_key(v) -> bool:
     return v is True or (isinstance(v, str) and v.strip().lower().startswith("yes"))
 
 
-def decide(r: dict) -> Decision:
+def decide(r: dict, batch: Batch = BATCH_1) -> Decision:
     text = " ".join(str(r.get(k) or "") for k in ("license", "robots", "clause", "notes"))
     flags = sorted({m.group(0).lower() for m in LOW_CONFIDENCE.finditer(text)})
     verdict = r["verdict"]
     ds = domains(r.get("domains") or [])
     d = Decision(name=r["name"], verdict=verdict, domains=ds, confident=not flags, flags=flags, apply_policy=False, record=r,
-                 corpus=r["name"] in CORPORA)
+                 corpus=r["name"] in CORPORA, batch=batch)
     if d.corpus:
         return d
     if verdict in RESTRICTIVE:
@@ -158,23 +182,22 @@ def decide(r: dict) -> Decision:
     return d
 
 
-def decisions() -> list[Decision]:
-    return [decide(r) for r in records()]
+def decisions(batch: Batch = BATCH_1) -> list[Decision]:
+    return [decide(r, batch) for r in records(batch)]
 
 
-def merged() -> dict[str, dict]:
+def merged(batch: Batch = BATCH_1) -> dict[str, dict]:
     """domain → what to write: the strictest applied verdict wins; API bases of applied api_only ratings join with
     " | "; every record's note is kept."""
-    order = {"forbidden": 0, "citation_only": 1, "browser_only": 2, "api_only": 3, "allowed": 4}
     out = defaultdict(lambda: {"notes": [], "policy": None, "tier": None, "api_base": [], "needs_key": False, "key_setting": ""})
-    for dec in decisions():
+    for dec in decisions(batch):
         for dom in dec.domains:
             w = out[dom]
             w["notes"].append(dec.note)
             if not dec.apply_policy:
                 continue
             pol = POLICY_FOR.get(dec.verdict, dec.verdict)
-            if w["policy"] is None or order[pol] < order[w["policy"]]:
+            if w["policy"] is None or ORDER[pol] < ORDER[w["policy"]]:
                 w["policy"] = pol
             w["tier"] = w["tier"] or dec.tier
             if dec.api_base and dec.api_base not in w["api_base"]:
@@ -184,8 +207,17 @@ def merged() -> dict[str, dict]:
     return dict(out)
 
 
-def apply(actor: str = "job:seed_sources", *, force: bool = False) -> Counter:
-    """Write the ratings into Publisher rows, once per database (or again with force=True), through the services."""
+def apply_all(actor: str = "job:seed_sources", *, force: bool = False) -> Counter:
+    """Every batch, in order, each once per database; the sum of their counts."""
+    total = Counter()
+    for batch in BATCHES:
+        total += apply(actor, force=force, batch=batch)
+    return total
+
+
+def apply(actor: str = "job:seed_sources", *, force: bool = False, batch: Batch = BATCH_1) -> Counter:
+    """Write one batch of ratings into Publisher rows, once per database (or again with force=True), through the services.
+    A rating never loosens a restrictive policy a row already has (citation_only stays when a later batch says browser_only)."""
     from evidence.models import Publisher
     from evidence.publishers import defaults_for
     from revisions import revising
@@ -194,18 +226,20 @@ def apply(actor: str = "job:seed_sources", *, force: bool = False) -> Counter:
     from .models import JobState
 
     counts = Counter()
-    state, _ = JobState.objects.get_or_create(name=STATE)
+    state, _ = JobState.objects.get_or_create(name=batch.state)
     if state.state.get("applied") and not force:
         return counts
-    with revising(actor, reason=f"Source ratings {RATED_ON} (docs/adr/0037-source-ratings-2026-11-28.md)"):
-        for dom, w in sorted(merged().items()):
+    with revising(actor, reason=f"Source ratings {batch.rated_on} ({batch.adr}, docs/adr/)"):
+        for dom, w in sorted(merged(batch).items()):
             p = Publisher.objects.filter(domain=dom).first()
             if p is None:
                 p = Publisher.objects.create(domain=dom, **defaults_for(dom))
                 counts["created"] += 1
             note = "\n".join(w["notes"])
             values = {"access_notes": (p.access_notes + "\n" + note).strip() if note not in p.access_notes else p.access_notes}
-            if w["policy"] and p.fetch_policy != "forbidden":
+            if w["policy"] in RESTRICTIVE and p.fetch_policy in RESTRICTIVE and ORDER[w["policy"]] > ORDER[p.fetch_policy]:
+                counts["kept_stricter"] += 1
+            elif w["policy"] and p.fetch_policy != "forbidden":
                 values["fetch_policy"] = w["policy"]
                 if w["policy"] in PERMISSIVE and p.tier is None and w["tier"]:
                     values["tier"] = w["tier"]
@@ -221,9 +255,9 @@ def apply(actor: str = "job:seed_sources", *, force: bool = False) -> Counter:
     return counts
 
 
-def follow_ups() -> list[dict]:
+def follow_ups(batch: Batch = BATCH_1) -> list[dict]:
     """What the ratings leave for later: the corpora with no fetcher, and the confident keyed APIs without a key."""
-    out = [{"name": d.name, "why": "TEI/data corpus: record only, no fetcher yet", "where": d.record.get("api_base")} for d in decisions() if d.corpus]
+    out = [{"name": d.name, "why": "TEI/data corpus: record only, no fetcher yet", "where": d.record.get("api_base")} for d in decisions(batch) if d.corpus]
     out += [{"name": d.name, "why": "api_only and needs a key: off until a key exists (none requested)", "where": d.api_base}
-            for d in decisions() if d.apply_policy and d.verdict == "api_only" and d.needs_key and not d._key_set]
+            for d in decisions(batch) if d.apply_policy and d.verdict == "api_only" and d.needs_key and not d._key_set]
     return out

@@ -129,7 +129,7 @@ Table and field names are as they appear in the code.
 | **Skill** | Instructions in `.claude/skills/` that teach an agent to drain one kind of task. | [Work queue and agents](work-queue-and-agents.md) |
 | **Slug** | An entry's stable kebab-case id, unique across branches and events. | [Content model](content-model.md) |
 | **Snapshot** | `releases/<version>/content.json` in the releases store (mirrored to `var/releases/<version>/`): the published content in the site's one canonical shape, never edited by hand. The page is built from it. | [Publishing](publishing.md) |
-| **Sort key** | An entry's fractional index: its fixed place in the snapshot's order, so inserting an entry moves no other. | [Content model](content-model.md) |
+| **Sort key** | An entry's fractional index: its place in the snapshot's order, so inserting an entry moves no other (until a used-up gap respaces its neighbors, in the same order). At most 16 characters. | [Content model](content-model.md) |
 | **source_key** | A candidate's stable key from where it came from, so re-reading a source updates the same candidate. | [Ingestion](ingestion.md) |
 | **Stale** | A claim status: its recheck date has come, so it should be read again. How soon depends on what it states and how recent the entry is. | [Evidence and fact-checking](evidence-and-fact-checking.md) |
 | **Stamp** | A chapter's record, written by `make guide-stamp`, that someone read it against the current code: the date and a hash of the files it covers. | [This guide](this-guide.md) |
@@ -138,6 +138,7 @@ Table and field names are as they appear in the code.
 | **Task kind** | What a task asks for: write_event, verify_claim, enrich, audit, review_branch_proposal, recheck_citation, map_branch_entities. | [Work queue and agents](work-queue-and-agents.md) |
 | **Tier** | A publisher's reliability: 1 primary, official or peer-reviewed; 2 scholarly or institutional reference; 3 general reference; 4 weak; empty for unrated. | [Sources and terms](sources-and-terms.md) |
 | **Trigram similarity** | Postgres's `pg_trgm` measure of how alike two strings are, used to match candidates to existing events. | [Ingestion](ingestion.md) |
+| **UnratedLookup** | A tally of one domain agents asked `GET policy` about and were refused as unrated: how many times, first and last seen, the latest URL. `manage.py unrated_domains` and the console's Work page list them, most asked first. | [Ingestion](ingestion.md) |
 | **Unverified** | A claim status: no evidence supports or conflicts with it. | [Evidence and fact-checking](evidence-and-fact-checking.md) |
 | **Verdict** | The result of reading a source's terms: allow, drop for jobs, or links only, with the clause. Recorded in its access notes and ADR 0013. | [Sources and terms](sources-and-terms.md) |
 | **Wikipedia-only** | A claim whose only supporting witness is Wikipedia. It can't be corroborated, and an event resting on it gets a `verify_claim` task for a second source. | [Evidence and fact-checking](evidence-and-fact-checking.md) |

@@ -11,6 +11,9 @@ re-applying the same content changes nothing and leaves no Revision.
                                  title="D-Day landings in Normandy", text="…", imp=1, status="review")
 """
 
+from bisect import bisect_right
+
+from django.core.exceptions import ValidationError
 from django.db import connection, models
 
 from revisions import require_revising
@@ -21,11 +24,15 @@ from .models import Branch, Entry, Event, Region, Status
 
 
 def apply_changes(obj: models.Model, values: dict) -> str:
-    """Set `values` on `obj` and save only what changed. Returns "created", "updated" or "unchanged"."""
+    """Set `values` on `obj` and save only what changed. Returns "created", "updated" or "unchanged".
+
+    A text longer than its column is a ValidationError naming the field ({"<model>.<field>": [...]}) before Postgres
+    would refuse it with a DataError that names none (the agent API answers either as a 422)."""
     require_revising()
     if obj.pk is None:
         for k, v in values.items():
             setattr(obj, k, v)
+        _check_lengths(obj, [f.name for f in obj._meta.concrete_fields])
         obj.save()
         return "created"
     changed = [k for k, v in values.items() if getattr(obj, k) != v]
@@ -33,10 +40,22 @@ def apply_changes(obj: models.Model, values: dict) -> str:
         return "unchanged"
     for k in changed:
         setattr(obj, k, values[k])
+    _check_lengths(obj, changed)
     if any(f.name == "updated_at" for f in obj._meta.concrete_fields):
         changed.append("updated_at")
     obj.save(update_fields=changed)
     return "updated"
+
+
+def _check_lengths(obj: models.Model, names) -> None:
+    problems = {}
+    for f in obj._meta.concrete_fields:
+        if f.name in names and isinstance(f, models.CharField) and f.max_length:
+            v = getattr(obj, f.attname)
+            if isinstance(v, str) and len(v) > f.max_length:
+                problems[f"{f.model._meta.model_name}.{f.name}"] = [f"{len(v)} characters, at most {f.max_length}"]
+    if problems:
+        raise ValidationError(problems)
 
 
 def delete(obj: models.Model) -> None:
@@ -81,9 +100,31 @@ def _last_key(kind: str) -> str | None:
     return Entry.objects.filter(kind=kind).order_by("-sort_key").values_list("sort_key", flat=True).first()
 
 
+def _new_key(kind: str, lo: str | None, hi: str | None, *, exclude: int | None = None) -> str:
+    """A key between lo and hi for an entry of `kind` (under the order lock). When the plain key would be longer than
+    `ordering.MAX_LEN` (a gap halved too often), the entries around the gap get fresh, short keys in the same order
+    first, each through apply_changes, so each leaves a Revision (ordering.respace, ADR 0045). `exclude`: the entry
+    being moved, if it already has a key."""
+    key = ordering.between(lo, hi)
+    if len(key) <= ordering.MAX_LEN:
+        return key
+    rows = list(Entry.objects.filter(kind=kind).exclude(pk=exclude).order_by("sort_key").values_list("pk", "sort_key"))
+    keys = [k for _, k in rows]
+    i = bisect_right(keys, lo) if lo is not None else 0
+    start, stop, fresh = ordering.respace(keys, i)
+    new = fresh.pop(i - start)
+    window = rows[start:stop]
+    entries = Entry.objects.in_bulk([pk for pk, _ in window])
+    for (pk, old), k in zip(window, fresh):
+        if old != k:
+            apply_changes(entries[pk], {"sort_key": k})
+    return new
+
+
 def place(entry: Entry, *, after: str | None = None, before: str | None = None) -> str:
     """Move an entry in the snapshot order (within its kind): just after the entry `after` or just before `before`
-    (slugs). Writes this entry's sort key only; no other entry moves."""
+    (slugs). Writes this entry's sort key only, unless its gap is used up: then its neighbours are respaced too, in
+    the same order (`_new_key`, ADR 0045)."""
     require_revising()
     kind = entry.kind
     _order_lock(kind)
@@ -96,13 +137,13 @@ def place(entry: Entry, *, after: str | None = None, before: str | None = None) 
         lo = keys.filter(sort_key__lt=hi).order_by("-sort_key").values_list("sort_key", flat=True).first()
     else:
         raise ValueError("place() needs after= or before=")
-    return apply_changes(entry, {"sort_key": ordering.between(lo, hi)})
+    return apply_changes(entry, {"sort_key": _new_key(kind, lo, hi, exclude=entry.pk)})
 
 
 def save_branch(slug: str, *, region: str | Region | None = None, **fields) -> tuple[Branch, str]:
     """Create or update a branch by slug. Date-derived fields follow start_when/end_when."""
     require_revising()
-    branch = Branch.objects.filter(slug=slug).first() or Branch(slug=slug, sort_key=ordering.between(_last_key("branch"), None))
+    branch = Branch.objects.filter(slug=slug).first() or Branch(slug=slug, sort_key=_new_key("branch", _last_key("branch"), None))
     if region is not None:
         fields["region"] = region if isinstance(region, Region) else Region.objects.get(slug=region)
     start_when = fields.get("start_when", branch.start_when if branch.pk else "")
@@ -114,7 +155,7 @@ def save_branch(slug: str, *, region: str | Region | None = None, **fields) -> t
 def save_event(slug: str, *, branch: str | Branch | None = None, **fields) -> tuple[Event, str]:
     """Create or update an event by slug. Date-derived fields follow `when`."""
     require_revising()
-    event = Event.objects.filter(slug=slug).first() or Event(slug=slug, sort_key=ordering.between(_last_key("event"), None))
+    event = Event.objects.filter(slug=slug).first() or Event(slug=slug, sort_key=_new_key("event", _last_key("event"), None))
     if branch is not None:
         fields["branch"] = branch if isinstance(branch, Branch) else Branch.objects.get(slug=branch)
     fields.update(event_date_fields(fields.get("when", event.when if event.pk else "")))

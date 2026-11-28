@@ -4,6 +4,10 @@
 The schemas follow site/SCHEMA.md where they describe content (an event's keys and limits, a cite's `t`/`u`/`k`),
 and the old CLI results where they describe a decision, so the jobs that read results (`process` reads a write_event
 task's `result.entry`) work unchanged.
+
+Beyond the schema, `errors()` counts each excerpt's words (`excerpts()` finds them, in every kind that carries
+one): at most EXCERPT_WORDS (25, AGENTS.md rule 5, ADR 0004; the evidence table's `evidence_excerpt_25_words`
+holds the same), split on whitespace. A longer one is a 422 naming it; it was cut to 25 words before (ADR 0045).
 """
 
 from jsonschema import Draft202012Validator
@@ -11,7 +15,9 @@ from jsonschema import Draft202012Validator
 SLUG = {"type": "string", "pattern": r"^[a-z0-9][a-z0-9-]{1,98}$"}
 HTTPS = {"type": "string", "pattern": r"^https://", "maxLength": 1000}
 KIND = {"enum": ["primary", "textbook", "paper", "museum", "archive", "reference", "encyclopedia", "news", "data"]}
-EXCERPT = {"type": "string", "maxLength": 400, "description": "At most 25 words, copied from the page."}
+EXCERPT_WORDS = 25  # AGENTS.md rule 5; timeline.edits.EXCERPT_WORDS and the evidence_excerpt_25_words constraint agree
+EXCERPT = {"type": "string", "maxLength": 400, "description": f"At most {EXCERPT_WORDS} words (split on whitespace), copied verbatim "
+           "from the page; a longer one is refused (422), never cut."}
 NOTE = {"type": "string", "maxLength": 2000}
 
 CITE = {
@@ -118,8 +124,29 @@ for _s in RESULTS.values():
 _VALIDATORS = {k: Draft202012Validator(v) for k, v in RESULTS.items()}
 
 
+def excerpts(kind: str, result) -> list[tuple[str, str | None, object]]:
+    """Every excerpt a result carries, as (path, the cited URL, the excerpt): a write_event's event's cites, an audit's
+    or a fill_gap's events' cites, a verify_claim's evidence. Tolerant of a malformed result (the schema reports it)."""
+    out = []
+    if not isinstance(result, dict):
+        return out
+    if kind in ("write_event", "fill_gap", "audit"):
+        events = [("event", result.get("event"))] if kind == "write_event" else [(f"events/{i}", e) for i, e in enumerate(result.get("events") or [])]
+        for base, ev in events:
+            if isinstance(ev, dict) and isinstance(ev.get("cites"), list):
+                out += [(f"{base}/cites/{j}/excerpt", c.get("u"), c["excerpt"]) for j, c in enumerate(ev["cites"]) if isinstance(c, dict) and "excerpt" in c]
+    elif kind == "verify_claim" and isinstance(result.get("evidence"), list):
+        out += [(f"evidence/{i}/excerpt", e.get("url"), e["excerpt"]) for i, e in enumerate(result["evidence"]) if isinstance(e, dict) and "excerpt" in e]
+    return out
+
+
+def words(text: str) -> int:
+    return len(text.split())
+
+
 def errors(kind: str, result) -> list[str]:
-    """Schema problems with a result, as "path: message". Unknown kinds can't be completed over the API."""
+    """Schema problems with a result, as "path: message", then any excerpt over EXCERPT_WORDS words. Unknown kinds
+    can't be completed over the API."""
     v = _VALIDATORS.get(kind)
     if v is None:
         return [f"no result schema for {kind!r}: complete it with `manage.py tasks complete` (the owner's CLI)"]
@@ -127,4 +154,7 @@ def errors(kind: str, result) -> list[str]:
     for e in sorted(v.iter_errors(result), key=lambda e: list(e.absolute_path)):
         path = "/".join(str(p) for p in e.absolute_path) or "(result)"
         out.append(f"{path}: {e.message[:300]}")
+    for path, _, x in excerpts(kind, result):
+        if isinstance(x, str) and (n := words(x)) > EXCERPT_WORDS:
+            out.append(f"{path}: the excerpt is {n} words; at most {EXCERPT_WORDS}: quote a shorter verbatim passage, never a cut one")
     return out

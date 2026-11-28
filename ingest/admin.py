@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import BranchEntity, Candidate, Document, DocumentEntity, DocumentVersion, Entity, Feed, FetchRun, JobState, LinkCheck, SuggestedSource, WikiTitle
+from .models import BranchEntity, Candidate, Document, DocumentEntity, DocumentVersion, Entity, Feed, FetchRun, JobState, LinkCheck, SuggestedSource, UnratedLookup, WikiTitle
 
 
 class FetchRunInline(admin.TabularInline):
@@ -113,3 +113,12 @@ class SuggestedSourceAdmin(admin.ModelAdmin):
 @admin.register(JobState)
 class JobStateAdmin(admin.ModelAdmin):
     list_display = ["name", "updated_at"]
+
+
+@admin.register(UnratedLookup)
+class UnratedLookupAdmin(admin.ModelAdmin):
+    """The unrated domains agents asked GET policy about (ADR 0045): rate the frequent ones (Publisher), terms first."""
+
+    list_display = ["domain", "lookups", "first_seen", "last_seen", "last_actor", "example_url"]
+    search_fields = ["domain"]
+    readonly_fields = ["domain", "lookups", "first_seen", "last_seen", "example_url", "last_actor"]

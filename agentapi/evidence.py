@@ -46,20 +46,12 @@ def _line(m: dict) -> str:
 
 
 def result_mismatches(kind: str, result: dict) -> list[dict]:
+    from .schemas import excerpts
+
     cache, out = {}, []
-    if kind in ("write_event", "fill_gap", "audit"):
-        events = [result.get("event")] if kind == "write_event" else (result.get("events") or [])
-        for i, ev in enumerate(events):
-            if not isinstance(ev, dict):
-                continue
-            base = "event" if kind == "write_event" else f"events/{i}"
-            for j, c in enumerate(ev.get("cites") or []):
-                if isinstance(c, dict) and (m := _check(c.get("u"), c.get("excerpt"), f"{base}/cites/{j}/excerpt", cache)):
-                    out.append(m)
-    elif kind == "verify_claim":
-        for i, e in enumerate(result.get("evidence") or []):
-            if isinstance(e, dict) and (m := _check(e.get("url"), e.get("excerpt"), f"evidence/{i}/excerpt", cache)):
-                out.append(m)
+    for where, url, x in excerpts(kind, result):
+        if m := _check(url, x, where, cache):
+            out.append(m)
     return out
 
 

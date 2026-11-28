@@ -1,0 +1,711 @@
+[
+ {
+  "name": "World Trade Organization",
+  "domains": [
+   "wto.org"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "terms not read",
+  "robots": "One group, User-agent: * with Allow: / and a few path Disallows; no AI group (a comment mentions Claude); no Crawl-delay (read)",
+  "terms_url": "https://www.wto.org/english/info_e/disclaimer_e.htm",
+  "clause": "Terms page not read (404 on the guessed URL); a search snippet of an archived copy says site contents are WTO copyright",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Rated allowed only on robots.txt; the terms were not read, so this is low confidence and not applied. Read the copyright page in a browser, then re-rate."
+ },
+ {
+  "name": "African Union",
+  "domains": [
+   "au.int"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt names AI crawlers (ClaudeBot, anthropic-ai, GPTBot, CCBot, Google-Extended) with Disallow: / (read)",
+  "terms_url": "https://au.int/en/legal_notice",
+  "clause": "Legal notice: \"Copyright © African Union, 2003. All rights reserved.\" (seen via search)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Scripts and AI crawlers are barred by robots.txt; the terms page itself was not fetched (404 on a guessed URL), so the clause is from a search snippet. Agents read pages in a browser."
+ },
+ {
+  "name": "Organization of American States",
+  "domains": [
+   "oas.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved (via search)",
+  "robots": "robots.txt not fetched: HTTP 403 (bot wall); not retried.",
+  "terms_url": "https://www.oas.org/documents/eng/disclaimer.asp",
+  "clause": "OAS holds copyright unless otherwise stated (seen via search; site refused the fetch)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Bot wall: not retried. Browser reads only."
+ },
+ {
+  "name": "SICE, OAS Foreign Trade Information System",
+  "domains": [
+   "sice.oas.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "OAS copyright (via search)",
+  "robots": "robots.txt not fetched: TLS handshake failure; not retried.",
+  "terms_url": "https://sice.oas.org/disclaim.asp",
+  "clause": "GS/OAS holds copyright on the information on this website unless otherwise stated (seen via search)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "The server refused our connection, so scripts cannot read it. Trade-agreement texts: browser reads, cite by URL."
+ },
+ {
+  "name": "Council of the European Union",
+  "domains": [
+   "consilium.europa.eu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Reuse allowed by Decision 2017/1842 (not read)",
+  "robots": "robots.txt not fetched: HTTP 403 (bot wall); not retried.",
+  "terms_url": "https://www.consilium.europa.eu/en/about-site/copyright/",
+  "clause": "Copyright page lists reuse rules; not read (site refused). Decision (EU) 2017/1842 sets open reuse of Council documents (via search)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Bot wall: not retried. The Council's public registers may have their own open-data route; not checked here. Browser reads only."
+ },
+ {
+  "name": "United Nations (un.org)",
+  "domains": [
+   "un.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt not fetched: HTTP 403 (bot wall); not retried.",
+  "terms_url": "https://www.un.org/en/about-us/copyright/",
+  "clause": "Copyright © United Nations. All rights reserved. (search snippet; the page refused us)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Bot wall: not retried. UN Digital Library and UN News were rated in batch 1."
+ },
+ {
+  "name": "UN Office of Legal Affairs (legal.un.org)",
+  "domains": [
+   "legal.un.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "/robots.txt answers 302 to a not-found page: no robots.txt (read)",
+  "terms_url": "https://www.un.org/en/about-us/copyright/",
+  "clause": "UN copyright page: All rights reserved (via search); not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Treaty Collection and ILC pages. No robots.txt, but the parent un.org refuses scripts and the terms are all rights reserved, so scripts are not used. Browser reads only."
+ },
+ {
+  "name": "UNESCO",
+  "domains": [
+   "unesco.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not all Materials are licensed (terms s.5)",
+  "robots": "robots.txt blocks ClaudeBot, GPTBot, CCBot and other AI crawlers with Disallow: /; the * group carries Content-Signal ai-train=no and Disallow: /search, /core/, /admin/ (read)",
+  "terms_url": "https://www.unesco.org/en/terms-use",
+  "clause": "UNESCO terms of use section 7(c): \"access, scrape, crawl, harvest or bulk-download Materials by any Automated System\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms read in full: scraping and bulk download barred; AI training reserved; retrieval of single pages by an AI system on a user's query is allowed. So scripts and the evidence-pack job stay away; agents read in a browser."
+ },
+ {
+  "name": "UNESCO World Heritage Centre",
+  "domains": [
+   "whc.unesco.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not all Materials are licensed (terms s.5)",
+  "robots": "robots.txt (read): ClaudeBot, GPTBot, CCBot, Amazonbot, Meta-ExternalAgent and others Disallow: /; * group lists path and query Disallows",
+  "terms_url": "https://www.unesco.org/en/terms-use",
+  "clause": "UNESCO terms of use section 7(c): \"access, scrape, crawl, harvest or bulk-download Materials by any Automated System\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Same UNESCO terms as unesco.org (read). Its AI crawler block is on top of them. Cite the pages; read them in a browser."
+ },
+ {
+  "name": "UNESCO Intangible Cultural Heritage",
+  "domains": [
+   "ich.unesco.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not all Materials are licensed (terms s.5)",
+  "robots": "robots.txt (read): ClaudeBot, GPTBot, CCBot, Amazonbot, Meta-ExternalAgent and others Disallow: /; * group lists path and query Disallows",
+  "terms_url": "https://www.unesco.org/en/terms-use",
+  "clause": "UNESCO terms of use section 7(c): \"access, scrape, crawl, harvest or bulk-download Materials by any Automated System\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Same UNESCO terms as unesco.org (read). Its AI crawler block is on top of them. Cite the pages; read them in a browser."
+ },
+ {
+  "name": "FIFA",
+  "domains": [
+   "fifa.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Private, non-commercial use only (s.5.3)",
+  "robots": "One group, User-agent: *, Disallow: /*archive?filters=, /*searchOverlay=, /*/search? only; no AI group (read)",
+  "terms_url": "https://inside.fifa.com/en/terms-of-service",
+  "clause": "\"robots, spiders or other automated programmes\" barred where they circumvent function (s.6.6)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms read (updated 27 Jan 2026). Robots and spiders are barred only to circumvent the site, but content may be reproduced only for private non-commercial use (s.5.3) and shown elsewhere only non-commercially (s.6.4). Kept to browser reads as the cautious reading of that limit."
+ },
+ {
+  "name": "International Olympic Committee (olympics.com)",
+  "domains": [
+   "olympics.com"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "not read",
+  "robots": "robots.txt: fetch timed out; not read",
+  "terms_url": "https://olympics.com/en/terms-of-service",
+  "clause": "Search snippet: bars automated systems that detrimentally affect the Services; page itself not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms seen only through a search snippet and robots.txt fetch timed out: low confidence, not applied. Re-rate after a browser read."
+ },
+ {
+  "name": "PBS",
+  "domains": [
+   "pbs.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt not fetched: HTTP 403 (bot wall); not retried.",
+  "terms_url": "https://www.pbs.org/about/policies/terms-of-use",
+  "clause": "Terms not read; site refused the fetch",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Bot wall: not retried. Browser reads only. Member-station sites have their own terms (WGBH bars scraping)."
+ },
+ {
+  "name": "Rappler",
+  "domains": [
+   "rappler.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt not fetched: HTTP 403 (bot wall); not retried.",
+  "terms_url": "https://www.rappler.com/about/",
+  "clause": "No terms of use or republishing policy found; site refused the fetch",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Bot wall: not retried. Browser reads only; cite stories by URL."
+ },
+ {
+  "name": "Nature (Springer Nature)",
+  "domains": [
+   "nature.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "TDM rights reserved; open access per article",
+  "robots": "robots.txt names AI crawlers (ClaudeBot, anthropic-ai, GPTBot, CCBot, Google-Extended) with Disallow: / (read); the * group blocks search, account and some article sub-pages",
+  "terms_url": "https://www.springernature.com/gp/researchers/text-and-data-mining",
+  "clause": "Springer Nature \"explicitly reserves all rights\" for text and data mining (TDM reservation policy, via search)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "nature.com's own terms page redirected to a login, so only the TDM policy was read (via search). Its robots.txt blocks AI crawlers. Open-access articles keep their CC licence; read them in a browser. A keyed Springer Nature API exists; none requested."
+ },
+ {
+  "name": "The Royal Society",
+  "domains": [
+   "royalsociety.org"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Private or non-commercial use; journals not read",
+  "robots": "One group, User-agent: * with Disallow: /search#?query= and /Blog/tagsearchresult/? only; no AI group; no Crawl-delay (read)",
+  "terms_url": "https://royalsociety.org/about-us/terms-conditions-policies/",
+  "clause": "\"for your own private use or for other non-commercial purposes\" (Intellectual property rights)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Website terms read: private or non-commercial use allowed, no clause on automated access. The AI statement and the journals' publishing terms were not read, so this is low confidence and not applied."
+ },
+ {
+  "name": "PubMed Central and NCBI E-utilities",
+  "domains": [
+   "pmc.ncbi.nlm.nih.gov",
+   "eutils.ncbi.nlm.nih.gov"
+  ],
+  "verdict": "api_only",
+  "needs_key": false,
+  "license": "Each article's own licence; Open Access subset reusable (PMC copyright page)",
+  "robots": "pmc.ncbi.nlm.nih.gov/robots.txt (read): User-agent: * Crawl-delay: 1, Disallow: /; no AI group. So the PMC web pages are closed to scripts; the services below are the way in",
+  "terms_url": "https://pmc.ncbi.nlm.nih.gov/about/copyright/",
+  "clause": "Bulk download of PMC articles from the web site \"is prohibited because of copyright restrictions\"; use the OAI-PMH, FTP and Cloud services",
+  "rate_limit": "3 requests a second; large jobs at weekends or 9 pm to 5 am Eastern",
+  "eras": "all",
+  "regions": "all",
+  "notes": "PMC copyright page and NCBI scripting guidelines read. Scripts use E-utilities (3 requests a second, tool and email parameters; we send a descriptive User-Agent), the OAI-PMH service and the ID converter, not the web pages. PMC full text is read only for the Open Access subset, each article under its own licence. No key is needed.",
+  "api_base": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/ | https://pmc.ncbi.nlm.nih.gov/api/oai/v1/mh/ | https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/"
+ },
+ {
+  "name": "NCBI web site (ncbi.nlm.nih.gov)",
+  "domains": [
+   "ncbi.nlm.nih.gov"
+  ],
+  "verdict": "api_only",
+  "needs_key": false,
+  "license": "Each article's own licence; Open Access subset reusable (PMC copyright page)",
+  "robots": "ncbi.nlm.nih.gov/robots.txt (read): * group, Crawl-delay: 5, /pmc/articles/ and the ?term= search paths Disallowed; no AI group",
+  "terms_url": "https://pmc.ncbi.nlm.nih.gov/about/copyright/",
+  "clause": "Bulk download of PMC articles from the web site \"is prohibited because of copyright restrictions\"; use the OAI-PMH, FTP and Cloud services",
+  "rate_limit": "3 requests a second; large jobs at weekends or 9 pm to 5 am Eastern",
+  "eras": "all",
+  "regions": "all",
+  "notes": "PMC copyright page and NCBI scripting guidelines read. Scripts use E-utilities (3 requests a second, tool and email parameters; we send a descriptive User-Agent), the OAI-PMH service and the ID converter, not the web pages. PMC full text is read only for the Open Access subset, each article under its own licence. No key is needed.",
+  "api_base": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/ | https://pmc.ncbi.nlm.nih.gov/api/oai/v1/mh/ | https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/"
+ },
+ {
+  "name": "The Metropolitan Museum of Art (web site)",
+  "domains": [
+   "metmuseum.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "CC0 for Open Access works",
+  "robots": "robots.txt not fetched: HTTP 429; not retried.",
+  "terms_url": "https://www.metmuseum.org/policies/terms-and-conditions",
+  "clause": "Terms: Open Access works are CC0 \"for any purpose\"; all other rights reserved (search snippet)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "The web pages answered 429, so scripts are refused. The Open Access API (collectionapi.metmuseum.org) is a separate rating (batch 1)."
+ },
+ {
+  "name": "The British Museum",
+  "domains": [
+   "britishmuseum.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): 31 AI and scraper groups (ClaudeBot, GPTBot, anthropic-ai, CCBot, Google-Extended, Bytespider …) Disallow: /; * group: Content-Signal search=yes, ai-train=no, Allow: /",
+  "terms_url": "https://www.britishmuseum.org/terms-use",
+  "clause": "Terms page refused the fetch; not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "robots.txt blocks AI crawlers. Terms behind a bot wall. Browser reads only."
+ },
+ {
+  "name": "Smarthistory",
+  "domains": [
+   "smarthistory.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt not fetched: HTTP 403 (bot wall); not retried.",
+  "terms_url": "https://smarthistory.org/about/",
+  "clause": "Terms not read; site refused the fetch (content is CC BY-NC-SA per its pages, not checked)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Bot wall: not retried. Browser reads only."
+ },
+ {
+  "name": "Smithsonian National Museum of African Art",
+  "domains": [
+   "africa.si.edu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): ClaudeBot, GPTBot, anthropic-ai, CCBot, Google-Extended and about 25 more Disallow: /; * group Content-Signal ai-train=no",
+  "terms_url": "https://www.si.edu/termsofuse",
+  "clause": "Smithsonian terms page refused the fetch; not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "robots.txt blocks AI crawlers. Browser reads only."
+ },
+ {
+  "name": "Smithsonian National Museum of American History",
+  "domains": [
+   "americanhistory.si.edu"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): ClaudeBot, GPTBot, anthropic-ai, CCBot, Google-Extended and about 25 more Disallow: /; * group Content-Signal ai-train=no",
+  "terms_url": "https://www.si.edu/termsofuse",
+  "clause": "Smithsonian terms page refused the fetch; not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "robots.txt blocks AI crawlers. Browser reads only."
+ },
+ {
+  "name": "Smithsonian Institution (si.edu)",
+  "domains": [
+   "si.edu"
+  ],
+  "verdict": "api_only",
+  "needs_key": "yes (api.data.gov key; none requested)",
+  "license": "CC0 where marked",
+  "robots": "robots.txt (read): * group only (Drupal paths: /core/, /search/, /admin/ …); no AI group; no Crawl-delay",
+  "terms_url": "https://www.si.edu/termsofuse",
+  "clause": "Search snippet: CC0-marked content may be used \"for commercial purposes\" without permission; page refused the fetch",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Open Access metadata through the keyed api.si.edu API (api.data.gov key, which we have not requested); media and web pages are not covered. Terms page refused us, so low confidence and not applied.",
+  "api_base": "https://api.si.edu/openaccess/api/v1.0/"
+ },
+ {
+  "name": "World History Encyclopedia",
+  "domains": [
+   "worldhistory.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "CC BY-NC-SA (not read)",
+  "robots": "robots.txt (read): * group only: Disallow: /include/, /logout/, /search/ and a few more; no AI group; no Crawl-delay. Pages answer HTTP 403 to scripts",
+  "terms_url": "https://www.worldhistory.org/static/terms-of-use/",
+  "clause": "Terms page refused the fetch; content is CC BY-NC-SA per the site (search snippet)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Same rating as batch 1; its pages are behind a bot wall. Browser reads only."
+ },
+ {
+  "name": "Encyclopaedia Iranica",
+  "domains": [
+   "iranicaonline.org"
+  ],
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): * group, Crawl-Delay: 20, Disallow: /uploads/files/News_docs/, /*?s=; no AI group",
+  "terms_url": "https://iranicaonline.org/terms-of-use/",
+  "clause": "No terms page found at the guessed URL",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Same rating as batch 1. Cite by URL."
+ },
+ {
+  "name": "GlobalSecurity.org",
+  "domains": [
+   "globalsecurity.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): anthropic-ai, ClaudeBot, GPTBot, CCBot, Google-Extended, PerplexityBot and others Disallow: /; * group: /phpadsnew/, /stitial/ only",
+  "terms_url": "https://www.globalsecurity.org/copyright.htm",
+  "clause": "Copyright page refused the fetch; not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "robots.txt blocks AI crawlers and the pages answer 403. Browser reads only."
+ },
+ {
+  "name": "GSMA",
+  "domains": [
+   "gsma.com"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): * group with no Disallow; no AI group; sitemap listed",
+  "terms_url": "https://www.gsma.com/terms-and-conditions/",
+  "clause": "Terms page refused the fetch; not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "robots.txt is open but the pages answer 403 to scripts. Browser reads only."
+ },
+ {
+  "name": "DOI Foundation resolver (doi.org)",
+  "domains": [
+   "doi.org"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "No robots.txt (404, read)",
+  "terms_url": "https://www.doi.org/the-identifier/resources/handbook",
+  "clause": "DOI Handbook not read (the guessed chapter returned 404)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "doi.org is a redirector; a job may follow a DOI to its publisher, whose own rating then applies. Terms not read, so low confidence and not applied."
+ },
+ {
+  "name": "Federal Communications Commission",
+  "domains": [
+   "fcc.gov"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt not fetched: HTTP 403 (bot wall); not retried.",
+  "terms_url": "https://www.fcc.gov/about-fcc/fcc-initiatives/website-policies",
+  "clause": "Terms not read; site refused the fetch",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Bot wall: not retried. FCC works are US government works, but scripts are refused. Browser reads only."
+ },
+ {
+  "name": "US Department of State",
+  "domains": [
+   "state.gov"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt not fetched: HTTP 403 (bot wall); not retried.",
+  "terms_url": "https://www.state.gov/about/copyright-information/",
+  "clause": "Terms not read; site refused the fetch",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Same rating as batch 1; bot wall, not retried. history.state.gov was rated in batch 1."
+ },
+ {
+  "name": "The White House",
+  "domains": [
+   "whitehouse.gov"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): * group, Disallow: /*?s=, /*&s= and an empty Disallow; no AI group; no Crawl-delay",
+  "terms_url": "https://www.whitehouse.gov/privacy/",
+  "clause": "The privacy policy says nothing on reuse or automated access",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "No copyright or reuse notice was found (the privacy policy is silent), so low confidence and not applied. Content is almost all US government work; read a copyright notice before re-rating."
+ },
+ {
+  "name": "ETSI",
+  "domains": [
+   "etsi.org"
+  ],
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "ETSI copyright, all rights reserved",
+  "robots": "robots.txt (read): * group: Disallow: /?s=, /search/; no AI group; no Crawl-delay",
+  "terms_url": "https://www.etsi.org/terms/",
+  "clause": "\"the ETSI Website structure and its contents shall not be reproduced\" without prior express consent (s.3)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms read. Reproducing the site or its standards needs ETSI's consent. Cite standards by number and URL."
+ },
+ {
+  "name": "International Telecommunication Union",
+  "domains": [
+   "itu.int"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Personal, educational or non-commercial use",
+  "robots": "robots.txt (read): * group only; Disallow: /itudocs/, /cgi-bin/, /lib/, /dms_priv/* and some /dms_pub/ document paths; no AI group; no Crawl-delay",
+  "terms_url": "https://www.itu.int/en/about/Pages/terms-of-use.aspx",
+  "clause": "Users may \"download, copy and use content for personal, educational, or non-commercial purposes\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms of use and copyright page read: no clause on automated access, private and non-commercial copying allowed. The Fetcher keeps to the robots.txt paths. Commercial use needs ITU's written permission, which a private evidence copy is not."
+ },
+ {
+  "name": "Internet Archive (site, second read)",
+  "domains": [
+   "archive.org"
+  ],
+  "verdict": "api_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): * group, Disallow: /control/, /report/ and some ajax paths; no AI group; no Crawl-delay",
+  "terms_url": "https://archive.org/about/terms.php",
+  "clause": "Terms page fetched but its text came back empty; not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "The Archive says it rate-limits high-volume traffic (blog, Sept 2026, via search). Terms not read, so low confidence and not applied. Same state as batch 1.",
+  "api_base": "https://archive.org/advancedsearch.php | https://archive.org/metadata/ | https://archive.org/wayback/available"
+ },
+ {
+  "name": "Wayback Machine (web.archive.org)",
+  "domains": [
+   "web.archive.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt not fetched: the fetch tool itself refused web.archive.org; not retried.",
+  "terms_url": "https://archive.org/about/terms.php",
+  "clause": "Not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Our fetch tool refuses the host. The availability API on archive.org is rated above. Browser reads only."
+ },
+ {
+  "name": "CIA World Factbook (cia.gov)",
+  "domains": [
+   "cia.gov"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): * group, Crawl-delay: 10, Disallow: /js/, /*.json$, /readingroom/search/; no AI group",
+  "terms_url": "https://www.cia.gov/the-world-factbook/about/copyright-and-contributors/",
+  "clause": "Copyright page covers only photographs: \"copyright-free for anyone to access and use\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "The Factbook is a US government work, but no page read says so for its text, and /*.json is disallowed. Low confidence, not applied."
+ },
+ {
+  "name": "National Park Service",
+  "domains": [
+   "nps.gov"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Public domain, with third-party exceptions",
+  "robots": "robots.txt (read): * group, Disallow: /ns/, /search/, /loader.cfm; no AI group; no Crawl-delay",
+  "terms_url": "https://www.nps.gov/aboutus/disclaimer.htm",
+  "clause": "NPS material is \"generally considered in the public domain\"",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Disclaimer read: public domain except third-party material (photos and some texts carry their own rights), no clause on automated access."
+ },
+ {
+  "name": "The National Archives (UK)",
+  "domains": [
+   "nationalarchives.gov.uk"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): * group, Crawl-delay: 20, Disallow: /*pg_, /search; no AI group. The terms page answers HTTP 403",
+  "terms_url": "https://www.nationalarchives.gov.uk/legal/fair-use-policy/",
+  "clause": "Its fair-use policy on non-human access was refused to us; not read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Bot wall on the terms page: not retried. Browser reads only; its Discovery API needs its own terms."
+ },
+ {
+  "name": "World Bank",
+  "domains": [
+   "worldbank.org"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Non-commercial use with attribution",
+  "robots": "robots.txt (read): * group: system paths and old templates Disallowed; no AI group; no Crawl-delay",
+  "terms_url": "https://www.worldbank.org/en/about/legal/terms-and-conditions",
+  "clause": "\"you may make non-commercial uses thereof\" with attribution",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms and Conditions read: non-commercial use with attribution, no derivative works, APIs not to exceed reasonable request volume. A private evidence copy is non-commercial and not a derivative. Keep attribution on any quote."
+ },
+ {
+  "name": "History (A+E Networks)",
+  "domains": [
+   "history.com"
+  ],
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "All rights reserved",
+  "robots": "robots.txt (read): * group, Disallow: /private/, /temp/; no AI group",
+  "terms_url": "https://www.history.com/terms-of-use",
+  "clause": "Terms not read; an archived A+E copy bars robots, spiders and scrapers (search snippet)",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Commercial publisher, terms against automated copying (archived copy). Cite by URL."
+ },
+ {
+  "name": "US Holocaust Memorial Museum",
+  "domains": [
+   "ushmm.org"
+  ],
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt not fetched: HTTP 403 (bot wall); not retried.",
+  "terms_url": "https://www.ushmm.org/information/terms-of-use",
+  "clause": "Terms not read; site refused the fetch",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Bot wall: not retried. Browser reads only."
+ },
+ {
+  "name": "International Court of Justice",
+  "domains": [
+   "icj-cij.org"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): * group only: Drupal paths (/core/, /search/, /admin/ …); no AI group; no Crawl-delay",
+  "terms_url": "https://www.icj-cij.org/",
+  "clause": "No terms page read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms not read: low confidence, not applied."
+ },
+ {
+  "name": "International Labour Organization",
+  "domains": [
+   "ilo.org"
+  ],
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Not read",
+  "robots": "robots.txt (read): * group, Crawl-delay: 10, Drupal paths Disallowed; no AI group",
+  "terms_url": "https://www.ilo.org/",
+  "clause": "No terms page read",
+  "rate_limit": "",
+  "eras": "all",
+  "regions": "all",
+  "notes": "Terms not read: low confidence, not applied."
+ }
+]

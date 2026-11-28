@@ -666,7 +666,9 @@ disallows it) and no crawling ([sources and terms](sources-and-terms.md#the-verd
    lists the host too, since that is what tells an agent to open a browser), then NEVER_FETCH (`never_fetch`), then
    **`unrated`**: the job fetches only publishers that are rated (`rated()`: the nearest Publisher row for the domain
    or a parent has a tier) and `allowed`. A domain with no row, or a row without a tier, is never requested by this
-   job (the Fetcher's own default for other jobs is unchanged). No request is made.
+   job (the Fetcher's own default for other jobs is unchanged). No request is made. The second batch of ratings
+   ([ADR 0044](../adr/0044-source-ratings-batch-2.md)) gives a tier to only three more publishers (itu.int, nps.gov and
+   worldbank.org); most of its 45 domains are `browser_only` or `citation_only`.
 2. **An official API** (`ingest/prefetch_api.py` `route`): a catalog page that has one is read through it, and
    never as a page (below), even when its own domain is unrated (n2t.net). Reused like a page.
 3. **AI-crawler blocks** (`Fetcher.ai_blocked`, ADR 0037): a site whose robots.txt names an AI crawler
@@ -759,8 +761,11 @@ URL on a site that hasn't refused us by robots.txt, a bot wall or a TDM reservat
 the unrated domains (`unrated()`), the
 groups with no such URL, the unreadable reasons and hosts, the hosts the policy keeps jobs off, and the host health.
 `--out` writes `evidence-coverage-<date>.md` and `.json`. `manage.py unrated_domains [--json] [--limit N]` prints
-`unrated()` alone: each unrated domain the queued and claimed tasks point at, with the tasks and URLs naming it,
-whether it has a row, and an example URL, most tasks first.
+`unrated()`: each unrated domain the queued and claimed tasks point at, with the tasks and URLs naming it,
+whether it has a row, and an example URL, most tasks first. Below it, the unrated domains agents asked `GET policy`
+about and were refused (`ingest.UnratedLookup`: one row per domain with `lookups`, `first_seen`, `last_seen`,
+`example_url` and `last_actor`, written only by `agentapi.policy.record_unrated`; ADR 0045), most asked first, without
+the ones rated since; `--json` prints both lists, `{"cited_by_tasks", "asked_by_agents"}`.
 
 **Repacking.** `evidence_urls` hashes the candidate keys with `PACK_VERSION` (3): a change to what a pack holds bumps
 it, and every queued task is packed again on the next runs.
