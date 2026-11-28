@@ -165,7 +165,7 @@ def seed(actor="job:seed_sources") -> dict:
     counts["verdicts_applied"] = apply_verdicts(actor)
     from . import ratings
 
-    counts["ratings_applied"] = ratings.apply(actor).get("updated", 0)  # the 2026-11-28 ratings, once (ADR 0037)
+    counts["ratings_applied"] = ratings.apply_all(actor).get("updated", 0)  # the 2026-11-28 ratings and batch b, each once (ADRs 0037, 0044)
     for name, url, kind, domain, interval, enabled, config in FEEDS:
         pub = Publisher.objects.get(domain=domain)
         feed = Feed.objects.filter(url=url).first()

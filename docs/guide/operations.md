@@ -177,7 +177,8 @@ that Feed's `next_run_at` has come; each run sets `next_run_at` to now plus the 
 | `prefetch_sources` | 15 | plain |
 
 `seed_sources` also applies one-off rating sets once per database: the terms verdicts (ADR 0013) and the
-November 28, 2026 source ratings (ADR 0037, JobState "ratings_2026_11_28"). On a database that has them pending,
+November 28, 2026 source ratings (ADR 0037, JobState "ratings_2026_11_28"; the second batch, ADR 0044, JobState
+"ratings_2026_11_28b"). On a database that has them pending,
 `manage.py run_job seed_sources` applies them now instead of at the weekly run.
 
 Plain intervals are in `ingest/job_defs.py` (`DAY, WEEK = 1440, 10080`). Feed intervals are the Feed rows'

@@ -495,6 +495,35 @@ class RatingsTests(FreshStorage, TestCase):
         self.assertTrue(JobState.objects.get(name="ratings_2026_11_28").state["applied"])
         self.assertEqual(ratings.apply(), Counter(), "once per database")
 
+    def test_second_batch_is_conservative_and_applies_once(self):
+        """The 2026-11-28b ratings (ADR 0044): same rules, its own JobState, and nothing loosened."""
+        from ingest import ratings
+        from ingest.models import JobState
+
+        by = {d.name: d for d in ratings.decisions(ratings.BATCH_2)}
+        self.assertEqual(len(by), 44)
+        for name in ("World Trade Organization", "The Royal Society", "The White House", "CIA World Factbook (cia.gov)", "Smithsonian Institution (si.edu)"):
+            self.assertFalse(by[name].apply_policy, name)  # terms unread or behind a bot wall: no policy change
+        for name in ("International Telecommunication Union", "National Park Service", "World Bank", "PubMed Central and NCBI E-utilities"):
+            self.assertTrue(by[name].apply_policy and by[name].confident, name)
+        m = ratings.merged(ratings.BATCH_2)
+        self.assertEqual((m["nature.com"]["policy"], m["unesco.org"]["policy"], m["fifa.com"]["policy"]), ("browser_only",) * 3)
+        self.assertEqual(m["itu.int"]["policy"], "allowed")
+        self.assertIsNone(m["wto.org"]["policy"])
+        self.assertEqual(m["pmc.ncbi.nlm.nih.gov"]["policy"], "api_only")
+        self.assertIn("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/", m["pmc.ncbi.nlm.nih.gov"]["api_base"][0])
+
+        import_content(small())
+        ratings.apply_all()
+        self.assertEqual(Publisher.objects.get(domain="itu.int").fetch_policy, "allowed")
+        self.assertEqual(Publisher.objects.get(domain="itu.int").tier, 1)
+        self.assertEqual(Publisher.objects.get(domain="nature.com").fetch_policy, "browser_only")
+        self.assertEqual(Publisher.objects.get(domain="iranicaonline.org").fetch_policy, "citation_only")
+        self.assertIn("Rated 2026-11-28b (source discovery, ADR 0044)", Publisher.objects.get(domain="unesco.org").access_notes)
+        self.assertIsNone(Publisher.objects.get(domain="wto.org").tier, "low confidence: still unrated")
+        self.assertTrue(JobState.objects.get(name="ratings_2026_11_28b").state["applied"])
+        self.assertEqual(ratings.apply_all(), Counter(), "each batch once per database")
+
     def test_fetcher_api_only_citation_only_and_ai_blocks(self):
         with revising("human:test", reason="test publishers"):
             Publisher.objects.create(domain="loc.gov", name="LoC", tier=1, fetch_policy="api_only", api_base="https://www.loc.gov/ ?fo=json")
