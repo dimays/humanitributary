@@ -1,6 +1,6 @@
 # 0044 — A second batch of source ratings: 44 more records, a Batch for each round, and a rating never loosens a restrictive policy
 
-**Status:** proposed (November 2026); amends [0037](0037-source-ratings-2026-11-28.md) (the ratings code serves more than one batch; a later rating cannot loosen an earlier restrictive one)
+**Status:** proposed (November 2026); amends [0037](0037-source-ratings-2026-11-28.md) (the ratings code serves more than one batch; a later rating cannot loosen an earlier restrictive one); amended by [0049](0049-source-ratings-batch-3.md) (a third batch, after more agent tasks were refused)
 
 ## Context
 
