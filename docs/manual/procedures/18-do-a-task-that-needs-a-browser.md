@@ -8,8 +8,11 @@ agent asks the API: `GET /api/agent/policy?url=<url>`. For a `browser_only` or `
 or a site that blocks AI crawlers, the answer is `may_fetch: false`. A cloud agent has no browser. If the agent
 cannot do the task with a different source, it releases the task with `needs: browser`.
 
-Such a task stays in the queue, but agents do not get it for 7 days. The summary of the round lists it on the line
-"Needs the owner". The console shows it on the tab Deferred.
+Such a task stays in the queue, but no agent gets it again until you decide (ADR 0046). The summary of the round
+lists it on the line "Needs the owner". The console shows it on the tab Deferred.
+
+> **NOTE:** For a `verify_claim`, `fill_gap` or `write_event` task, do procedure
+> [19](19-review-the-items-that-need-a-person.md) on the Review page instead. This procedure is for the other kinds.
 
 ## Before you start
 
@@ -48,7 +51,7 @@ Such a task stays in the queue, but agents do not get it for 7 days. The summary
 2. Confirm the cancel.
    Make sure that the task has the status `cancelled`.
 
-> **NOTE:** If you do nothing, an agent gets the task again after 7 days. A cloud agent usually releases it again.
+> **NOTE:** If you do nothing, the task stays on the tab Deferred. No agent gets it.
 
 > **NOTE:** A release with `needs: owner` tells you that the task needs your decision, not a browser. Read the
 > reason. Then requeue or cancel the task in the same way.

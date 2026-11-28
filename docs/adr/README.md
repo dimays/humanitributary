@@ -65,6 +65,7 @@ things work now; an ADR says why, and what was given up.
 | [0042](0042-deferred-releases-and-the-fetch-policy-endpoint.md) | A released task waits before it is offered again, and agents ask the API before they fetch a page | proposed |
 | [0044](0044-source-ratings-batch-2.md) | A second batch of source ratings: 44 more records, a Batch for each round, and a rating never loosens a restrictive policy | proposed |
 | [0045](0045-short-sort-keys-and-json-errors.md) | Sort keys stay short and a used-up gap is respaced; the agent API answers every error as JSON, refuses long excerpts and counts unrated lookups | proposed |
+| [0046](0046-the-owners-review-queue.md) | Pages only a person may read go to the owner's review queue, and no agent is offered them | proposed |
 <!-- index:end -->
 
 ## Template

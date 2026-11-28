@@ -118,10 +118,11 @@ Start the role agents as subagents, in parallel, one per agent in the plan. Brie
   User-Agent; one browser tab at most, closed at the end; never force a site);
 - the cloud constraint (no `browser_only` pages; see below);
 - **the evidence pack first** (each task skill's "The evidence pack: read it first"): passages and `GET
-  documents/<doc_id>`, excerpts copied from the stored text (`complete` refuses one that isn't on a stored page),
-  a browser only for `unreadable` URLs whose reason is `browser_only`, `citation_only` or `ai_blocked`;
-- to release a task it can't do without a page only a browser may read with `{"needs": "browser", "reason":
-  "<url>: <why>"}` (it waits a week for the owner), never to release and re-claim it in a loop, and to finish by
+  documents/<doc_id>`, excerpts copied from the stored text (`complete` refuses one that isn't on a stored page);
+  `browser_only` pages are read by a person, never by an agent (ADR 0046): the owner's review queue gets them;
+- to release a task it can't do without a page only a person may read with `{"needs": "browser", "reason":
+  "<url>: <why>"}` (it goes to the owner's review queue, and no agent is offered it again until the owner decides),
+  never to release and re-claim it in a loop, and to finish by
   releasing (`POST tasks/<id>/release -d '{"reason": "…"}'`) any task it holds and can't finish, and to report:
   task ids claimed, completed, failed and released per kind; every `needs` release, with its task id, kind, URL and
   why; every slug it drafted (`result.entry`, `result.entries`); and the sources that refused it.
@@ -162,7 +163,8 @@ Brief every reviewer with the fetching rules and the hard-won rules below, in fu
 every scripted fetch: a reviewer never reads by script a page the policy refuses). A reviewer must **read every
 cited page itself**: a draft whose excerpt it could not check against the page is not approved. A stored page (ADR 0036) counts as read
 from `GET documents?url=`: the reviewer reads the text there, judges the stance from it and checks each excerpt
-with `evidence/check-excerpt`; it opens a browser (desktop rounds) only for a `browser_only` page. `edits/check`
+with `evidence/check-excerpt`; it never reads a `browser_only` page itself: a draft whose only support besides
+Wikipedia is one is a HOLD, and goes to the owner's review queue (ADR 0046). `edits/check`
 refuses an excerpt that isn't on a stored page, naming the closest passage, so a reviewer's `add_evidence` and
 `add_cites` excerpts are copied from the stored text too.
 
@@ -226,12 +228,18 @@ Drafts 11 → approve 7, approve with edits 2, hold 2, reject 1 (duplicate of �
 Edit file: 31 ops (edit 9, add_evidence 12, approve 9, reject 1); 64 revisions.
 Held: <slugs and why>. Unreadable sources: <hosts>.
 Needs the owner: #426 verify_claim needs browser (https://www.un.org/…: browser_only); #431 …
+Review: 5 items wait for the owner at https://data.<host>/ops/review/
 ```
 
 The **Needs the owner** line lists every release the role agents (and reviewers) made with `needs`, as they
-reported them: task id, kind, `browser` or `owner`, and the reason. Leave the line out when there were none. Those
-tasks wait a week in the console's Work → kind page, tab Deferred; the owner reads the page and requeues the task,
-or cancels it.
+reported them: task id, kind, `browser` or `owner`, and the reason. Leave the line out when there were none. No
+agent is offered those tasks again until the owner decides: the verify_claim, fill_gap and write_event ones wait in
+the console's **Review** page (ADR 0046), where the owner opens each source in their own browser and approves,
+denies or defers it; the others in Work → kind, tab Deferred.
+
+The **Review** line gives `owner_review.waiting` from `GET queue` (read it again at the end) and the page's address:
+the agent API's host with `owner_review.path` (`/ops/review/`). It counts what waits for the owner: the `needs`
+releases above and the drafts held only for a person's read. Leave it out when the count is 0.
 
 ## Fetching: honest, one tab, never forced
 
@@ -264,10 +272,11 @@ AP, Al Jazeera, un.org, nobelprize.org …, the payload's `fetch_policy`) can't 
   means a person's browser, which a cloud round doesn't have.
 - **Prefer other reputable sources** that scripts may read: official sites, national archives, universities and
   museums, peer-reviewed papers, reputable outlets that allow automated reads.
-- **Hold a draft whose only support is a `browser_only` source** (a reviewer can't check it either). Name it in
-  the summary so the owner can review it by hand in a browser (procedure 01). A task (not a draft) that can't be
-  done without such a page is released with `"needs": "browser"`, and the summary's "Needs the owner" line names it
-  (procedure 18). A task's `unreadable` list names
+- **Hand `browser_only` reads to the owner's review queue** (ADR 0046): a `browser_only` page is read by a
+  person, never by an agent. Hold a draft whose only support besides Wikipedia is such a page (a reviewer can't
+  check it either): it appears in the console's Review page by itself, and no later round carries it over. A task
+  (not a draft) that can't be done without such a page is released with `"needs": "browser"`; it waits in the Review
+  page, and the summary's "Needs the owner" and "Review" lines name it (procedure 19). A task's `unreadable` list names
   those sources (reasons `browser_only`, `citation_only`, `ai_blocked`); its `evidence_pack` holds the ones a cloud round can read and check.
 - **Use the evidence packs.** In a cloud round they are most of what can be read: the stored pages, their
   passages, `GET documents/<doc_id>` and `evidence/check-excerpt`.

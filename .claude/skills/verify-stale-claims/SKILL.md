@@ -26,7 +26,7 @@ lost. If you can't finish, `release` the task (untouched) or `fail` it with the 
 A release is deferred (ADR 0042): the task isn't offered again for an hour, so neither you nor the next agent claims it
 straight back. Say why, `-d '{"reason": "…"}'` (`"defer_minutes"`: 0 to 10080 for another wait). When only a person
 can unblock it, add `"needs": "browser"` (a page only a browser may read) or `"needs": "owner"` (the owner's call): it
-waits a week, and the round's summary lists it for the owner. Never release and re-claim the same task in a loop.
+waits for the owner (the console's Review page: no agent is offered it again), and the round's summary lists it. Never release and re-claim the same task in a loop.
 
 ## Fetching: honest, one tab, never forced
 
@@ -49,7 +49,7 @@ waits a week, and the round's summary lists it for the owner. Never release and 
   3. **Don't cite it unread.** No task skill allows a citation-only cite: a page you could not read is no source.
   4. **Release the task** when it can't be done without that page, so a person can read it:
      `api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
-     It waits a week for the owner instead of coming straight back to you or the next agent.
+     It waits for the owner (the console's Review page) instead of coming straight back to you or the next agent.
 - **Never disguise the client.** Every page you fetch by script sends the project's honest User-Agent:
   `curl -sS -A "$INGEST_USER_AGENT" <url>` (the same value as the app's `INGEST_USER_AGENT`). No spoofed browser
   User-Agent, no header tricks, no proxies, mirrors or caches to get round a site that refuses automated reads.

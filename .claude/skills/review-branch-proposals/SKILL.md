@@ -40,7 +40,7 @@ lost. If you can't finish, `release` the task (untouched) or `fail` it with the 
 A release is deferred (ADR 0042): the task isn't offered again for an hour, so neither you nor the next agent claims it
 straight back. Say why, `-d '{"reason": "…"}'` (`"defer_minutes"`: 0 to 10080 for another wait). When only a person
 can unblock it, add `"needs": "browser"` (a page only a browser may read) or `"needs": "owner"` (the owner's call): it
-waits a week, and the round's summary lists it for the owner. Never release and re-claim the same task in a loop.
+waits for the owner (the console's Review page: no agent is offered it again), and the round's summary lists it. Never release and re-claim the same task in a loop.
 
 ## 1. Claim a task
 

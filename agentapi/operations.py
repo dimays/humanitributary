@@ -146,6 +146,12 @@ FROM work_agenttask WHERE status = 'queued' AND (not_before IS NULL OR not_befor
 """
 
 
+def owner_review_count() -> int:
+    from opsconsole import review
+
+    return review.count()
+
+
 def queue_summary(now) -> dict:
     from opsconsole import queries as Q
     from publish.models import Release
@@ -179,6 +185,8 @@ def queue_summary(now) -> dict:
         "at": now.isoformat(timespec="seconds"), "kinds": kinds, "stuck": stuck,
         "caps": {k["kind"]: k["cap"] for k in kinds if k["cap"]},
         "review": {"in_review": {r["kind"]: r["n"] for r in review}, "held": held, "held_count": len(held)},
+        # The owner's review queue (ADR 0046): how many items wait for a person's read, never which: no agent works them.
+        "owner_review": {"waiting": owner_review_count(), "path": "/ops/review/"},
         "release": {"live": (pointer or {}).get("version"), "newest": newest.version if newest else None,
                     "unreleased_revisions": Revision.objects.filter(id__gt=newest.revision_high_water if newest else 0).count()},
         "round": {**st, "latest": R.as_json(latest) if latest else None},

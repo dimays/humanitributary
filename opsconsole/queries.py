@@ -589,15 +589,18 @@ def queue(now, *, archived: set[str] | None = None) -> list[dict]:
     """Per task kind: waiting (queued), in progress (claimed, lease live), stuck (claimed, lease expired), done and
     failed today, done in the last seven days, today's new tasks against the daily cap where there is one, the oldest waiting task (two queries)."""
     mid = midnight(now)
+    # The owner's review backlog (ADR 0046) is out of every count here, and a person's lapsed lease from the Review
+    # page is not a stuck agent (an agent may take the task over as from any expired lease).
+    waiting_q = Q(status="queued") & ~work_queue.backlog_q()
     rows = {r["kind"]: r for r in AgentTask.objects.values("kind").annotate(
-        waiting=Count("id", filter=Q(status="queued")),
+        waiting=Count("id", filter=waiting_q),
         in_progress=Count("id", filter=Q(status="claimed", lease_until__gte=now)),
-        stuck=Count("id", filter=Q(status="claimed", lease_until__lt=now)),
+        stuck=Count("id", filter=Q(status="claimed", lease_until__lt=now) & ~Q(claimed_by__startswith="human:")),
         done_today=Count("id", filter=Q(status="done", completed_at__gte=mid)),
         done_7d=Count("id", filter=Q(status="done", completed_at__gte=now - timedelta(days=7))),
         failed_today=Count("id", filter=Q(status="failed", completed_at__gte=mid)),
         failed=Count("id", filter=Q(status="failed")),
-        oldest_waiting=Min("created_at", filter=Q(status="queued")),
+        oldest_waiting=Min("created_at", filter=waiting_q),
         # Evidence packs (ingest/prefetch.py, ADR 0036): waiting tasks with a pack, and with ≥ 1 non-Wikipedia page stored.
         packed=Count("id", filter=Q(status="queued", payload__has_key="evidence_pack")),
         evidence_ready=Count("id", filter=Q(status="queued", payload__evidence_ready=True)),
@@ -623,7 +626,7 @@ def queue(now, *, archived: set[str] | None = None) -> list[dict]:
 
 def stuck_leases(now, limit: int = 20) -> list:
     """Claimed tasks whose lease ran out, the longest-expired first (one query)."""
-    return list(AgentTask.objects.filter(status="claimed", lease_until__lt=now).defer("payload", "result")
+    return list(AgentTask.objects.filter(status="claimed", lease_until__lt=now).exclude(claimed_by__startswith="human:").defer("payload", "result")
                 .order_by("lease_until", "id")[:limit])
 
 
@@ -660,7 +663,7 @@ def tasks(*, kind="", status="", agent="", q=""):
 def kind_counts(kind: str, now) -> dict:
     """One kind's tasks per tab (one query)."""
     return AgentTask.objects.filter(kind=kind).aggregate(
-        waiting=Count("id", filter=Q(status="queued")),
+        waiting=Count("id", filter=Q(status="queued") & ~work_queue.backlog_q()),
         deferred=Count("id", filter=work_queue.deferred_q(now)),
         in_progress=Count("id", filter=Q(status="claimed", lease_until__gte=now)),
         stuck=Count("id", filter=Q(status="claimed", lease_until__lt=now)),

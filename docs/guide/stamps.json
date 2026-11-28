@@ -2,15 +2,15 @@
   "architecture": {"reviewed": "2026-11-28", "hash": "027271e133b5"},
   "branch-governance": {"reviewed": "2026-11-28", "hash": "835e4243c6ea"},
   "content-model": {"reviewed": "2026-11-28", "hash": "5461504ea6e3"},
-  "content-waves": {"reviewed": "2026-11-28", "hash": "f54efbec5b48"},
+  "content-waves": {"reviewed": "2026-11-28", "hash": "c7a359145f99"},
   "evidence-and-fact-checking": {"reviewed": "2026-11-28", "hash": "67cb66a35ff5"},
-  "glossary": {"reviewed": "2026-11-28", "hash": "555ffa3385f6"},
+  "glossary": {"reviewed": "2026-11-28", "hash": "723f01829bad"},
   "ingestion": {"reviewed": "2026-11-28", "hash": "439da65aa7f3"},
-  "operations": {"reviewed": "2026-11-28", "hash": "e8df22ffa4b6"},
-  "operations-console": {"reviewed": "2026-11-28", "hash": "d3afa3413ade"},
+  "operations": {"reviewed": "2026-11-28", "hash": "f7b5f2aa37ec"},
+  "operations-console": {"reviewed": "2026-11-28", "hash": "2d81344805c9"},
   "publishing": {"reviewed": "2026-11-27", "hash": "757cae88b8da"},
   "revisions": {"reviewed": "2026-11-26", "hash": "9a093264afb7"},
   "sources-and-terms": {"reviewed": "2026-11-28", "hash": "ecbc2a733d56"},
   "this-guide": {"reviewed": "2026-11-27", "hash": "2f43bb47522b"},
-  "work-queue-and-agents": {"reviewed": "2026-11-28", "hash": "9eae93325570"}
+  "work-queue-and-agents": {"reviewed": "2026-11-28", "hash": "78351616bc16"}
 }

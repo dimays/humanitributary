@@ -102,8 +102,11 @@ def queue() -> dict:
     from work.models import AgentTask
 
     now = timezone.now()
-    queued = dict(AgentTask.objects.filter(status="queued").values("kind").annotate(n=Count("id")).values_list("kind", "n"))
-    agg = AgentTask.objects.aggregate(claimed=Count("id", filter=Q(status="claimed")), expired=Count("id", filter=Q(status="claimed", lease_until__lt=now)))
+    from work.queue import backlog_q
+
+    # The owner's review backlog (ADR 0046) is noiseless: never counted here.
+    queued = dict(AgentTask.objects.filter(status="queued").exclude(backlog_q()).values("kind").annotate(n=Count("id")).values_list("kind", "n"))
+    agg = AgentTask.objects.aggregate(claimed=Count("id", filter=Q(status="claimed")), expired=Count("id", filter=Q(status="claimed", lease_until__lt=now) & ~Q(claimed_by__startswith="human:")))
     return {"queued": dict(sorted(queued.items())), "queued_total": sum(queued.values()), "claimed": agg["claimed"], "expired_leases": agg["expired"]}
 
 

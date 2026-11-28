@@ -101,3 +101,4 @@ script. Write a comment that tells why.
 | 16 | [Measure the evidence coverage](procedures/16-measure-the-evidence-coverage.md) |
 | 17 | [Archive and unarchive a job](procedures/17-archive-and-unarchive-a-job.md) |
 | 18 | [Do a task that needs a browser](procedures/18-do-a-task-that-needs-a-browser.md) |
+| 19 | [Review the items that need a person](procedures/19-review-the-items-that-need-a-person.md) |

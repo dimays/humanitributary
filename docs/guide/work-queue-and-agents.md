@@ -78,6 +78,8 @@ queued ──claim──▶ claimed ──complete──▶ done
 
 queued ──a job withdraws it, or an operator cancels it──▶ cancelled
 failed, cancelled, deferred ──an operator requeues it (attempts reset, not_before and needs cleared)──▶ queued
+queued (needs a person) ──the owner decides on the Review page──▶ done, cancelled, or queued with owner_read
+queued ──a person opens it on the Review page (claim_for, human:<username>)──▶ claimed ──they leave (let_go)──▶ queued
 ```
 
 `cancelled` is set by jobs (branch governance cancels the queued task of a
@@ -90,7 +92,11 @@ filled) and by operators from the console (below). Agents never cancel.
 and leases it to the agent.
 
 1. **Available** means queued, or claimed with a lease that has run out
-   (`lease_until` in the past), and `not_before` empty or past.
+   (`lease_until` in the past), `not_before` empty or past, and no
+   `payload["needs"]`: a task that waits for a person is never offered to an
+   agent, however long ago its `not_before` passed, until the owner decides
+   on the console's Review page ([ADR 0046](../adr/0046-the-owners-review-queue.md);
+   `queue._available`, `queue.available_q` for the console).
 2. **Best** means highest `priority`, then oldest `created_at`, then lowest
    id. `kinds` narrows the choice.
 3. The row is read with `SELECT … FOR UPDATE SKIP LOCKED`. If another agent
@@ -117,6 +123,18 @@ attempt. From then on only the new holder may finish it.
 
 Without `claim=True`, `next_task` only shows the best task and changes
 nothing.
+
+**A person's lease.** `queue.claim_for(id, agent="human:<username>")` takes one
+named task for a person reading it on the Review page (ADR 0046): the same
+`claimed` state and lease as an agent's claim (`HUMAN_LEASE_MINUTES`, 10;
+the open page renews it every 5 minutes), so no agent is offered it while it
+is live. It refuses a task another holds under a live lease, or one that
+isn't available; the holder's own call renews it. It counts no attempt and
+keeps the task's round link: a person's read is not an agent's try.
+`queue.let_go(id, agent=…)` hands it back untouched (queued, no deferral, no
+note) when the person leaves without deciding, and returns False when they
+no longer hold it. A person's lease that runs out is taken over like any
+other, but the console doesn't count it as stuck.
 
 ## Finishing, handing back and extending
 
@@ -169,16 +187,24 @@ a release waits:
 - `needs` is `"browser"` (a page only a browser may read: the
   [policy endpoint](#the-fetch-policy-for-an-agents-own-reads) said
   `may_fetch: false`) or `"owner"` (a decision only the owner makes). It
-  defers `NEEDS_DEFER_MINUTES` (a week) unless `defer_minutes` says
-  otherwise, and records `payload["needs"] = {kind, by, at, reason}`. Over
-  the API a release with `needs` must say why (`reason`, typically
-  `"<url>: <why>"`).
+  sets `not_before` `NEEDS_DEFER_MINUTES` (a week) ahead unless
+  `defer_minutes` says otherwise, and records `payload["needs"] = {kind, by,
+  at, reason}`. Over the API a release with `needs` must say why (`reason`,
+  typically `"<url>: <why>"`). Since [ADR 0046](../adr/0046-the-owners-review-queue.md)
+  the need, not the week, decides: no agent is offered the task again until
+  a person decides it (the console's Review page for `verify_claim` with
+  either need and `fill_gap` and `write_event` with `browser`; Work → kind,
+  Deferred, for the rest).
 - `<agent>: released[, needs <kind>][: <reason>] (deferred until <time> UTC)`
   is appended to `error`.
 
 The jobs that refresh a queued task's payload (`process`, `gap_waves`,
-`branches review`) keep `queue.PAYLOAD_KEYS` (`needs`), as they keep the
-evidence pack's keys. The console's Work → kind page has a **Deferred** tab
+`branches review`) keep `queue.PAYLOAD_KEYS` (`needs`, and `owner_read`: what
+the owner handed back from the Review page, a readable source or their own
+summary, ADR 0046), as they keep the evidence pack's keys. The owner's
+**backlog** is `payload["needs"]["backlog"]` (`queue.backlog_q`): a task the
+owner deferred there is out of the Work counts and `/healthz`'s `queued`, and
+waits until they bring it back. The console's Work → kind page has a **Deferred** tab
 (the same `deferred_q`) that shows each task's "not before" time and its
 need, and offers Requeue and Cancel; the task's page shows both too.
 
@@ -434,7 +460,11 @@ source (Wikipedia's references), a browser where there is one and `browser_read`
 not read, and, when the task can't be done without the page, a release with `{"needs": "browser", "reason":
 "<url>: <why>"}`. An `unrated` page in the evidence pack is no longer "read it yourself": scripts never fetch it.
 Every task skill's API section says a release is deferred and asks for a reason; `run-round` asks its role agents
-to report every `needs` release and lists them on the summary's "Needs the owner" line.
+to report every `needs` release and lists them on the summary's "Needs the owner" line, with a "Review" line: how
+many items wait in the owner's review queue (`GET queue`'s `owner_review.waiting`) and its address. Since
+[ADR 0046](../adr/0046-the-owners-review-queue.md) `run-round` hands `browser_only` reads to that queue: its
+agents and reviewers never read such a page themselves, and a draft only such a page supports is held and waits
+there. The task skills say a `needs` release waits for the owner (the Review page), not a week.
 
 Every task skill also says to **extend a long lease** (`POST tasks/<id>/extend` when one task's work passes about
 20 minutes, and every 20 minutes after), and the skills that fetch pages (`drain-write-events`, `fill-gaps`,
@@ -626,7 +656,7 @@ the console's single-publish lock covers both doors.
 
 | Endpoint | Scope | What |
 |---|---|---|
-| `GET queue` | any | Per kind: `waiting`, `in_progress`, `stuck`, `done_today`, `failed_today`, `done_7d`, `oldest_waiting_minutes`, `priorities` (max, median, min of the waiting), the `top` five, the daily `cap`, `fed_by` (its jobs) and `role`; the stuck leases; the drafts `in_review` and the `held` ones; the live and newest release and the Revisions since; the round settings with `next_round_takes` and the latest round. |
+| `GET queue` | any | Per kind: `waiting`, `in_progress`, `stuck`, `done_today`, `failed_today`, `done_7d`, `oldest_waiting_minutes`, `priorities` (max, median, min of the waiting), the `top` five, the daily `cap`, `fed_by` (its jobs) and `role`; the stuck leases; the drafts `in_review` and the `held` ones; `owner_review` (`waiting`: how many items wait in the owner's review queue, never which, and the console's `path`, `/ops/review/`; ADR 0046); the live and newest release and the Revisions since; the round settings with `next_round_takes` and the latest round. |
 | `POST edits/check` | `review` | `{"ops", "name", "round"}`: `timeline.edits.check()` plus the agent rules (below), then `apply(dry_run=True)`. 200 with `valid`, `counts`, `revisions` and each op's diff (25 lines); 422 with every problem. The row keeps the full diff. At most 500 ops (413). |
 | `POST edits/apply` | `review` | `{"ops", "name", "round", "check", "reason"}` and an `Idempotency-Key` header. Needs a passing check of the same ops (their sha256), at most 60 minutes old and not yet applied. One transaction as `agent:<name>`, the file named `round-<id>:<name>` in every Revision's reason; the answer has the counts, the Revisions and the `txid`. The round's `edit_ops` add up. |
 | `POST releases/check` | `publish` | `publish.release.preview()`: the gates and the change report, writing nothing. 200 with the hashes, `unchanged_since` and the summary; 422 with `problems` per gate. A passing check moves an open round to `release_ready`. |
@@ -764,7 +794,13 @@ recorded: the routine stops cleanly); any round while another is open is a
 Otherwise the round starts, and `carry_over` moves into its plan (the drafts
 still in review) and clears. **Held drafts** (`rounds.held_drafts`) are
 entries in review with a Revision whose reason starts `apply_edits`: a
-reviewer's file touched them and left them there.
+reviewer's file touched them and left them there. Not the drafts that wait
+for the owner's own read (`rounds.owner_read_drafts`, ADR 0046): an entry in
+review whose record's support, besides Wikipedia, is only `PERSON_READ` pages
+(`browser_only`, `citation_only`) that nobody has read as `human:` yet, and
+that no open round is reviewing (`rounds.in_open_rounds`). Those go to the
+console's Review page, never back to a round's reviewers, so neither
+`carry_over` nor `GET queue`'s `held` lists them.
 
 `PATCH rounds/<id>` checks what it sets (`validate_patch`: known fields,
 counts that are non-negative integers, a status an agent may set, `finish`
@@ -815,4 +851,4 @@ the link have no linked tasks, so their counts show only what was planned.
 | A round setting, a limit on the round size, `DRAFTS_PER_REVIEWER` | `work/rounds.py`, the `run-round` skill and the Work page together; `tests/test_rounds.py`. A change to the auto-publish policy is a new ADR (it amends ADR 0035). |
 | Which tokens link their claims to a round, or what a round's progress counts | `rounds.ROUND_AGENT`, `round_for_claim` and `progress`, the Work page's strip (`opsconsole/queries.py` `live_round`) and `tests/test_round_progress.py` together; procedure 15 names the tokens. |
 | The heavy operations' limits | `AGENT_API_EDITS_CHECKS_PER_HOUR`, `AGENT_API_EDITS_APPLIES_PER_HOUR`, `AGENT_API_RELEASE_CHECKS_PER_HOUR`, `AGENT_API_PUBLISHES_PER_DAY` in the environment. |
-| Queue behavior | `tests/test_queue.py` covers ordering, peeking, ownership, takeover, release and fail, deferred releases and needs, max attempts, dedupe, `not_before` and SKIP LOCKED between two connections; `tests/test_agent_api.py` the release body and `GET policy`, one case per policy. Extend them. A change of contract (leases, ownership) belongs in ADR 0003. |
+| Queue behavior | `tests/test_queue.py` covers ordering, peeking, ownership, takeover, release and fail, deferred releases and needs, max attempts, dedupe, `not_before` and SKIP LOCKED between two connections; `tests/test_review.py` that a need is never offered to an agent, a person's lease (`claim_for`, `let_go`) and the backlog; `tests/test_agent_api.py` the release body and `GET policy`, one case per policy. Extend them. A change of contract (leases, ownership) belongs in ADR 0003. |

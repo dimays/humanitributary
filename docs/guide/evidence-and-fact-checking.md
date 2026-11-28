@@ -72,7 +72,7 @@ claim), and the computed `status`, `confidence` (0–1),
 | `stance` | `supports`, `partial`, `conflicts` or `unrelated`. |
 | `excerpt` | The passage that bears on the claim, at most 25 words (a check constraint). |
 | `checked_at`, `checked_by` | When the page was last read against the claim, and by whom (`agent:`, `human:` or `job:`, a check constraint). Empty for legacy evidence never re-read here. |
-| `method` | `legacy` (cited by the static site's author), `fetch_match` (a job found it in a fetched page), `agent_read`, `browser_read`, `human`. |
+| `method` | `legacy` (cited by the static site's author), `fetch_match` (a job found it in a fetched page), `agent_read`, `browser_read`, `human`. The owner's read from the console's Review page is `browser_read` with `checked_by` `human:<username>` ([ADR 0046](../adr/0046-the-owners-review-queue.md)): it goes through `record_evidence` like an agent's, so the claim is recomputed by the same rules. |
 | `found_value` | What the source itself says when it differs, e.g. `{"y": 1951.3, "when": "April 1951"}`. |
 | `content_hash` | The citation's hash when this evidence was checked: a later change means re-read. |
 | `position`, `cited_title`, `cited_kind` | The order and wording of the entry's `cites`, kept per use so a snapshot reproduces them exactly. |
