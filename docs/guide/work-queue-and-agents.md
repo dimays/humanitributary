@@ -8,6 +8,7 @@ covers:
   - .claude/skills/**
   - tests/test_queue.py
   - tests/test_rounds.py
+  - tests/test_round_progress.py
   - agentapi/*.py
   - agentapi/management/commands/*.py
 ---
@@ -48,6 +49,7 @@ An `AgentTask` row is one piece of judgment work. Its fields:
 | `error` | Every failure note, one per line, each prefixed with the agent's name. |
 | `created_by` | Who queued it (`job:<name>`, `agent:<name>` or `human:<name>`). |
 | `created_at`, `completed_at` | When it was queued and when it finished (done, failed or cancelled). |
+| `round` | The `Round` whose role agent last claimed it, or empty ([a round's progress](#a-rounds-progress); [ADR 0040](../adr/0040-round-progress-from-a-task-link.md)). `SET_NULL`. |
 
 The database holds the queue's rules, not just the code:
 
@@ -100,7 +102,9 @@ and leases it to the agent.
    `error`) and the loop picks the next one.
 5. Otherwise it becomes `claimed`: `claimed_by` is the agent,
    `claimed_at` is now, `lease_until` is now plus the lease, and `attempts`
-   goes up by one.
+   goes up by one. `round` becomes the `round` the caller passed: the API's
+   claim passes the open round when a round's role token claims, and nothing
+   otherwise, so any other claim clears it ([a round's progress](#a-rounds-progress)).
 
 The lease is `TASK_LEASE_MINUTES` in `config/settings.py`: 30 minutes, read
 from the environment variable of the same name. A caller may ask for another
@@ -439,7 +443,7 @@ From `agentapi/views.py` (routes in `agentapi/urls.py`):
 | `GET /api/agent/` | Who you are (`agent:<name>`), your scopes, the kinds with schemas, every endpoint. |
 | `GET schemas/<kind>` | The result schema `complete` checks for that kind (404 for a kind without one). |
 | `GET tasks/next?kind=…` | Peek at the best available task (`kind` repeats), changing nothing. |
-| `POST tasks/claim` | `{"kinds": [...], "lease_minutes": 30}` → `{"task": {…}}` leased to you, or `{"task": null}`. |
+| `POST tasks/claim` | `{"kinds": [...], "lease_minutes": 30}` → `{"task": {…}}` leased to you, or `{"task": null}`. A round's role token's claim links the task to the open round (`"round"` in the task; [a round's progress](#a-rounds-progress)). |
 | `GET tasks/<id>` | A task you claimed, or any queued task of a kind you may take (403 otherwise). |
 | `POST tasks/<id>/extend` | `{"minutes": N}` (1–240; default `TASK_LEASE_MINUTES`). |
 | `POST tasks/<id>/complete` | `{"result": {…}}` → validated, applied, done. |
@@ -454,7 +458,7 @@ From `agentapi/views.py` (routes in `agentapi/urls.py`):
 | `GET queue` | What a round plans from ([below](#a-rounds-operations)). Any token. |
 | `POST edits/check`, `POST edits/apply` | An edit file checked (a dry run) and applied. Scope `review`. |
 | `POST releases/check`, `POST releases/publish` | The release gates, and a release. Scope `publish`. |
-| `GET rounds/settings`, `POST rounds`, `GET`/`PATCH rounds/<id>` | The round settings, and a round's record ([rounds](#rounds)). Writing needs scope `round`. |
+| `GET rounds/settings`, `POST rounds`, `GET`/`PATCH rounds/<id>` | The round settings, and a round's record ([rounds](#rounds)), with its per-kind progress in `tasks`. Writing needs scope `round`. |
 
 The queue endpoints call `work.queue` unchanged: the same leases, the same
 `SKIP LOCKED` claims, the same ownership checks. A queue error (not your
@@ -648,6 +652,37 @@ reviewer's file touched them and left them there.
 counts that are non-negative integers, a status an agent may set, `finish`
 only with a final status) and appends to the history.
 
+### A round's progress
+
+While a round runs, an operator watches its batch move: planned, in
+progress, done (or failed, or released). There is no "planned" task state
+for this ([ADR 0040](../adr/0040-round-progress-from-a-task-link.md)):
+a task is linked to the round that worked it, and the counts are derived.
+
+**The link.** `POST tasks/claim` asks `rounds.round_for_claim(actor)`: when
+the actor is one of a round's role tokens (`rounds.ROUND_AGENT`:
+`agent:round-writer`, `round-filler`, `round-verifier` or `round-mapper`,
+or a replacement such as `round-writer-2`; never the recorder, reviewer or
+publisher), it is `rounds.open_round()`, the newest round that is
+`running`, `reviewing` or `release_ready` and younger than `STALE_HOURS`;
+otherwise nothing. `queue.next_task` sets `AgentTask.round` to it, so a
+claim by any other token (and the owner's `tasks next --claim`, which
+passes nothing) clears the link. Release, fail and the lease's end leave it,
+so a task a round handed back still counts for that round until someone
+else claims it. The task's JSON (`queue.as_json`) carries `round`.
+
+**The counts.** `rounds.progress(r)` (one query) gives, per kind: `planned`
+(the plan's `mix`; 0 for a kind it lacks, or a value that isn't a
+non-negative integer), `claimed` (every task linked to the round),
+`in_progress` (still claimed; `stuck`, the part whose lease ran out),
+`done`, `failed`, and `released` (back in the queue: released, failed with
+attempts left, or cancelled). The plan's kinds come first, in its order,
+then any other kind the round's agents claimed. `as_json` (so `GET
+rounds/<id>`, the round in `POST rounds` and `PATCH` answers, and `GET
+queue`'s latest round) puts them in `tasks`; what the routine `PATCH`ed as
+`tasks` is kept in the row and shown as `tasks_reported`. Rounds from before
+the link have no linked tasks, so their counts show only what was planned.
+
 ## Changing it
 
 | Change | What it needs |
@@ -660,5 +695,6 @@ only with a final status) and appends to the history.
 | Retry limits | `max_attempts` is per task (default 3 in `work/models.py`); a job may pass another value when it creates tasks. Changing the default needs a migration. |
 | Claim order | `next_task`'s ordering and the `task_queued_idx` index must match; change both, with a migration. |
 | A round setting, a limit on the round size, `DRAFTS_PER_REVIEWER` | `work/rounds.py`, the `run-round` skill and the Work page together; `tests/test_rounds.py`. A change to the auto-publish policy is a new ADR (it amends ADR 0035). |
+| Which tokens link their claims to a round, or what a round's progress counts | `rounds.ROUND_AGENT`, `round_for_claim` and `progress`, the Work page's strip (`opsconsole/queries.py` `live_round`) and `tests/test_round_progress.py` together; procedure 15 names the tokens. |
 | The heavy operations' limits | `AGENT_API_EDITS_CHECKS_PER_HOUR`, `AGENT_API_EDITS_APPLIES_PER_HOUR`, `AGENT_API_RELEASE_CHECKS_PER_HOUR`, `AGENT_API_PUBLISHES_PER_DAY` in the environment. |
 | Queue behavior | `tests/test_queue.py` covers ordering, peeking, ownership, takeover, release and fail, max attempts, dedupe, `not_before` and SKIP LOCKED between two connections. Extend it. A change of contract (leases, ownership) belongs in ADR 0003. |

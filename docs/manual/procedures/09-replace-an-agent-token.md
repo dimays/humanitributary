@@ -22,7 +22,7 @@ when you make it.
    ```
 
    Make sure that you know the name and the scopes of the old token.
-2. Choose a new name for the new token, for example `writer-2`.
+2. Choose a new name for the new token, for example `writer-2`. For a role token of the daily round, use `round-writer-2`.
    Make sure that no token in the list has this name, also no revoked token.
 3. Make the new token with the same scopes:
 

@@ -28,6 +28,9 @@ Do this procedure one time. After that, the routine starts one round each day ([
    ```
 
    Make sure that you have seven tokens in the password manager.
+
+   > **NOTE:** Use these names. The console shows the progress of a round from the tasks that `round-writer`,
+   > `round-filler`, `round-verifier` and `round-mapper` get.
 2. Show the tokens:
 
    ```bash

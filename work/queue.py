@@ -42,8 +42,10 @@ def _available(now):
     return (Q(status=S.QUEUED) | Q(status=S.CLAIMED, lease_until__lt=now)) & (Q(not_before__isnull=True) | Q(not_before__lte=now))
 
 
-def next_task(*, agent: str, kinds: list[str] | None = None, claim: bool = False, lease_minutes: int | None = None) -> AgentTask | None:
-    """The best available task (highest priority, then oldest). With claim=True, lease it to `agent`."""
+def next_task(*, agent: str, kinds: list[str] | None = None, claim: bool = False, lease_minutes: int | None = None, round=None) -> AgentTask | None:
+    """The best available task (highest priority, then oldest). With claim=True, lease it to `agent` and link it to
+    `round` (the open round whose role agent claims it: work.rounds.round_for_claim), or unlink it (any other claim):
+    a task belongs to the round that last claimed it, and keeps that link when it is released or fails (ADR 0040)."""
     now = timezone.now()
     with transaction.atomic():
         qs = AgentTask.objects.filter(_available(now))
@@ -64,7 +66,8 @@ def next_task(*, agent: str, kinds: list[str] | None = None, claim: bool = False
             task.status, task.claimed_by, task.claimed_at = S.CLAIMED, agent, now
             task.lease_until = now + timedelta(minutes=lease_minutes or settings.TASK_LEASE_MINUTES)
             task.attempts += 1
-            task.save(update_fields=["status", "claimed_by", "claimed_at", "lease_until", "attempts"])
+            task.round = round
+            task.save(update_fields=["status", "claimed_by", "claimed_at", "lease_until", "attempts", "round"])
             return task
 
 
@@ -228,6 +231,6 @@ def as_json(task: AgentTask) -> dict:
         },
         "payload": task.payload, "claimed_by": task.claimed_by or None,
         "lease_until": task.lease_until.isoformat() if task.lease_until else None,
-        "attempts": task.attempts, "max_attempts": task.max_attempts, "created_by": task.created_by,
+        "attempts": task.attempts, "max_attempts": task.max_attempts, "created_by": task.created_by, "round": task.round_id,
         "result": task.result, "error": task.error or None,
     }
