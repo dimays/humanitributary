@@ -171,6 +171,11 @@ that Feed's `next_run_at` has come; each run sets `next_run_at` to now plus the 
 | `second_source` | `DAY` | plain |
 | `gap_waves` | `DAY` | plain |
 | `gap_pointers` | 60 | plain |
+| `prefetch_sources` | 15 | plain |
+
+`seed_sources` also applies one-off rating sets once per database: the terms verdicts (ADR 0013) and the
+November 28, 2026 source ratings (ADR 0037, JobState "ratings_2026_11_28"). On a database that has them pending,
+`manage.py run_job seed_sources` applies them now instead of at the weekly run.
 
 Plain intervals are in `ingest/job_defs.py` (`DAY, WEEK = 1440, 10080`). Feed intervals are the Feed rows'
 `interval_minutes`, seeded from `ingest/seed.py` `FEEDS`. Seeding never changes an existing Feed's interval, so
@@ -297,6 +302,8 @@ roll back), each confirmed, with a reason, and recorded as an OpsAction; the com
 | `/ops/` (the operations console) | The Dashboard: "All good" or the problems, one per line; the last 24 hours of runs as a run graph; failed runs needing attention (with Retry); what runs next; waiting, in progress and stuck per agent queue. Pointing at a run's bar (or a square of a ten-run strip), or focusing it, shows its run card: what started it, its runtime against the job's usual one, where its time went, its counts and error. Then Jobs (tags, schedule, the last ten runs), Runs (each with its log), Work, Releases and Docs, and the action log. Staff only; acting needs `ops_operator`. |
 | `/healthz` (http://127.0.0.1:8000/healthz while `make up` or `make serve` runs; on staging, the app's URL + `/healthz`) | JSON from `infra/health.py`: the database, both stores and `storage_backend` (`local` when hosted means the dyno's throwaway disk), the latest release's version, each job's state (`failing` when its last run failed, `ok`, `never_run`, or `paused`, with who paused it and why), last run, last run that finished ok or partial, last status and consecutive failures, `failing_jobs` and `paused_jobs` (a paused job is never in `failing_jobs`, whatever its last runs did; resumed, it is again), and the queue (queued by kind, claimed, expired leases). 200 when the database and both stores answer, 503 otherwise; the job and queue figures never change the status code. |
 | `make storage-status` | The storage backend, whether each bucket answers, and the `latest` pointer: its version, why it was written and by whom. |
+| `manage.py unrated_domains [--json] [--limit N]` | The unrated domains queued and claimed tasks point at, with task and URL counts, whether a Publisher row exists, and an example: what the evidence-pack job won't fetch until someone reads their terms and rates them in the admin. No requests. |
+| `manage.py evidence_coverage [--out var/]` | Evidence-pack coverage of the queued tasks ([ingestion](ingestion.md#evidence-packs)): per task kind, region and era, the share whose pack holds a non-Wikipedia page and the share that point at one a job may fetch; the unreadable hosts and reasons and the host health. No requests. `--out` writes `evidence-coverage-<date>.md` and `.json` (`var/` is gitignored): the input to a source-discovery round. |
 | `make digest` (`manage.py digest`) | Open tasks by kind, the top `write_event` stories, `write_event` by branch, `verify_claim` reasons, new-branch signals, the fact base's and branch governance's sections, candidates by status, and every job's runs in the last 24 hours with the last three failed or partial errors. "No runs in the last 24 hours" means the schedule isn't running. `--sources` adds every feed and lookup adapter, on or off, with its publisher's policy, tier and disabled reason, plus the sources considered and skipped. |
 | `uv run python manage.py facts report` | The fact base: record claims by status (corroborated, single source, contested, stale, unverified), by era and region, and what is due, broken, contested or blocking publication. `--brief` drops the tables. |
 | `make schedule-status` | Whether launchd runs the ticks, and the last log lines. The worker's output is in the terminal that runs `make up`. |

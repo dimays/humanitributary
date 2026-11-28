@@ -47,6 +47,16 @@ HOST_DELAY = {
     "api.crossref.org": 1.0,  # public pool: 1 request a second, one at a time
     "news.un.org": 10.0,  # un.org robots.txt Crawl-delay
     "press.un.org": 10.0,
+    "sec.gov": 0.5,
+    # robots.txt Crawl-delay values the 2026-11-28 ratings recorded (the Fetcher also reads Crawl-delay itself; ADR 0037)
+    "legislation.gov.uk": 5.0,
+    "plato.stanford.edu": 5.0,
+    "pleiades.stoa.org": 3.0,
+    "ccel.org": 10.0,
+    "open.canada.ca": 20.0,
+    "zenodo.org": 10.0,
+    "arxiv.org": 15.0,
+    "scmp.com": 10.0,  # SEC fair access: at most 10 requests a second, all machines together (www. and data.sec.gov)
 }
 DEFAULT_HOST_DELAY = 1.0
 
@@ -54,6 +64,30 @@ DEFAULT_HOST_DELAY = 1.0
 # and disallows /w/, where api.php lives; Wikimedia's API etiquette asks bots to use the API, serially, with a
 # descriptive User-Agent, which we do) and the Wayback availability API. Every other host's robots.txt is honored.
 API_HOSTS = {"en.wikipedia.org", "www.wikidata.org", "query.wikidata.org", "wikimedia.org", "archive.org"}
+
+
+# Crawler names that mark a robots.txt group as addressed to AI readers (ADR 0037): a site that disallows one of these
+# by name is not fetched by the evidence-pack job, whatever our User-Agent string says.
+AI_AGENTS = {"claudebot", "claude-web", "claude-user", "claude-searchbot", "claude-code", "anthropic-ai", "gptbot", "chatgpt-user",
+             "oai-searchbot", "ccbot", "google-extended", "perplexitybot", "perplexity-user", "bytespider", "applebot-extended",
+             "meta-externalagent", "cohere-ai", "cohere-training-data-crawler", "ai2bot", "diffbot", "omgili", "youbot", "amazonbot"}
+
+
+def api_base_allows(api_base: str, url: str) -> bool:
+    """Is `url` under an `api_only` publisher's API base? Each base (several separated by " | ") is a URL prefix,
+    optionally followed by a space and a query parameter the URL must carry ("https://www.loc.gov/ ?fo=json")."""
+    from urllib.parse import parse_qsl, urlsplit
+
+    for base in (b.strip() for b in (api_base or "").split("|")):
+        if not base:
+            continue
+        prefix, _, need = base.partition(" ")
+        if not url.startswith(prefix.strip()):
+            continue
+        need = need.strip().lstrip("?")
+        if not need or need in {f"{k}={v}" for k, v in parse_qsl(urlsplit(url).query, keep_blank_values=True)}:
+            return True
+    return False
 
 
 def never_fetch_reason(url: str) -> str:

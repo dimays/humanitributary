@@ -1,0 +1,974 @@
+[
+ {
+  "name": "GovInfo (GPO)",
+  "domains": [
+   "govinfo.gov",
+   "api.govinfo.gov"
+  ],
+  "api_base": "https://api.govinfo.gov",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "US public domain (GPO photos excepted)",
+  "robots": "User-agent * only; disallows /search, /app/search, admin paths; no AI blocks. 54 sitemaps listed.",
+  "terms_url": "https://www.govinfo.gov/about/policies",
+  "clause": "public documents can generally be reprinted without legal restriction",
+  "rate_limit": "API key (api.data.gov) 1000 req/hr; DEMO_KEY 30/hr",
+  "eras": "1789-now (Federal Register 1936+, CFR, Congressional Record, Statutes, Presidential papers)",
+  "regions": "US",
+  "notes": "Site pages and bulk data/sitemaps fetchable without key; api.govinfo.gov needs a free key (not requested). Terms page has no automated-access clause. Best US primary source for laws and presidential documents."
+ },
+ {
+  "name": "Congress.gov / Congress API",
+  "domains": [
+   "congress.gov",
+   "api.congress.gov"
+  ],
+  "api_base": "https://api.congress.gov/v3",
+  "verdict": "api_only",
+  "needs_key": true,
+  "license": "US public domain (Library of Congress)",
+  "robots": "Site: Crawl-delay 2, disallows search; Disallow / for 100+ named AI bots incl. ClaudeBot, Claude-User, Claude-Web, anthropic-ai. API host is separate.",
+  "terms_url": "https://api.congress.gov/",
+  "clause": "Disallow: / for ClaudeBot, Claude-User, Claude-Web, anthropic-ai (robots.txt)",
+  "rate_limit": "API key via api.data.gov, 5000 req/hr typical (unverified)",
+  "eras": "1789-now bills, members, Congressional Record",
+  "regions": "US",
+  "notes": "Do not fetch www.congress.gov HTML. Use the API only; key required and not requested. API terms page itself returned no text via WebFetch."
+ },
+ {
+  "name": "National Archives Catalog API",
+  "domains": [
+   "catalog.archives.gov",
+   "archives.gov"
+  ],
+  "api_base": "https://catalog.archives.gov/api/v2",
+  "verdict": "api_only",
+  "needs_key": true,
+  "license": "US federal records mostly public domain; item-level rights vary",
+  "robots": "User-agent *: Disallow / (whole host).",
+  "terms_url": "https://www.archives.gov/research/catalog/help/api",
+  "clause": "may not cache or store API content; no scraping or downloading all data",
+  "rate_limit": "10,000 requests/month per key",
+  "eras": "1700s-now archival records, documents, photos",
+  "regions": "US",
+  "notes": "Key required (email-assigned; not requested). Terms forbid caching/storing and bulk download, so only live lookups; storing for fact-check privately conflicts. Treat as lookup-only."
+ },
+ {
+  "name": "Voice of America",
+  "domains": [
+   "voanews.com"
+  ],
+  "api_base": null,
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "US government work, public domain except marked third-party content (not verified from terms page)",
+  "robots": "User-agent *: path restrictions only (/z/, /tv/, /radio/, search, comments); only AhrefsBot blocked; no AI blocks.",
+  "terms_url": "https://www.voanews.com/p/5339.html",
+  "clause": "terms page not retrieved (contact page only)",
+  "rate_limit": "Not stated",
+  "eras": "2000s-now international news, English and ~40 languages",
+  "regions": "Global; Asia, Africa, Russia/Ukraine, Iran",
+  "notes": "LOW CONFIDENCE on licence: terms and usage-request pages not read. VOA's operating status/funding in 2025-26 should be checked before relying on new content. Verify terms before bulk jobs."
+ },
+ {
+  "name": "NASA",
+  "domains": [
+   "nasa.gov"
+  ],
+  "api_base": "https://api.nasa.gov",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "US public domain; NASA insignia and third-party images excluded",
+  "robots": "User-agent usasearch crawl-delay 1; * Allow /. No AI blocks.",
+  "terms_url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+  "clause": "generally are not subject to copyright in the United States",
+  "rate_limit": "Not stated for site; api.nasa.gov uses api.data.gov key (1000/hr)",
+  "eras": "1958-now space history, missions, science",
+  "regions": "Global/US",
+  "notes": "Credit NASA as source. Third-party images remain copyrighted. api.nasa.gov needs a key (not requested)."
+ },
+ {
+  "name": "US State Department",
+  "domains": [
+   "state.gov"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "US public domain (not verified)",
+  "robots": "robots.txt not retrievable by WebFetch (HTTP 403); not retried.",
+  "terms_url": "https://www.state.gov/privacy-policy/",
+  "clause": "none retrieved",
+  "rate_limit": "Unknown",
+  "eras": "1990s-now press statements, travel, treaty actions; Office of the Historian history.state.gov separate",
+  "regions": "US/global diplomacy",
+  "notes": "WebFetch received HTTP 403 on robots.txt and terms. Not retried. Content is US government work but job fetch not cleared. history.state.gov (FRUS) not rated here; worth a separate check."
+ },
+ {
+  "name": "USGS",
+  "domains": [
+   "usgs.gov",
+   "earthquake.usgs.gov"
+  ],
+  "api_base": "https://earthquake.usgs.gov/fdsnws/event/1",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "US public domain (non-USGS photos marked copyrighted)",
+  "robots": "User-agent *: disallows admin/search/core paths; no AI blocks.",
+  "terms_url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+  "clause": "While the content of most USGS websites is in the U.S. Public Domain",
+  "rate_limit": "FDSN event API limit 20000 events per query; USGS recommends GeoJSON feeds for automation",
+  "eras": "Earthquakes ~1900-now (ComCat), volcanoes, floods, geology",
+  "regions": "Global (earthquakes), US",
+  "notes": "No key. Good for dating and sizing earthquakes and eruptions. Events from before ~1900 sparse."
+ },
+ {
+  "name": "NOAA / National Weather Service",
+  "domains": [
+   "noaa.gov",
+   "weather.gov",
+   "api.weather.gov",
+   "ncei.noaa.gov"
+  ],
+  "api_base": "https://api.weather.gov",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "US public domain unless noted",
+  "robots": "User-agent *: disallows admin/search/core paths and faceted URLs; no AI blocks (noaa.gov).",
+  "terms_url": "https://www.weather.gov/disclaimer",
+  "clause": "web content is in the public domain unless noted otherwise",
+  "rate_limit": "NWS may block IPs that strain systems; limit retries to 1 per minute; api.weather.gov requires identifying User-Agent",
+  "eras": "1850s-now hurricanes, climate, storms (HURDAT2, Storm Events, NCEI)",
+  "regions": "US, global ocean and climate",
+  "notes": "No key for api.weather.gov or most NCEI data. Disclaimer text was only summarized by the fetch tool."
+ },
+ {
+  "name": "GOV.UK Content API",
+  "domains": [
+   "gov.uk"
+  ],
+  "api_base": "https://www.gov.uk/api/content",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Open Government Licence v3.0 (unless stated)",
+  "robots": "User-agent *: disallows /search/all* and print pages only; /api/content not disallowed. meta-externalagent blocked from search only; deepcrawl fully blocked.",
+  "terms_url": "https://www.gov.uk/help/terms-conditions",
+  "clause": "terms page not read; OGL v3 stated on gov.uk (not retrieved)",
+  "rate_limit": "Not stated; be polite, AhrefsBot crawl-delay 10 suggests ~1 req/10s ceiling for abusive bots",
+  "eras": "1990s-now UK government announcements, policy, press releases",
+  "regions": "UK",
+  "notes": "No key. Good for current UK events and press releases. Terms page was not fetched; OGL assumption from standard gov.uk footer."
+ },
+ {
+  "name": "legislation.gov.uk",
+  "domains": [
+   "legislation.gov.uk"
+  ],
+  "api_base": "https://www.legislation.gov.uk (append /data.xml, /data.json)",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Open Government Licence v3.0; EU-derived material under Decision 2011/833/EU",
+  "robots": "User-agent *: Crawl-delay 5; disallows */data.pdf, */data.docx, /defralex; no AI blocks.",
+  "terms_url": "https://www.legislation.gov.uk/developer/uris",
+  "clause": "All content is available under the Open Government Licence v3.0.",
+  "rate_limit": "Crawl-delay 5s; fair-use policy at /fair-use-policy (not read)",
+  "eras": "1267-now UK Acts and statutory instruments",
+  "regions": "UK",
+  "notes": "No key. Use data.xml/data.json not pdf/docx. Fair-use policy not read in full."
+ },
+ {
+  "name": "UK Parliament Hansard API",
+  "domains": [
+   "hansard.parliament.uk",
+   "hansard-api.parliament.uk",
+   "api.parliament.uk"
+  ],
+  "api_base": "https://hansard-api.parliament.uk",
+  "verdict": "api_only",
+  "needs_key": false,
+  "license": "Open Parliament Licence v3.0",
+  "robots": "robots.txt not retrievable by WebFetch (HTTP 403); not retried.",
+  "terms_url": "https://www.parliament.uk/copyright",
+  "clause": "use of Parliamentary material is governed by the Open Parliament Licence",
+  "rate_limit": "Not stated; API reportedly caps ~5500 rows per request",
+  "eras": "1803-now (Historic Hansard) debates and speeches",
+  "regions": "UK",
+  "notes": "robots.txt 403 to WebFetch, so website fetching is not cleared; the developer API is public and licence is OPL. No key found needed. Verify before use."
+ },
+ {
+  "name": "EUR-Lex / EU Publications Office",
+  "domains": [
+   "eur-lex.europa.eu",
+   "publications.europa.eu",
+   "op.europa.eu"
+  ],
+  "api_base": "https://publications.europa.eu/webapi/rdf/sparql",
+  "verdict": "api_only",
+  "needs_key": false,
+  "license": "Reuse under Commission Decision 2011/833/EU (CC BY 4.0 equivalent)",
+  "robots": "robots.txt fetch returned empty content; unknown.",
+  "terms_url": "https://eur-lex.europa.eu/content/help/data-reuse/reuse-contents-eurlex-details.html",
+  "clause": "EUR-Lex data is free of charge, subject to copyright conditions",
+  "rate_limit": "Not stated; SOAP web service needs registration; bulk dump needs EU login",
+  "eras": "1951-now EU treaties, law, Official Journal",
+  "regions": "EU",
+  "notes": "Use Cellar SPARQL/REST (no key) rather than scraping HTML. Web service and bulk dump need registration, not requested."
+ },
+ {
+  "name": "European Commission Press Corner",
+  "domains": [
+   "ec.europa.eu",
+   "commission.europa.eu"
+  ],
+  "api_base": "https://ec.europa.eu/commission/presscorner/api",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Commission reuse policy: CC BY 4.0 (Decision 2011/833/EU)",
+  "robots": "/commission/presscorner/robots.txt returned 404 (no rules at that path); root ec.europa.eu robots not checked.",
+  "terms_url": "https://commission.europa.eu/legal-notice_en",
+  "clause": "reuse policy rests on Commission Decision of 12 December 2011",
+  "rate_limit": "Not stated",
+  "eras": "1990s-now Commission press releases, statements",
+  "regions": "EU, Europe",
+  "notes": "MEDIUM-LOW CONFIDENCE: root robots not read; legal notice found via search only. Presscorner is a JS app; use its API/RSS endpoints."
+ },
+ {
+  "name": "UN Digital Library",
+  "domains": [
+   "digitallibrary.un.org"
+  ],
+  "api_base": "https://digitallibrary.un.org/search?of=xm",
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "UN: free non-commercial reuse with credit line",
+  "robots": "User-agent *: Crawl-Delay 5; disallows /rss, /search; no AI blocks.",
+  "terms_url": "https://digitallibrary.un.org/pages/?page=tos",
+  "clause": "web scraping and/or automated downloads ... not permitted without approval",
+  "rate_limit": "Crawl-delay 5s",
+  "eras": "1945-now UN documents, resolutions, votes",
+  "regions": "Global",
+  "notes": "Terms forbid automated downloads without Library approval (via search snippet; page itself not fetched). Request approval from the Dag Hammarskjold Library to upgrade."
+ },
+ {
+  "name": "UN News",
+  "domains": [
+   "news.un.org"
+  ],
+  "api_base": "https://news.un.org/en/rss",
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "UN website terms (not read)",
+  "robots": "User-agent *: blocks */news/, tags, search, ?page=, facets; story pages not blocked; no AI blocks.",
+  "terms_url": "https://www.un.org/en/about-us/terms-of-use",
+  "clause": "terms page 403 to WebFetch",
+  "rate_limit": "Not stated",
+  "eras": "2000s-now UN activities, humanitarian news",
+  "regions": "Global",
+  "notes": "Terms not read (HTTP 403), so not cleared. RSS exists. Re-rate if terms are read from a browser."
+ },
+ {
+  "name": "ReliefWeb (OCHA)",
+  "domains": [
+   "reliefweb.int",
+   "api.reliefweb.int"
+  ],
+  "api_base": "https://api.reliefweb.int/v2",
+  "verdict": "api_only",
+  "needs_key": true,
+  "license": "Per-document; source organizations retain copyright",
+  "robots": "robots.txt not retrievable by WebFetch (HTTP 403); not retried.",
+  "terms_url": "https://apidoc.reliefweb.int/",
+  "clause": "every API URL needs a pre-approved appname",
+  "rate_limit": "Older docs: 1000 calls/day, 1000 entries/call; current quota unconfirmed",
+  "eras": "1981-now humanitarian reports, disasters, crises",
+  "regions": "Global, esp. Africa, Asia, Middle East",
+  "notes": "Appname must be pre-approved since 1 Nov 2025 (not requested). Terms page URL I tried returned 404. Strong for disasters and conflicts after 1990s."
+ },
+ {
+  "name": "World Health Organization",
+  "domains": [
+   "who.int",
+   "iris.who.int"
+  ],
+  "api_base": null,
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Typically CC BY-NC-SA 3.0 IGO (not confirmed on page read)",
+  "robots": "User-agent list of ~527 'bad bots' (CCBot, Scrapy, Heritrix, SEO tools) blocked; GPTBot/ClaudeBot not listed.",
+  "terms_url": "https://www.who.int/about/policies/terms-of-use",
+  "clause": "not for sale or for use in conjunction with commercial purposes",
+  "rate_limit": "Not stated",
+  "eras": "1948-now disease outbreaks, health statistics",
+  "regions": "Global",
+  "notes": "Non-commercial reuse OK for this non-commercial project. Automated-access clause not found. LOW-MEDIUM confidence. Disease Outbreak News and GHO OData API are the useful parts."
+ },
+ {
+  "name": "OECD",
+  "domains": [
+   "oecd.org"
+  ],
+  "api_base": "https://sdmx.oecd.org/public/rest",
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Per OECD terms (not read)",
+  "robots": "User-agent *: disallows /content/dam/oecd/ and dynamicmedia only; no AI blocks.",
+  "terms_url": "https://www.oecd.org/en/about/terms-conditions.html",
+  "clause": "terms page 403 to WebFetch",
+  "rate_limit": "Not stated",
+  "eras": "1960-now economic statistics",
+  "regions": "OECD members",
+  "notes": "Terms not read, so not cleared. Robots permissive. Data API is SDMX (no key). Re-rate after reading terms."
+ },
+ {
+  "name": "IMF",
+  "domains": [
+   "imf.org",
+   "data.imf.org"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "IMF data: copy/publish with attribution; commercial needs permission",
+  "robots": "data.imf.org/robots.txt 404 (none).",
+  "terms_url": "https://www.imf.org/en/About/copyright-and-terms",
+  "clause": "bulk download of information by automated technology without explicit permission",
+  "rate_limit": "Not stated",
+  "eras": "1945-now macro data, country reports",
+  "regions": "Global",
+  "notes": "Terms also require permission to train LLMs. Prohibition targets bulk automated download; individual citation fine. Data API terms not stated."
+ },
+ {
+  "name": "Our World in Data",
+  "domains": [
+   "ourworldindata.org"
+  ],
+  "api_base": "https://ourworldindata.org/grapher",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "CC BY 4.0 for OWID work; third-party sources keep own licences",
+  "robots": "Only a Sitemap line was returned; no disallow rules.",
+  "terms_url": "https://ourworldindata.org/faqs",
+  "clause": "Our charts, articles, and data are licensed under CC BY",
+  "rate_limit": "Not stated; Chart Data API in development",
+  "eras": "Long-run statistics (population, income, health, war) from ~1500-now",
+  "regions": "Global",
+  "notes": "Check per-chart source licence. Not a news source; useful for quantitative claims and context. Attribution statement required."
+ },
+ {
+  "name": "GDELT Project",
+  "domains": [
+   "gdeltproject.org",
+   "api.gdeltproject.org",
+   "data.gdeltproject.org"
+  ],
+  "api_base": "https://api.gdeltproject.org/api/v2",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Free for any use with citation",
+  "robots": "User-agent *: Disallow /data/ on www host; no AI blocks. data.gdeltproject.org host not checked.",
+  "terms_url": "https://www.gdeltproject.org/about.html",
+  "clause": "must include a citation to the GDELT Project",
+  "rate_limit": "Not stated; community guidance ~1 req/5s (unverified)",
+  "eras": "1979-now (events), 2015-now full text GKG/DOC API",
+  "regions": "Global",
+  "notes": "Returns URLs, metadata, themes (event index), not full article text. Good for finding current events and which outlets covered them. No key."
+ },
+ {
+  "name": "Wikinews (English)",
+  "domains": [
+   "en.wikinews.org"
+  ],
+  "api_base": "https://en.wikinews.org/w/api.php",
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "CC BY 2.5 (en edition reportedly moved to CC BY 4.0 in Dec 2024; unverified)",
+  "robots": "/wiki/ allowed except Special: pages; /w/ and /api/ disallowed (except mobileview); SemrushBot crawl-delay 5; no AI blocks.",
+  "terms_url": "https://meta.wikimedia.org/wiki/Wikinews/License",
+  "clause": "Wikimedia APIs require a descriptive User-Agent; 429 on exceeding limits",
+  "rate_limit": "Keep concurrency <=3; Wikimedia tiered limits; send descriptive UA",
+  "eras": "2004-now (sparse after ~2019)",
+  "regions": "Global, English-speaking",
+  "notes": "Fetch /wiki/ article pages (allowed). robots disallows /w/api.php for anonymous clients, so prefer dumps or Special:Export-free paths. Low volume now."
+ },
+ {
+  "name": "Kremlin.ru (President of Russia)",
+  "domains": [
+   "kremlin.ru",
+   "en.kremlin.ru"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "CC BY 4.0 per secondary sources (older material CC BY 3.0); not read on site",
+  "robots": "robots.txt fetch failed with no output; unknown.",
+  "terms_url": "http://en.kremlin.ru/about/copyrights",
+  "clause": "terms page fetch failed",
+  "rate_limit": "Not stated",
+  "eras": "1999-now presidential statements, transcripts, decrees",
+  "regions": "Russia",
+  "notes": "Primary source for Russian state positions only. Licence confirmed only via Wikimedia template and press; official notice unread. Re-check from a clean host."
+ },
+ {
+  "name": "Press Information Bureau (India)",
+  "domains": [
+   "pib.gov.in"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Free reuse without prior approval; third-party material excluded",
+  "robots": "robots.txt HTTP 403 to WebFetch; not retried.",
+  "terms_url": "https://www.pib.gov.in/content/369_2_CopyrightPolicy.aspx",
+  "clause": "reproduced free of charge and no need for any prior approval",
+  "rate_limit": "Not stated",
+  "eras": "1990s-now Indian government releases",
+  "regions": "India",
+  "notes": "Licence is permissive (via search snippet) but fetch is refused, so not a job source until robots can be read. Must reproduce accurately and credit source."
+ },
+ {
+  "name": "Ministry of Foreign Affairs of Japan",
+  "domains": [
+   "mofa.go.jp"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Government of Japan Standard Terms v2.0 / PDL 1.0 pattern (not confirmed for MOFA)",
+  "robots": "robots.txt not retrievable by WebFetch (HTTP 403); not retried.",
+  "terms_url": "https://www.mofa.go.jp/about/legalmatters.html",
+  "clause": "user must cite the source (via search snippet)",
+  "rate_limit": "Not stated",
+  "eras": "1990s-now Japan foreign policy statements, treaties",
+  "regions": "Japan, Asia-Pacific",
+  "notes": "HTTP 403 on robots. Licence likely CC BY compatible but unconfirmed."
+ },
+ {
+  "name": "Prime Minister's Office of Japan (Kantei, English)",
+  "domains": [
+   "japan.kantei.go.jp"
+  ],
+  "api_base": null,
+  "verdict": "allowed",
+  "needs_key": false,
+  "license": "Government of Japan Standard Terms of Use (CC BY-compatible), not read",
+  "robots": "robots.txt returns 404 (no restrictions).",
+  "terms_url": "https://japan.kantei.go.jp/policies/terms_e.html",
+  "clause": "terms page not read; found via search",
+  "rate_limit": "Not stated",
+  "eras": "2000s-now PM speeches and cabinet decisions",
+  "regions": "Japan",
+  "notes": "MEDIUM-LOW confidence: absence of robots rules plus standard Japanese government terms; terms not fetched."
+ },
+ {
+  "name": "Open Government Canada (open.canada.ca)",
+  "domains": [
+   "open.canada.ca"
+  ],
+  "api_base": "https://open.canada.ca/data/api/3/action",
+  "verdict": "api_only",
+  "needs_key": false,
+  "license": "Open Government Licence - Canada 2.0",
+  "robots": "User-agent *: Crawl-delay 20; disallows search, admin, /core etc.; no AI blocks.",
+  "terms_url": "https://open.canada.ca/en/open-government-licence-canada",
+  "clause": "Your use of the Information will be governed by the terms of the licence",
+  "rate_limit": "Crawl-delay 20s",
+  "eras": "Datasets 1900s-now (historical census, Hansard, Treaties)",
+  "regions": "Canada",
+  "notes": "CKAN read-only calls need no key. Catalogue, not news. canada.ca news releases not rated."
+ },
+ {
+  "name": "Parliament of Australia",
+  "domains": [
+   "aph.gov.au"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "CC BY-NC-ND 3.0 Australia (House pages); attribution 'Parliament of Australia website'",
+  "robots": "robots.txt not retrievable by WebFetch (HTTP 403); not retried.",
+  "terms_url": "https://aph.gov.au/Help/Disclaimer_Privacy_Copyright",
+  "clause": "no automated-access clause found",
+  "rate_limit": "Not stated",
+  "eras": "1901-now Hansard, bills, research papers",
+  "regions": "Australia",
+  "notes": "HTTP 403 on robots. NC-ND licence fine for private fact-check but not for derivative text."
+ },
+ {
+  "name": "BBC",
+  "domains": [
+   "bbc.co.uk",
+   "bbc.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "BBC copyright; archive terms prohibit TDM/AI",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://www.bbc.co.uk/usingthebbc/terms/",
+  "clause": "BBC Archive terms prohibit text and data mining and AI training (via search)",
+  "rate_limit": "N/A",
+  "eras": "1930s-now",
+  "regions": "Global",
+  "notes": "Citation link only. Fetch tool refuses the domain."
+ },
+ {
+  "name": "CBC (Canada)",
+  "domains": [
+   "cbc.ca"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "CBC copyright (not read)",
+  "robots": "robots.txt not retrievable by WebFetch (HTTP 403); not retried.",
+  "terms_url": "https://www.cbc.ca/aboutcbc/discover/termsofuse",
+  "clause": "not read",
+  "rate_limit": "N/A",
+  "eras": "1936-now",
+  "regions": "Canada",
+  "notes": "HTTP 403 on robots; citation only."
+ },
+ {
+  "name": "ABC Australia",
+  "domains": [
+   "abc.net.au"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "ABC copyright; some CC content (not read)",
+  "robots": "Disallow / for 26 named bots incl. GPTBot, ClaudeBot, Claude-Web, anthropic-ai, Google-Extended, CCBot, PerplexityBot.",
+  "terms_url": "https://www.abc.net.au/about/terms-of-use",
+  "clause": "robots.txt: ClaudeBot, Claude-Web, anthropic-ai Disallow /",
+  "rate_limit": "N/A",
+  "eras": "1932-now",
+  "regions": "Australia, Pacific",
+  "notes": "Unlisted agents not blocked by robots, but terms not read and the organization actively opposes AI crawling."
+ },
+ {
+  "name": "Deutsche Welle",
+  "domains": [
+   "dw.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "(c) Deutsche Welle; German copyright",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://www.dw.com/en/conditions-of-participation/a-16372765",
+  "clause": "not read",
+  "rate_limit": "N/A",
+  "eras": "1990s-now",
+  "regions": "Germany, Europe",
+  "notes": "Citation only; fetch tool refuses domain."
+ },
+ {
+  "name": "France 24",
+  "domains": [
+   "france24.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "France Medias Monde copyright",
+  "robots": "Disallow / for Claude-Web, ClaudeBot, Claude-User, Claude-SearchBot, Claude-Code, GPTBot etc. (~200 bots); * allowed.",
+  "terms_url": "https://www.france24.com/en/terms-of-use",
+  "clause": "robots.txt: ClaudeBot, Claude-User, Claude-Code Disallow /",
+  "rate_limit": "Crawl-delay 5-10 for partner bots",
+  "eras": "2006-now",
+  "regions": "France, Africa, Middle East",
+  "notes": "Names Claude-Code explicitly; do not fetch."
+ },
+ {
+  "name": "NHK",
+  "domains": [
+   "nhk.or.jp",
+   "www3.nhk.or.jp"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "NHK copyright",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://www3.nhk.or.jp/nhkworld/en/info/terms/",
+  "clause": "not read",
+  "rate_limit": "N/A",
+  "eras": "1990s-now",
+  "regions": "Japan",
+  "notes": "Citation only; fetch tool refuses domain."
+ },
+ {
+  "name": "RNZ (Radio New Zealand)",
+  "domains": [
+   "rnz.co.nz"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "RNZ content often CC BY-NC 4.0 (unverified)",
+  "robots": "Disallow / for ~30 named AI bots incl. ClaudeBot, Claude-SearchBot, Claude-Web, GPTBot; Crawl-delay 7; ambiguous duplicate * group.",
+  "terms_url": "https://www.rnz.co.nz/about/terms-of-use",
+  "clause": "robots.txt Disallow / for ClaudeBot and Claude-SearchBot",
+  "rate_limit": "Crawl-delay 7",
+  "eras": "2000s-now",
+  "regions": "New Zealand, Pacific",
+  "notes": "Licence may allow reuse, but robots blocks AI agents and terms unread. Verify licence page before any use."
+ },
+ {
+  "name": "Financial Times",
+  "domains": [
+   "ft.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "FT copyright, paywalled",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://help.ft.com/legal-privacy/terms-conditions/",
+  "clause": "not read",
+  "rate_limit": "N/A",
+  "eras": "1888-now",
+  "regions": "Global business",
+  "notes": "Citation only."
+ },
+ {
+  "name": "TIME",
+  "domains": [
+   "time.com"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "TIME copyright",
+  "robots": "User-agent *: Disallow /c/ only; Googlebot restricted; no AI blocks.",
+  "terms_url": "https://time.com/terms-of-use/",
+  "clause": "terms not read",
+  "rate_limit": "N/A",
+  "eras": "1923-now",
+  "regions": "US, global",
+  "notes": "Robots permissive but terms unread; not cleared for jobs."
+ },
+ {
+  "name": "NBC News",
+  "domains": [
+   "nbcnews.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "NBCUniversal copyright",
+  "robots": "Disallow / (with exceptions) for anthropic-ai, ClaudeBot, Claude-Web, Claude-User, Claude-SearchBot, GPTBot, CCBot, PerplexityBot and ~50 others.",
+  "terms_url": "https://www.nbcuniversal.com/terms",
+  "clause": "robots.txt blocks ClaudeBot, Claude-User, Claude-Web",
+  "rate_limit": "N/A",
+  "eras": "1940s-now",
+  "regions": "US",
+  "notes": "Do not fetch."
+ },
+ {
+  "name": "CNN",
+  "domains": [
+   "cnn.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "CNN/WBD copyright",
+  "robots": "Disallow / for 83 named bots incl. ClaudeBot, Claude-User, Claude-Web, anthropic-ai, GPTBot, PerplexityBot.",
+  "terms_url": "https://www.cnn.com/terms",
+  "clause": "robots.txt blocks ClaudeBot, Claude-User, Claude-Web",
+  "rate_limit": "N/A",
+  "eras": "1980-now",
+  "regions": "US, global",
+  "notes": "Do not fetch."
+ },
+ {
+  "name": "The New York Times",
+  "domains": [
+   "nytimes.com"
+  ],
+  "api_base": "https://developer.nytimes.com",
+  "verdict": "citation_only",
+  "needs_key": true,
+  "license": "NYT copyright; terms reportedly prohibit AI/TDM",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://help.nytimes.com/hc/en-us/articles/115014893428-Terms-of-Service",
+  "clause": "reported ToS bar AI scraping (search headline only; not read)",
+  "rate_limit": "N/A",
+  "eras": "1851-now",
+  "regions": "US, global",
+  "notes": "Citation only. Developer APIs (Archive, Article Search) need key and have own terms; not requested."
+ },
+ {
+  "name": "The Washington Post",
+  "domains": [
+   "washingtonpost.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "WaPo copyright",
+  "robots": "Disallow / for anthropic-ai, ClaudeBot, Claude-Web, CCBot, PerplexityBot, GPTBot-class and archive crawlers.",
+  "terms_url": "https://www.washingtonpost.com/terms-of-service/",
+  "clause": "robots.txt blocks ClaudeBot, Claude-Web, anthropic-ai",
+  "rate_limit": "N/A",
+  "eras": "1877-now",
+  "regions": "US",
+  "notes": "Do not fetch."
+ },
+ {
+  "name": "Reuters",
+  "domains": [
+   "reuters.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "Thomson Reuters copyright",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://www.reuters.com/info-pages/terms-of-use/",
+  "clause": "not read",
+  "rate_limit": "N/A",
+  "eras": "1851-now",
+  "regions": "Global",
+  "notes": "Citation only."
+ },
+ {
+  "name": "Associated Press",
+  "domains": [
+   "apnews.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "AP copyright",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://www.ap.org/about/terms-of-use",
+  "clause": "not read",
+  "rate_limit": "N/A",
+  "eras": "1846-now",
+  "regions": "Global",
+  "notes": "Citation only."
+ },
+ {
+  "name": "The Guardian",
+  "domains": [
+   "theguardian.com"
+  ],
+  "api_base": "https://content.guardianapis.com",
+  "verdict": "citation_only",
+  "needs_key": true,
+  "license": "Open Platform: developer keys for non-commercial use; forum reading says ML/text mining barred",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://open-platform.theguardian.com/access/",
+  "clause": "API content for personal and non-commercial use only (via search snippet)",
+  "rate_limit": "Developer key rate-limited (figures unverified)",
+  "eras": "1821-now",
+  "regions": "UK, global",
+  "notes": "API key required, not requested. Terms reportedly bar text mining; not read directly."
+ },
+ {
+  "name": "Al Jazeera",
+  "domains": [
+   "aljazeera.com"
+  ],
+  "api_base": null,
+  "verdict": "forbidden",
+  "needs_key": false,
+  "license": "All rights reserved; robots header restricts use",
+  "robots": "Header prohibits ML, AI, TDM, scraping without written permission; Disallow / for anthropic-ai, ClaudeBot, Claude-Web, GPTBot, PerplexityBot etc.",
+  "terms_url": "https://www.aljazeera.com/terms",
+  "clause": "prohibits text and data mining, creating archived or cached datasets",
+  "rate_limit": "N/A",
+  "eras": "1996-now",
+  "regions": "Middle East, global",
+  "notes": "Explicit prohibition in robots.txt header (paraphrased by fetch tool)."
+ },
+ {
+  "name": "NPR",
+  "domains": [
+   "npr.org"
+  ],
+  "api_base": "https://dev.npr.org",
+  "verdict": "citation_only",
+  "needs_key": true,
+  "license": "NPR copyright",
+  "robots": "robots.txt fetch timed out (60s); not retried.",
+  "terms_url": "https://www.npr.org/about-npr/179876898/terms-of-use",
+  "clause": "not read",
+  "rate_limit": "N/A",
+  "eras": "1971-now",
+  "regions": "US",
+  "notes": "Citation only. NPR API requires registration (not requested)."
+ },
+ {
+  "name": "CBS News",
+  "domains": [
+   "cbsnews.com"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Paramount copyright",
+  "robots": "Disallow / for GPTBot, MAZBot, panscient.com only; * disallows /search, /stories etc.",
+  "terms_url": "https://www.paramount.com/terms-of-use",
+  "clause": "terms not read",
+  "rate_limit": "N/A",
+  "eras": "1950s-now",
+  "regions": "US",
+  "notes": "Robots permits unlisted UAs but terms unread; not cleared."
+ },
+ {
+  "name": "ABC News (US)",
+  "domains": [
+   "abcnews.go.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "Disney copyright",
+  "robots": "Disallow / for GPTBot, Google-Extended, CCBot, ChatGPT-User, anthropic-ai, Bytespider, Omgili, FacebookBot.",
+  "terms_url": "https://disneytermsofuse.com/",
+  "clause": "robots.txt blocks anthropic-ai",
+  "rate_limit": "N/A",
+  "eras": "1940s-now",
+  "regions": "US",
+  "notes": "Do not fetch."
+ },
+ {
+  "name": "Fox Business",
+  "domains": [
+   "foxbusiness.com"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Fox copyright",
+  "robots": "User-agent *: disallows /search, /topics/, /xid; no AI blocks.",
+  "terms_url": "https://www.foxbusiness.com/terms-of-use",
+  "clause": "terms not read",
+  "rate_limit": "N/A",
+  "eras": "1990s-now",
+  "regions": "US finance",
+  "notes": "Robots permissive but terms unread; not cleared."
+ },
+ {
+  "name": "Politico",
+  "domains": [
+   "politico.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "Politico copyright",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://www.politico.com/terms-of-service",
+  "clause": "not read",
+  "rate_limit": "N/A",
+  "eras": "2007-now",
+  "regions": "US, EU",
+  "notes": "Citation only."
+ },
+ {
+  "name": "Axios",
+  "domains": [
+   "axios.com"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Axios copyright",
+  "robots": "Disallow / for CCBot, Bytespider, Diffbot, Amazonbot etc.; Google-Extended allowed; * blocks /core, /admin, /api only.",
+  "terms_url": "https://www.axios.com/terms",
+  "clause": "terms not read",
+  "rate_limit": "Twitterbot crawl-delay 1",
+  "eras": "2017-now",
+  "regions": "US",
+  "notes": "Robots permissive for unlisted UAs; terms unread."
+ },
+ {
+  "name": "Bloomberg",
+  "domains": [
+   "bloomberg.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "Bloomberg copyright, paywalled",
+  "robots": "Disallow / (except /select/) for ClaudeBot, Claude-User, Claude-Web, anthropic-ai, GPTBot, OAI-SearchBot, PerplexityBot, and python-requests.",
+  "terms_url": "https://www.bloomberg.com/notices/tos/",
+  "clause": "robots.txt blocks ClaudeBot, Claude-User, anthropic-ai",
+  "rate_limit": "N/A",
+  "eras": "1990-now",
+  "regions": "Global finance",
+  "notes": "Do not fetch."
+ },
+ {
+  "name": "CNBC",
+  "domains": [
+   "cnbc.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "NBCUniversal copyright",
+  "robots": "Disallow / (except /select/) for ClaudeBot, Claude-User, Claude-Web, Claude-SearchBot, anthropic-ai, GPTBot, PerplexityBot and many more.",
+  "terms_url": "https://www.cnbc.com/nbcuniversal-terms-of-service/",
+  "clause": "robots.txt blocks ClaudeBot, Claude-User, Claude-Web",
+  "rate_limit": "N/A",
+  "eras": "1989-now",
+  "regions": "Global finance",
+  "notes": "Do not fetch."
+ },
+ {
+  "name": "South China Morning Post",
+  "domains": [
+   "scmp.com"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "SCMP copyright",
+  "robots": "User-agent *: Crawl-delay 10; disallows login, admin, PDFs, tracking params; no AI blocks.",
+  "terms_url": "https://www.scmp.com/terms-conditions",
+  "clause": "terms not read",
+  "rate_limit": "Crawl-delay 10",
+  "eras": "1990s-now",
+  "regions": "China, Hong Kong, Asia",
+  "notes": "Robots permissive but terms unread; not cleared."
+ },
+ {
+  "name": "The Times of India",
+  "domains": [
+   "timesofindia.indiatimes.com"
+  ],
+  "api_base": null,
+  "verdict": "citation_only",
+  "needs_key": false,
+  "license": "Bennett Coleman copyright",
+  "robots": "WebFetch refused this domain ('unable to fetch'); robots and terms NOT read; not worked around.",
+  "terms_url": "https://timesofindia.indiatimes.com/termsandcondition",
+  "clause": "not read",
+  "rate_limit": "N/A",
+  "eras": "1838-now",
+  "regions": "India",
+  "notes": "Citation only."
+ },
+ {
+  "name": "The Japan Times",
+  "domains": [
+   "japantimes.co.jp"
+  ],
+  "api_base": null,
+  "verdict": "browser_only",
+  "needs_key": false,
+  "license": "Japan Times copyright",
+  "robots": "User-agent *: disallows ajax, print, .php, archives, rss; no AI blocks.",
+  "terms_url": "https://www.japantimes.co.jp/terms-of-use/",
+  "clause": "terms not read",
+  "rate_limit": "N/A",
+  "eras": "1897-now",
+  "regions": "Japan",
+  "notes": "Robots permissive but terms unread; not cleared."
+ }
+]

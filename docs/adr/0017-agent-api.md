@@ -1,6 +1,6 @@
 # 0017 — Agents work through an authenticated API, never the database
 
-**Status:** proposed (November 2026); amended by [0021](0021-the-cutover.md) (nothing imports over Postgres now); refined by [0026](0026-content-waves.md) (content waves); amended by [0035](0035-automated-daily-rounds.md) (operation scopes and a round's endpoints)
+**Status:** proposed (November 2026); amended by [0021](0021-the-cutover.md) (nothing imports over Postgres now); refined by [0026](0026-content-waves.md) (content waves); amended by [0035](0035-automated-daily-rounds.md) (operation scopes and a round's endpoints); amended by [0036](0036-evidence-packs.md) (stored pages over the API, excerpts checked on complete and edit files)
 
 ## Context
 

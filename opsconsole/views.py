@@ -380,7 +380,7 @@ def task_detail(request, pk):
     now = timezone.now()
     return _render(request, "task_detail.html", {
         "t": task, "now": now, "stale": task.status == "claimed" and task.lease_until and task.lease_until < now,
-        "revisions": revs[:50], "revision_count": revs.count(), "error": mask_secrets(task.error),
+        "revisions": revs[:50], "revision_count": revs.count(), "error": mask_secrets(task.error), "pack": Q.evidence_pack(task),
     }, section="work")
 
 

@@ -18,7 +18,9 @@ class Publisher(models.Model):
 
     class Fetch(models.TextChoices):
         ALLOWED = "allowed", "automated fetching allowed"
+        API_ONLY = "api_only", "jobs only through its API (api_base), and only with a key where one is needed"
         BROWSER_ONLY = "browser_only", "blocks automated readers: read in a browser"
+        CITATION_ONLY = "citation_only", "cite the link; never fetched by a job (an agent may read it in a browser)"
         FORBIDDEN = "forbidden", "never fetch or cite (terms forbid it)"
 
     domain = models.CharField(max_length=200, unique=True)
@@ -33,13 +35,17 @@ class Publisher(models.Model):
     license = models.CharField(max_length=200, blank=True, help_text='e.g. "CC BY-SA 4.0", "all rights reserved".')
     fetch_policy = models.CharField(max_length=16, choices=Fetch.choices, default=Fetch.ALLOWED)
     access_notes = models.TextField(blank=True, help_text='e.g. "no automated fetching (ToS)".')
+    # For `api_only` (ADR 0037): the only URLs a job may request, and whether that needs a key.
+    api_base = models.CharField(max_length=500, blank=True, help_text='api_only: the URL prefix a job may request, optionally with a required query parameter after a space ("https://www.loc.gov/ ?fo=json"). Several, separated by " | ".')
+    api_needs_key = models.BooleanField(default=False, help_text="api_only: the API needs a key; a job uses it only when api_key_setting names a setting that is set.")
+    api_key_setting = models.CharField(max_length=60, blank=True, help_text='The setting holding the key (e.g. "SMITHSONIAN_API_KEY"); empty: no key exists, so the API stays off.')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["domain"]
         constraints = [
             models.CheckConstraint(condition=Q(tier__isnull=True) | Q(tier__gte=1, tier__lte=4), name="publisher_tier_1_to_4"),
-            models.CheckConstraint(condition=Q(fetch_policy__in=["allowed", "browser_only", "forbidden"]), name="publisher_fetch_policy_valid"),
+            models.CheckConstraint(condition=Q(fetch_policy__in=["allowed", "api_only", "browser_only", "citation_only", "forbidden"]), name="publisher_fetch_policy_valid"),
             models.CheckConstraint(condition=~Q(domain__regex=r"(^|\.)openstax\.org$") | Q(fetch_policy="forbidden"), name="publisher_openstax_forbidden"),
         ]
 

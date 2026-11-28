@@ -16,7 +16,7 @@ import re
 import time
 import urllib.robotparser
 from dataclasses import dataclass, field
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 import httpx
 from django.conf import settings
@@ -114,21 +114,46 @@ class Fetcher:
         self.close()
 
     # Policy ----------------------------------------------------------------------------------------------------
-    def refusal(self, url: str, *, robots: bool = True) -> str:
-        """Why the policy forbids fetching `url` ("" = allowed)."""
+    def refusal(self, url: str, *, robots: bool = True, full_url: str = "") -> str:
+        """Why the policy forbids fetching `url` ("" = allowed). `full_url` is the URL with its query parameters, which
+        an `api_only` publisher's API base may require ("?fo=json")."""
         parts = urlsplit(url)
         if parts.scheme not in ("http", "https"):
             return f"not an http(s) URL: {url}"
         if reason := policy.never_fetch_reason(url):
             return reason
         fetch_policy = self._publisher_policy(domain_of(url))
-        if fetch_policy and fetch_policy != "allowed":
+        if fetch_policy == "api_only":
+            if why := self.api_refusal(full_url or url):
+                return why
+        elif fetch_policy and fetch_policy != "allowed":
             return f"publisher {domain_of(url)} is {fetch_policy}: read in a browser, never by a job"
         host = (parts.hostname or "").lower()
         if host in self.blocked:
             return f"{host} answered with a bot challenge earlier in this run"
         if robots and host not in policy.API_HOSTS and not self._robots_allow(url):
             return f"robots.txt on {host} disallows {self.robots_token}"
+        return ""
+
+    def api_refusal(self, url: str) -> str:
+        """For an `api_only` publisher (ADR 0037): "" when `url` is under its API base and any key it needs is set."""
+        return _db_api_refusal(url)
+
+    def ai_blocked(self, url: str) -> str:
+        """Why robots.txt refuses `url` to an AI crawler named in it (ClaudeBot, anthropic-ai, GPTBot …), else "".
+        The evidence-pack job doesn't fetch such a site whatever our User-Agent says (ADR 0037): the site has said it
+        wants no AI readers. Reads robots.txt through the usual cache; Wikimedia's API hosts are exempt as always."""
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+        if host in policy.API_HOSTS:
+            return ""
+        self._robots_allow(url)
+        rp = self._robots.get(host)
+        path = quote(parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+        for entry in getattr(rp, "entries", []) or []:
+            named = [a for a in entry.useragents if a.lower().split("/")[0] in policy.AI_AGENTS]
+            if named and not entry.allowance(path):
+                return f"robots.txt on {host} disallows the AI crawler {named[0]}"
         return ""
 
     def _robots_allow(self, url: str) -> bool:
@@ -160,7 +185,7 @@ class Fetcher:
         return self.request("HEAD", url, **kw)
 
     def request(self, method: str, url: str, *, params=None, headers=None, etag="", last_modified="", robots=True, timeout=None) -> Fetched:
-        if reason := self.refusal(url, robots=robots):
+        if reason := self.refusal(url, robots=robots, full_url=str(httpx.URL(url, params=params)) if params else url):
             logger.warning("refused %s: %s", _shown(url), reason)
             raise Refused(reason)
         h = dict(headers or {})
@@ -250,6 +275,26 @@ def _retry_after(value: str | None, default: float) -> float:
         return min(max(float(value), 1.0), 60.0)
     except (TypeError, ValueError):
         return min(default, 60.0)
+
+
+def _nearest_publisher(domain: str):
+    from evidence.models import Publisher
+
+    parts = domain.split(".")
+    candidates = [".".join(parts[i:]) for i in range(len(parts) - 1)]
+    rows = {p.domain: p for p in Publisher.objects.filter(domain__in=candidates)}
+    return next((rows[d] for d in candidates if d in rows), None)
+
+
+def _db_api_refusal(url: str) -> str:
+    pub = _nearest_publisher(domain_of(url))
+    if pub is None or pub.fetch_policy != "api_only":
+        return ""
+    if not policy.api_base_allows(pub.api_base, url):
+        return f"publisher {pub.domain} is api_only: only through {pub.api_base or '(no API base recorded)'}"
+    if pub.api_needs_key and not (pub.api_key_setting and getattr(settings, pub.api_key_setting, "")):
+        return f"publisher {pub.domain} is api_only and its API needs a key that isn't set: off until one exists"
+    return ""
 
 
 def _db_publisher_policy(domain: str) -> str:

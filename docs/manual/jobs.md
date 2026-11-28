@@ -30,7 +30,7 @@ The tag in the table is the group of the job in `ingest/job_defs.py`: `set-up`, 
 
 | Name | Tag | Schedule | Reads | Writes | Safe to run again? | When it fails |
 |---|---|---|---|---|---|---|
-| `seed_sources` | `set-up` | Each week (10,080 minutes) | `ingest/seed.py`: `PUBLISHERS`, `FEEDS`, `VERDICTS` | New `Publisher` and `Feed` rows (as `job:seed_sources`); the terms verdicts one time (`JobState` "terms_verdicts_v1") | Yes. It makes only the rows that do not exist. It never changes a tier, a `fetch_policy` or an `enabled` value. | Read the error. Usually a row in `ingest/seed.py` is not valid. Correct the code and deploy. |
+| `seed_sources` | `set-up` | Each week (10,080 minutes) | `ingest/seed.py`: `PUBLISHERS`, `FEEDS`, `VERDICTS`; the source verdicts of November 28, 2026 (`ingest/ratings.py`, one time for each database) | New `Publisher` and `Feed` rows (as `job:seed_sources`); the terms verdicts one time (`JobState` "terms_verdicts_v1") | Yes. It makes only the rows that do not exist. It never changes a tier, a `fetch_policy` or an `enabled` value. | Read the error. Usually a row in `ingest/seed.py` is not valid. Correct the code and deploy. |
 | `seed_branch_entities` | `set-up` | Each week | Branches; Wikidata | `BranchEntity`, `Entity`, `WikiTitle`; `map_branch_entities` tasks | Yes. The dedupe key `branch:<slug>` keeps one open task for each branch. | If Wikidata does not answer, wait for the next run. |
 | `portal` | `sources` | Feed, each 60 minutes | The Wikipedia Current events portal, the last 3 days | `Document`, `DocumentVersion`, raw bytes, entities, `Candidate` | Yes. The `source_key` of a candidate makes a second read update the same candidate. | If the page format changed, correct the parser and record the test cassette again. |
 | `year_pages` | `sources` | Feed, each day (1,440 minutes) | The Wikipedia pages `<Year> in <Country>`, 25 for each run | The same as `portal` | Yes. A second run reads the next pages. | The same as `portal` |
@@ -51,6 +51,7 @@ The tag in the table is the group of the job in `ingest/job_defs.py`: `set-up`, 
 | `second_source` | `upkeep` | Each day | Claims that only Wikipedia supports, from a bookmark (`JobState` "second_source"); the lookup adapters | `SuggestedSource` rows; `verify_claim` tasks at priority 2 | No. Each run does the next batch from its bookmark. | Wait for the next day. |
 | `gap_waves` | `upkeep` | Each day | Published events, window by window, in the content waves | `fill_gap` tasks, at most `FILL_GAP_TASKS_PER_DAY` (40) new each day; the active wave (`JobState` "gap_waves") | Yes. It makes no requests, and the dedupe key `gap:<branch>:<from>:<to>` stops a second task. | Read the traceback. Run it again after you correct the cause. |
 | `gap_pointers` | `upkeep` | Each 60 minutes | Queued `fill_gap` tasks, 20 for each run; Wikipedia history sections; the lookup adapters | `pointers` in the task payloads | Yes | If a source does not answer, the next run tries again. |
+| `prefetch_sources` | `upkeep` | Each 15 minutes, after all other jobs | Queued `write_event`, `fill_gap` and `verify_claim` tasks, 40 for each run. The pages that they cite or suggest, only from publishers with a tier and the policy `allowed`. Catalog pages through their APIs. At most 60 requests for each run, 8 for each host. | `PrefetchedPage` rows; the clean text of each page in the private `raw` store (`pages/`); `evidence_pack` and `unreadable` in the task payloads | Yes. The job uses a page from the last 7 days again with no request. | A `partial` run is usual when a site does not answer. The tasks stay valid without a pack. The next run tries again. |
 
 ## Commands
 
@@ -59,6 +60,7 @@ heroku run python manage.py run_jobs --list -a humanitributary-staging     # eac
 heroku run python manage.py run_job <name> -a humanitributary-staging      # one job now, due or not, paused or not
 heroku run python manage.py run_job <name> --feed "<feed name>" -a humanitributary-staging   # one feed of a feed job
 heroku run python manage.py digest -a humanitributary-staging              # the runs of the last 24 hours, the queue, the signals
+heroku run python manage.py evidence_coverage -a humanitributary-staging   # the share of tasks with a stored non-Wikipedia source
 ```
 
 > **CAUTION:** Do not run `link_health` or `second_source` two times within one day. A second `link_health` run can

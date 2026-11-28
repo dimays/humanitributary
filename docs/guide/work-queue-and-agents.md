@@ -209,9 +209,10 @@ clusters and priority are computed is in [ingestion](ingestion.md).
 | `possible_duplicates` | Existing events that look alike: `event`, `title`, `when`, `similarity`. |
 | `instructions` | A pointer to the skill. |
 | `suggested_sources`, `suggested_at` | Added later by `enrich_tasks`: lookup hits from open APIs (not evidence). |
+| `evidence_pack`, `unreadable`, `evidence_ready`, `evidence_pack_at`, `evidence_urls` | Added later by `prefetch_sources` ([evidence packs](#evidence-packs)). |
 
 On a re-run, `process` rewrites a queued task's payload and priority if they
-changed, keeping `suggested_sources`.
+changed, keeping `suggested_sources` and the evidence-pack keys.
 
 What the agent does: decide whether the story is a duplicate, not worth an
 event, or one event; read and cite its sources; complete the task with
@@ -239,6 +240,7 @@ Built by `evidence/sweep.py` `task_payload`. The reasons, their priorities
 | `parent_claim` | For an atomic claim, its "as written" parent. |
 | `page_changes` | For `content_changed`: each changed page's diff from ingestion's stored versions (or its new text when the old one is missing). |
 | `todo` | One sentence saying what to do for this reason. |
+| `evidence_pack`, `unreadable`, … | Added later by `prefetch_sources`, from the cited pages and the suggestions ([evidence packs](#evidence-packs)). |
 
 ### Verify tasks from second sources
 
@@ -306,11 +308,13 @@ payload key, is in [content waves](content-waves.md#the-payload). In short:
 `wave`, `window` (`from`, `to`, `label`), `gap` (`kind`, counts, `run`),
 `branch` (its text, span, region, lineage, links, `id_prefixes`, Wikipedia
 articles and QIDs), `before` / `after` (the published events around the
-window), `in_window`, `priority_parts`, `instructions`, and later `pointers`
-(the `gap_pointers` job: Wikipedia history sections and lookup hits, unread).
+window), `in_window`, `priority_parts`, `instructions`, later `pointers`
+(the `gap_pointers` job: Wikipedia history sections and lookup hits, unread),
+and the evidence-pack keys (`prefetch_sources`: those pages and the branch's
+article, read; [evidence packs](#evidence-packs)).
 
 On a re-run, `gap_waves` refreshes a queued task's payload and priority if
-they changed, keeping `pointers`, and cancels a queued task whose window is
+they changed, keeping `pointers` and the evidence-pack keys, and cancels a queued task whose window is
 no longer a gap.
 
 What the agent does: read about the branch in that window and complete with
@@ -378,10 +382,14 @@ production URL.
 | `run-round` | a whole round | The daily routine's skill ([rounds](#rounds)): the settings first (stop when paused), `GET queue`, a plan by value (gaps, then `map_branch_entities`, `write_event`, `verify_claim`) and the round size, `POST rounds`, role agents with the four skills above, fresh reviewers in batches of at most 40 drafts who read every cited page and write the edit file, `edits/check` then `edits/apply`, `releases/check` then `releases/publish` when everything passes, the round recorded, a summary posted. It carries the review rounds' hard-won rules and the cloud constraint (no browser: `browser_only` sources are never fetched by script; a draft resting on one only is held). |
 
 Every skill that records evidence (`drain-write-events`, `fill-gaps`, `verify-claims`, `verify-stale-claims`)
-carries the same excerpt rule: copy the sentence from the page's own text (the in-app browser's page text, or the
-raw page where the site allows scripts), never from a fetch tool's summary, whose "quotes" are often paraphrased.
-If only a summary is reachable, the cite goes in without an excerpt. Each review round so far had to re-copy
-summarized excerpts; reviewers still check every excerpt against the page.
+carries the same section, "The evidence pack: read it first": read the passages and `GET documents/<doc_id>`, copy
+excerpts from the stored text (checked with `POST evidence/check-excerpt`), and open a browser only for an `unreadable`
+URL whose reason is `browser_only`. For a page not in the pack the old excerpt rule holds: copy the sentence from
+the page's own text (the in-app browser's page text, or the raw page where the site allows scripts), never from a
+fetch tool's summary, whose "quotes" are often paraphrased; if only a summary is reachable, the cite goes in without
+an excerpt. `run-round` briefs its role agents and reviewers the same way: a reviewer reads a stored page with `GET
+documents?url=` and checks excerpts against it, and in a cloud round a draft only `browser_only` pages support is
+held.
 
 Every task skill also says to **extend a long lease** (`POST tasks/<id>/extend` when one task's work passes about
 20 minutes, and every 20 minutes after), and the skills that fetch pages (`drain-write-events`, `fill-gaps`,
@@ -441,6 +449,8 @@ From `agentapi/views.py` (routes in `agentapi/urls.py`):
 | `GET branches/<slug>` | A branch: its events (up to 300 listed), latest metrics, open proposals. |
 | `GET claims/<id>` | A claim with its evidence and parts, in the `verify_claim` payload's shape. |
 | `GET search?q=…&kind=event` | Events and branches by title or name (trigram similarity; `kind` is `event` or `branch`, `limit` up to 50). |
+| `GET documents/<id>`, `GET documents?url=…` | A stored page's clean text ([evidence packs](#evidence-packs)): for the holder of a claimed task whose pack names it, or a `review` token when an entry in review cites it. |
+| `POST evidence/check-excerpt` | `{"doc_id" | "url", "excerpt"}` → whether it is verbatim on the stored page, and the closest passage when not. |
 | `GET queue` | What a round plans from ([below](#a-rounds-operations)). Any token. |
 | `POST edits/check`, `POST edits/apply` | An edit file checked (a dry run) and applied. Scope `review`. |
 | `POST releases/check`, `POST releases/publish` | The release gates, and a release. Scope `publish`. |
@@ -516,7 +526,17 @@ results, so `process` reads `result.entry` unchanged.
    with `"retryable": true`, never a 500; the task is still yours. The
    sort-key race behind the 500 of November 27, 2026 is closed at its root
    by the order lock ([content model](content-model.md#how-entries-are-ordered)).
-4. A result that is well-formed but can't be applied (an id that exists, an
+4. **Excerpts are checked against stored pages** (`agentapi/evidence.py`
+   `result_mismatches`, before anything is applied, and not on a replay): for
+   `write_event`, `fill_gap` (and `audit`) every cite's `excerpt`, for
+   `verify_claim` every evidence row's, whose URL's page itself is stored
+   (`ingest.prefetch.stored(url, pages_only=True)`: an API's record of a page
+   holds less than the page, so it never causes a refusal) must be on it,
+   verbatim up to whitespace. A
+   mismatch is a 422 with `problems` and `excerpts`
+   (`[{where, url, doc_id, fetched_at, excerpt, closest}]`); the task is still
+   yours. A page that isn't stored isn't checked here.
+5. A result that is well-formed but can't be applied (an id that exists, an
    unknown branch, an uncitable URL, a task about another claim or
    proposal, operations with placeholders left, a `fill_gap` event outside
    its window) raises `ApplyError`: a 422
@@ -544,9 +564,12 @@ the console's single-publish lock covers both doors.
 
 **Agent rules on edit files** (`agent_rules`): a reviewer may not `approve`
 an entry whose insert Revision is its own (independence: nothing reaches
-readers without a second reader), and an `add_event` or `add_branch` may not
+readers without a second reader), an `add_event` or `add_branch` may not
 carry `"status": "published"` (an added entry lands in review, for the next
-round's reviewers).
+round's reviewers), and every excerpt on a stored page (an `add_evidence`'s,
+and the cites of `add_cites`, `add_event`, `add_branch` and `add_connection`)
+must be on it (`agentapi/evidence.py` `ops_problems`; the problem names the
+closest passage), on `edits/check` and again on `edits/apply`.
 
 **Idempotency.** `edits/apply`, `releases/publish` and `POST rounds` need an
 `Idempotency-Key` (8–64 characters). It is stored hashed with the actor and
@@ -560,6 +583,30 @@ from the `OpsAction` rows; `POST rounds` 6 a day. Over a limit: 429 with
 `Retry-After`. An API action still `running` after 10 minutes lost its
 request (Heroku ends one after 30 seconds) and is closed as failed by the next
 lock check, so it never holds the publish lock.
+
+## Evidence packs
+
+The `prefetch_sources` job ([ingestion](ingestion.md#evidence-packs),
+[ADR 0036](../adr/0036-evidence-packs.md)) gives queued `write_event`,
+`fill_gap` and `verify_claim` tasks their pages ahead of time. Payload keys:
+
+| Key | What |
+|---|---|
+| `evidence_pack` | `[{url, title, publisher, tier, fetched_at, doc_id, words, passages: [{text, score, matches}]}]`: each stored page (non-Wikipedia first), with up to five ranked passages; at most 20,000 bytes. A page read through its official API adds `"via": "api", "api": "openalex"` (or `crossref`, `loc`, `smithsonian`, `europeana`): the record (abstract, metadata), not the page, and its `publisher` is the API's. A page purged by retention keeps its entry with no passages and `purged: true`. |
+| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it (an agent may read it itself, with the honest User-Agent); `api_<…>` that a catalog page's API failed or lacks its key; `api_only` that the publisher allows only its API and no route reaches it. `browser_only`, `citation_only` and `ai_blocked` (robots.txt shuts out AI crawlers by name, ADR 0037) are the reasons an agent opens a browser for; `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
+| `evidence_ready` | A stored page that isn't Wikipedia: what the console's "evidence ready" share counts. |
+| `evidence_pack_at`, `evidence_urls` | When it was built, and from which URLs (a hash; `+deferred` when a cap cut it short). |
+
+The API's side (`agentapi/evidence.py`): `GET documents/<id>` (or
+`?url=`) returns `{doc_id, url, final_url, title, publisher, tier, license,
+fetched_at, retain_until, words, text, note}`, a 403 to anyone but the holder
+of a claimed task whose pack names the page (a JSON containment query on the
+payload) or a `review` token when an entry in review cites it, 404 for an
+unknown page and 410 for a purged one. `POST evidence/check-excerpt` answers
+`{match, closest, words, within_25_words, doc_id, url, fetched_at}` (404 when
+the page isn't stored). The same comparison (`ingest.passages.contains`:
+Unicode NFC and whitespace collapsed, nothing else) backs the auto-verify on
+`complete` and on edit files.
 
 ## Rounds
 
@@ -605,7 +652,7 @@ only with a final status) and appends to the history.
 | Change | What it needs |
 |---|---|
 | A new task kind | Add it to `AgentTask.Kind` and make a migration (the choices are in the migration). Write its payload in the job that queues it, give it a dedupe key, and add a skill in `.claude/skills/` if agents will work it. For agents to complete it over the API, add its schema to `agentapi/schemas.py` `RESULTS` and its applier to `agentapi/apply.py` `APPLIERS`. Add a row to the kinds table here. |
-| A new payload key | Change the job that builds it and the skill that reads it, in the same pull request. |
+| A new payload key | Change the job that builds it and the skill that reads it, in the same pull request. A key `prefetch_sources` writes goes in `ingest/prefetch.py` `PAYLOAD_KEYS`, which the refreshing jobs keep. |
 | A result field | The kind's schema in `agentapi/schemas.py`, its applier, and the skill, together; `tests/test_agent_api.py`. |
 | The rate limit | Set `AGENT_API_RATE_PER_MINUTE` in the environment; the default is in `config/settings.py`. |
 | The lease length | Set `TASK_LEASE_MINUTES` in the environment; the default is in `config/settings.py`. |

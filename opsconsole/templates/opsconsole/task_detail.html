@@ -27,6 +27,17 @@
     <dt>Finished</dt><dd>{% if t.completed_at %}{{ t.completed_at|ago }}{% if t.claimed_at %} <span class="muted">· {{ t.claimed_at|timesince:t.completed_at }} after the claim</span>{% endif %}{% else %}–{% endif %}</dd>
   </dl></div>
 </div>
+{% if pack %}<div class="card" style="margin-top:18px"><div class="card-head"><h2>Evidence pack<span class="count">{{ pack.pages|length }}</span></h2>
+  <span class="small muted">{% if pack.built %}{% if pack.ready %}{% badge "done" "Ready" %} a non-Wikipedia source is stored{% else %}{% badge "waiting" "Not ready" %} no non-Wikipedia source stored{% endif %} · built {{ pack.at|slice:":16" }} UTC by prefetch_sources{% else %}not built yet: the prefetch_sources job adds it{% endif %}</span></div>
+  {% if pack.pages %}<ul class="list">{% for e in pack.pages %}<li><div class="grow">
+    <div class="t"><a href="{{ e.url }}" rel="noreferrer noopener" target="_blank">{{ e.title|default:e.url|truncatechars:90 }}</a></div>
+    <div class="small muted t">{{ e.publisher }}{% if e.tier %} · tier {{ e.tier }}{% endif %} · document {{ e.doc_id }} · {{ e.words }} words · fetched {{ e.fetched_at|slice:":10" }}{% if e.purged %} · <b>purged</b> (retention){% endif %}</div>
+    {% for p in e.passages %}<div class="small" style="margin-top:6px"><span class="mono muted">{{ p.score }}</span> {{ p.text }} <span class="muted">({{ p.matches|join:", " }})</span></div>{% empty %}<div class="small muted" style="margin-top:6px">No passage matched the task's dates, names or words.</div>{% endfor %}
+  </div></li>{% endfor %}</ul>{% elif pack.built %}<p class="empty-note">No page could be stored.</p>{% endif %}
+  {% if pack.unreadable %}<h3>Left to read by hand<span class="count">{{ pack.unreadable|length }}</span></h3>
+  <p class="small muted">{% for r, n in pack.reasons.items %}{{ r }} {{ n }}{% if not forloop.last %} · {% endif %}{% endfor %}. Agents open a browser only for browser_only pages; a cloud round holds a draft that only those support.</p>
+  <ul class="list">{% for u in pack.unreadable %}<li>{% if u.reason == "browser_only" %}{% badge "paused" "browser_only" %}{% else %}{% badge "cancelled" u.reason %}{% endif %}<div class="grow"><div class="t mono small">{{ u.url|truncatechars:110 }}</div>{% if u.detail %}<div class="small muted t">{{ u.detail }}</div>{% endif %}</div></li>{% endfor %}</ul>{% endif %}
+</div>{% endif %}
 <div class="card" style="margin-top:18px"><h2>Result</h2>
   {% if t.result is not None %}<pre>{{ t.result|pretty }}</pre>{% else %}<p class="empty-note">No result yet.</p>{% endif %}
   {% if error %}<h3>Error</h3><pre class="err">{{ error }}</pre>{% endif %}

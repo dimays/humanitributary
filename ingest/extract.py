@@ -118,13 +118,17 @@ def html_metadata(html: str, base_url: str = "") -> Extracted:
     return out
 
 
-def extract_html(html: str, url: str = "") -> Extracted:
+def extract_html(html: str, url: str = "", *, deduplicate: bool = True) -> Extracted:
     """Main text by trafilatura (no comments, no tables), plus html_metadata(). Dates through dateparser when the page
-    gives none in its metadata."""
+    gives none in its metadata.
+
+    deduplicate=False for evidence packs (ingest/prefetch.py): trafilatura's de-duplication remembers paragraphs
+    across calls in the process, so a page read a second time (a refresh, a second task) would come back without
+    the paragraphs it had already seen."""
     import trafilatura
 
     out = html_metadata(html, url)
-    text = trafilatura.extract(html, url=url or None, include_comments=False, include_tables=False, favor_precision=True, deduplicate=True) or ""
+    text = trafilatura.extract(html, url=url or None, include_comments=False, include_tables=False, favor_precision=True, deduplicate=deduplicate) or ""
     out.text = text.strip()
     if not out.title:
         md = trafilatura.extract_metadata(html)

@@ -55,6 +55,47 @@ lost. If you can't finish, `release` the task (untouched) or `fail` it with the 
 - **Paid and blocked wires are common in news.** Reuters (401), AFP (access denied) and CNN (451) often refuse.
   Don't force them. Find another readable, independent, reputable source: a `write_event` story without two readable independent sources is completed `rejected` with a note saying what refused, or failed with `{"retry": false}`; never written on one source you could not read.
 
+## The evidence pack: read it first
+
+The `prefetch_sources` job (every 15 minutes, ADR 0036) has usually fetched this task's pages already, from the
+publishers whose policy lets a job read them, and put them in the payload:
+
+- `evidence_pack`: one entry per stored page: `url`, `title`, `publisher`, `tier`, `fetched_at`, `doc_id`, `words`
+  and `passages` (the page's sentences that name the task's dates, years, numbers, entities or title words, best
+  first, each with its `score` and `matches`, such as `"date:June 6"`, `"entity:Normandy (Q8205)"`).
+- `unreadable`: the URLs it did not read, each with a `reason`: `browser_only` or `citation_only` (read it in a
+  browser), `ai_blocked` (its robots.txt shuts out AI crawlers by name: a browser read only, never a script), `api_only`
+  (the publisher allows only its API),
+  `unrated` (nobody has rated the publisher yet, so the job doesn't fetch it: read it yourself, honestly),
+  `forbidden` (never), `never_fetch`, `robots`, `blocked`, `tdm_reserved` (the page opts out of text and data mining: read it by hand), `http_404`, `error`, `unsupported` (a PDF, say), `empty`,
+  `deferred` (not yet: the next run reads it).
+- `evidence_ready`: true when at least one stored page is not Wikipedia.
+- An entry with `"via": "api"` is a catalog page read through its official API (`"api"`: openalex,
+  crossref, loc, smithsonian, europeana): the record (title, metadata, an abstract), not the page. Cite the entry's
+  `url`; an excerpt from the record is fine. If you cite the page for more than the record says, read the page.
+
+How to use it:
+
+1. **Read the passages, then the page.** A passage is a lead, not the whole story: `GET documents/<doc_id>` returns
+   the page's full stored text while you hold the task. Judge support from that text, as you would from the page.
+2. **Copy excerpts from the stored text.** Every passage, and every run of words inside one, is verbatim by
+   construction. Check any excerpt with `POST evidence/check-excerpt -d '{"doc_id": <id>, "excerpt": "…"}'`
+   (`match` true or false, and the `closest` passage when false). `complete` checks every excerpt whose page is
+   stored: one that is not on the page, whitespace aside, is a 422 that names the closest passage; copy that, or
+   drop the excerpt. Case, quote marks, dashes and footnote markers ("[12]") all count.
+3. **Cite the page's URL** (the entry's `url`), with `"method": "agent_read"`. The stored text is private: never
+   paste more than the excerpt anywhere.
+4. **Open a browser only for `unreadable` URLs whose reason is `browser_only`, `citation_only` or `ai_blocked`** (one tab, closed at the end), and
+   mark those cites `"method": "browser_read"`. Other unreadable pages: fetch one yourself only with the honest
+   User-Agent (below), and never one that `robots` or `blocked` refused. In a cloud round there is no browser: a
+   draft that only `browser_only` pages support is held (the `run-round` skill).
+5. **No pack yet** (no `evidence_pack` key, or a `deferred` reason): read the pages yourself as below.
+
+```bash
+api "$HUMANITRIBUTARY_API/documents/<doc_id>"                       # the stored text (a task you hold)
+api -X POST "$HUMANITRIBUTARY_API/evidence/check-excerpt" -d '{"doc_id": 42, "excerpt": "…"}'
+```
+
 ## 1. Claim
 
 ```bash
@@ -72,6 +113,7 @@ Payload keys:
 | `story_article` | The story's own Wikipedia article. |
 | `possible_duplicates` | Existing events that look alike, with similarity. |
 | `suggested_sources` | Lookup hits: scholarship, archives, official data. Not evidence until read. |
+| `evidence_pack`, `unreadable`, `evidence_ready` | The pages already fetched and stored, with ranked passages, and the ones left to read by hand (above). |
 
 Look things up with `GET entries/<slug>`, `GET branches/<slug>` (its events, metrics, open proposals) and
 `GET search?q=…&kind=event`.
@@ -87,7 +129,7 @@ Look things up with `GET entries/<slug>`, `GET branches/<slug>` (its events, met
 
 ## 3. Read and cite
 
-- **Copy excerpts from the page itself, never from a fetch tool's summary.** Tools such as WebFetch hand back a
+- **Copy excerpts from the evidence pack's stored text when the page is in it** (above); otherwise **from the page itself, never from a fetch tool's summary.** Tools such as WebFetch hand back a
   model-written summary of the page, and the "quotes" in it are often paraphrased, shortened or straightened. For
   every excerpt (and every stance you record), read the page's own text: the in-app browser's `get_page_text`, or
   `javascript_tool` returning the matching sentence from `document.body.innerText`, or the raw page via `curl` where

@@ -42,7 +42,8 @@ language edition is one publisher, `wikipedia.org`).
 |---|---|
 | `domain`, `name` | Unique domain, display name. |
 | `tier` | 1 primary, official or peer-reviewed; 2 scholarly or institutional reference; 3 general reference (Wikipedia); 4 weak; empty = not rated. A check constraint keeps it 1–4. |
-| `fetch_policy` | `allowed`, `browser_only` (read in a browser by an agent, never by a job) or `forbidden` (never fetched or cited). |
+| `fetch_policy` | `allowed`, `api_only` (jobs only through `api_base`, with a key where one is needed), `browser_only` (read in a browser by an agent, never by a job), `citation_only` (cited, never fetched by a job) or `forbidden` (never fetched or cited). |
+| `api_base`, `api_needs_key`, `api_key_setting` | For `api_only`: the URLs a job may request, and the key it needs ([sources and terms](sources-and-terms.md#what-the-fetcher-checks-before-a-request)). |
 | `license`, `access_notes` | What we may do with it, and why. |
 
 A new Publisher row starts with the ratings in `evidence/publishers.py`

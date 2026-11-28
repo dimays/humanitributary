@@ -15,6 +15,12 @@ validates the result against its kind's schema and applies it through the servic
     GET  /api/agent/branches/<slug>         a branch summary: its events, latest metrics, open proposals
     GET  /api/agent/claims/<id>             a claim with its evidence and parts (the verify_claim payload's shape)
     GET  /api/agent/search?q=…&kind=event   entries by title or name (trigram similarity)
+    GET  /api/agent/documents/<id>          a stored page's clean text (in the evidence pack of a task you hold)
+    GET  /api/agent/documents?url=…         the same, by the cited URL
+    POST /api/agent/evidence/check-excerpt  {"doc_id" | "url", "excerpt"} → verbatim on the stored page? (and the closest passage)
+
+Evidence packs (agentapi/evidence.py, ADR 0036): `complete` and `edits/check` / `edits/apply` check every excerpt
+whose cited page is stored; one that isn't on it is a 422 naming the closest passage.
 
 The operations a round needs (agentapi/operations.py, ADR 0035; scopes review, publish and round):
 
@@ -45,7 +51,7 @@ from work import queue
 from work.models import AgentTask
 
 from . import apply as appliers
-from . import schemas
+from . import evidence, schemas
 from .auth import agent_view, error
 
 ENDPOINTS = [" ".join(ln.split()) for ln in __doc__.splitlines() if ln.strip().startswith(("GET ", "POST ", "PATCH "))]
@@ -193,6 +199,9 @@ def complete(request, task_id, body):
     problems = schemas.errors(task.kind, result)
     if problems:
         return error(422, "the result does not match its schema", problems=problems, schema=f"/api/agent/schemas/{task.kind}")
+    if task.status != AgentTask.Status.DONE and (mismatches := evidence.result_mismatches(task.kind, result)):
+        return error(422, "an excerpt is not on the stored copy of its page (whitespace aside): copy it from the stored text",
+                     problems=evidence.problems_of(mismatches), excerpts=mismatches)
     digest = result_sha256(result)
     if task.status == AgentTask.Status.DONE and task.claimed_by == actor:
         if (task.result or {}).get("result_sha256") == digest:

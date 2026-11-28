@@ -136,7 +136,7 @@ the last `Revision` that the release includes. It is a number, not a foreign key
 | `Claim` | canonical | One statement about an entry. The system calculates its `status` and `confidence`. Nobody types them. |
 | `Evidence` | canonical | One citation for one claim, with a stance (`supports`, `partial`, `conflicts` or `unrelated`) and an excerpt of 25 words or fewer. |
 | `Citation` | canonical | One cited URL, with the result of its last check |
-| `Publisher` | canonical | A cited site, by domain, with a `tier` from 1 to 4 and a `fetch_policy` (`allowed`, `browser_only` or `forbidden`) |
+| `Publisher` | canonical | A cited site, by domain, with a `tier` from 1 to 4 and a `fetch_policy` (`allowed`, `api_only`, `browser_only`, `citation_only` or `forbidden`) |
 | `Revision` | audit log | One changed canonical row: who, why, which task, and the row before and after. The trigger writes it. Nobody edits it. |
 | `Feed` | operational | A source that a job reads on a schedule, with its interval and an on or off value (`enabled`) |
 | `FetchRun` | operational | One run of one job, with its status, counts and error |

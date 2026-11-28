@@ -207,9 +207,10 @@ def _ops_and_name(body):
 
 
 def agent_rules(ops: list, actor: str) -> list[str]:
-    """The two rules an edit file sent by an agent obeys on top of timeline/edits.py's checks: independence (a
-    reviewer never approves an entry it wrote, so nothing reaches readers without a second reader) and no shortcut
-    (an entry it adds lands in review, for the next round's reviewers, never straight in `published`)."""
+    """The rules an edit file sent by an agent obeys on top of timeline/edits.py's checks: independence (a reviewer
+    never approves an entry it wrote, so nothing reaches readers without a second reader), no shortcut (an entry it
+    adds lands in review, for the next round's reviewers, never straight in `published`), and verbatim excerpts (an
+    excerpt whose cited page is in the evidence store must be on it: agentapi/evidence.py, ADR 0036)."""
     from revisions.models import Revision
     from timeline import edits
     from timeline.models import Entry
@@ -225,7 +226,10 @@ def agent_rules(ops: list, actor: str) -> list[str]:
         if isinstance(op, dict) and op.get("op") in edits.ADDS and op.get("status") == "published":
             out.append(f"#{i} {op['op']} {edits.target(op)}: over the agent API an added entry lands in review (drop \"status\"); "
                        "the next round's reviewers approve it")
-    return out
+    # Evidence packs (ADR 0036): an excerpt whose cited page is in the store must be on it, verbatim.
+    from .evidence import ops_problems
+
+    return out + ops_problems(ops)
 
 
 def _diff_text(out) -> str:

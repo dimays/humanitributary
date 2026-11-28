@@ -193,3 +193,14 @@ def gap_pointers(ctx):
     from governance import pointers
 
     pointers.run(ctx)
+
+
+@job("prefetch_sources", interval=15, tags=("process", "fact-check"))
+def prefetch_sources(ctx):
+    """Fetches the allowed pages queued tasks point at and adds evidence packs (stored text, ranked passages) to their payloads.
+
+    Runs after process, enrich_tasks, the sweep and gap_pointers, so their sources and pointers are in; capped per
+    run and per host; never requests a browser_only page (ingest/prefetch.py, docs/adr/0036-evidence-packs.md)."""
+    from . import prefetch
+
+    prefetch.run(ctx)
