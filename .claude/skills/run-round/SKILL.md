@@ -19,23 +19,31 @@ agents you start follow them, so read them too.
 
 The routine's environment holds these variables (the owner stores the tokens as secrets; see
 `docs/manual/daily-round.md`). **Never print, echo, log or write a token anywhere**, not even in a brief to a
-subagent: pass the variable's *name*.
+subagent: pass the role's or the variable's *name*.
 
 | Variable | What | Scope |
 |---|---|---|
-| `HUMANITRIBUTARY_API` | `https://data.manyages.com/api/agent` | |
+| `MANYAGES_API` | `https://data.manyages.com/api/agent` | |
 | `INGEST_USER_AGENT` | The project's honest User-Agent, for every page fetched by script | |
-| `HUMANITRIBUTARY_TOKEN_ROUND` | records the round (`POST rounds`, `PATCH rounds/<id>`) | `round` |
-| `HUMANITRIBUTARY_TOKEN_WRITER` | the writers | `write_event` |
-| `HUMANITRIBUTARY_TOKEN_FILLER` | the gap fillers | `fill_gap` |
-| `HUMANITRIBUTARY_TOKEN_VERIFIER` | the verifiers | `verify_claim` |
-| `HUMANITRIBUTARY_TOKEN_MAPPER` | the mappers | `map_branch_entities` |
-| `HUMANITRIBUTARY_TOKEN_REVIEWER` | the reviewers' edit file (`edits/check`, `edits/apply`) | `review` |
-| `HUMANITRIBUTARY_TOKEN_PUBLISHER` | the release (`releases/check`, `releases/publish`) | `publish` |
+| `MANYAGES_TOKEN_ROUND` | records the round (`POST rounds`, `PATCH rounds/<id>`) | `round` |
+| `MANYAGES_TOKEN_WRITER` | the writers | `write_event` |
+| `MANYAGES_TOKEN_FILLER` | the gap fillers | `fill_gap` |
+| `MANYAGES_TOKEN_VERIFIER` | the verifiers | `verify_claim` |
+| `MANYAGES_TOKEN_MAPPER` | the mappers | `map_branch_entities` |
+| `MANYAGES_TOKEN_REVIEWER` | the reviewers' edit file (`edits/check`, `edits/apply`) | `review` |
+| `MANYAGES_TOKEN_PUBLISHER` | the release (`releases/check`, `releases/publish`) | `publish` |
+
+Until the owner deletes the old names (ADR 0047), `HUMANITRIBUTARY_API` and `HUMANITRIBUTARY_TOKEN_<ROLE>` stand in
+for them. `tokvar <ROLE>` gives the name of the variable that holds a role's token, the new one first, and never its
+value; `api <ROLE>` calls the API with it.
 
 ```bash
-api() { local tok="$1"; shift; curl -sS -H "Authorization: Bearer ${!tok}" -H "Content-Type: application/json" "$@"; }
-api HUMANITRIBUTARY_TOKEN_ROUND "$HUMANITRIBUTARY_API/"     # who you are and your scopes (check each token once)
+tokvar() { local new="MANYAGES_TOKEN_$1" old="HUMANITRIBUTARY_TOKEN_$1"
+  if [ -n "${!new:-}" ]; then echo "$new"; elif [ -n "${!old:-}" ]; then echo "$old"; else return 1; fi; }
+api() { local tok; tok=$(tokvar "$1") || { echo "no token for $1" >&2; return 1; }; shift
+  curl -sS -H "Authorization: Bearer ${!tok}" -H "Content-Type: application/json" "$@"; }
+for r in ROUND WRITER FILLER VERIFIER MAPPER REVIEWER PUBLISHER; do tokvar "$r" >/dev/null || echo "missing: $r"; done
+api ROUND "${MANYAGES_API:-$HUMANITRIBUTARY_API}/"     # who you are and your scopes (check each token once)
 ```
 
 A role whose token is missing is left out of the plan; say so in the summary. If the round or reviewer token is
@@ -47,7 +55,7 @@ Before anything else, read the round settings. The console's operators pause rou
 round size and send held drafts to the next review; the routine obeys them.
 
 ```bash
-api HUMANITRIBUTARY_TOKEN_ROUND "$HUMANITRIBUTARY_API/rounds/settings"
+api ROUND "${MANYAGES_API:-$HUMANITRIBUTARY_API}/rounds/settings"
 ```
 
 - **`paused` is set** and this is the scheduled routine: stop now. Print one line ("Rounds are paused by <by>:
@@ -59,7 +67,7 @@ api HUMANITRIBUTARY_TOKEN_ROUND "$HUMANITRIBUTARY_API/rounds/settings"
 ## 2. Plan the mix
 
 ```bash
-api HUMANITRIBUTARY_TOKEN_ROUND "$HUMANITRIBUTARY_API/queue"
+api ROUND "${MANYAGES_API:-$HUMANITRIBUTARY_API}/queue"
 ```
 
 `kinds` lists each task kind: `waiting`, `in_progress`, `stuck`, `priorities` (max, median, min), the top five
@@ -85,7 +93,7 @@ are near your usage limit, start fewer agents, and never start a reviewer you ca
 ## 3. Record the round
 
 ```bash
-api HUMANITRIBUTARY_TOKEN_ROUND -X POST "$HUMANITRIBUTARY_API/rounds" -H "Idempotency-Key: round-$(date -u +%Y-%m-%d)-schedule" -d '{
+api ROUND -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/rounds" -H "Idempotency-Key: round-$(date -u +%Y-%m-%d)-schedule" -d '{
   "trigger": "schedule",
   "plan": {"mix": {"fill_gap": 6, "map_branch_entities": 4, "write_event": 8, "verify_claim": 8},
            "roles": {"filler": 2, "mapper": 1, "writer": 2, "verifier": 1}, "why": "gaps first; 31 write_event waiting"},
@@ -108,8 +116,8 @@ Then `PATCH rounds/<id>` with `{"status": "running"}`.
 Start the role agents as subagents, in parallel, one per agent in the plan. Brief each one with:
 
 - its role, its skill (`fill-gaps`, `map-branch-entities`, `drain-write-events` or `verify-claims`) and the round id;
-- the **name** of its token variable, which it puts in place for the skill:
-  `export HUMANITRIBUTARY_API_TOKEN="$HUMANITRIBUTARY_TOKEN_WRITER"` (never the value);
+- its token's **role**, which it puts in place for the skill with the helpers above:
+  `v=$(tokvar WRITER) && export MANYAGES_API_TOKEN="${!v}"` (never the value);
 - how many tasks to take (`tasks_per_agent`), one at a time: claim, work, complete; stop when the count is reached
   or a claim returns `{"task": null}`;
 - **extend the lease** (`POST tasks/<id>/extend -d '{"minutes": 30}'`) whenever one task passes about 20
@@ -146,7 +154,7 @@ true, "summary": …}`) and post the summary: there is nothing to review or publ
 
 The drafts to review are this round's `drafts` plus `carry_over`. Split them into batches of at most
 `drafts_per_reviewer` (40) and start one reviewer subagent per batch, **fresh** (never an agent that wrote in this
-round), with the reviewer token's variable name. A reviewer reads only (`GET entries/<slug>`, `claims/<id>`,
+round), with the reviewer token's role (`REVIEWER`) and the helpers above. A reviewer reads only (`GET entries/<slug>`, `claims/<id>`,
 `branches/<slug>`, `search`, and the stored pages: `GET documents?url=<cited URL>` gives the text of a stored page
 that a draft in review cites, and `POST evidence/check-excerpt -d '{"url": …, "excerpt": …}'` checks an excerpt
 against it), writes nothing through the API, and returns:
@@ -174,7 +182,7 @@ Merge the reviewers' ops into one list, in draft order, and save it (in the sess
 never in the repository: the routine changes, commits and pushes no file) as `<date>-round-<id>.edits.json`.
 
 ```bash
-api HUMANITRIBUTARY_TOKEN_REVIEWER -X POST "$HUMANITRIBUTARY_API/edits/check" -d @check.json
+api REVIEWER -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/edits/check" -d @check.json
 #   check.json: {"ops": [...], "name": "2026-11-28-round-12.edits.json", "round": 12}
 ```
 
@@ -185,7 +193,7 @@ straight to `published`). Fix the ops of the draft at fault; if a draft's ops ca
 (it becomes a HOLD) and say so. Check again, at most three times in all.
 
 ```bash
-api HUMANITRIBUTARY_TOKEN_REVIEWER -X POST "$HUMANITRIBUTARY_API/edits/apply" -H "Idempotency-Key: round-12-apply-1" -d @apply.json
+api REVIEWER -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/edits/apply" -H "Idempotency-Key: round-12-apply-1" -d @apply.json
 #   apply.json: the same ops, name and round, plus "check": <its id> and "reason": "Round #12 review: 9 approved, 2 held, 1 rejected"
 ```
 
@@ -198,7 +206,7 @@ rounds/<id>` with `{"verdicts": {"approve": 7, "approve_with_edits": 2, "hold": 
 Publish only if the applied file approved or rejected at least one entry (else there is nothing new for readers):
 
 ```bash
-api HUMANITRIBUTARY_TOKEN_PUBLISHER -X POST "$HUMANITRIBUTARY_API/releases/check" -d '{"round": 12}'
+api PUBLISHER -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/releases/check" -d '{"round": 12}'
 ```
 
 - `200` with `"passed": true` and `unchanged_since` null: publish within 30 minutes of the check.
@@ -206,7 +214,7 @@ api HUMANITRIBUTARY_TOKEN_PUBLISHER -X POST "$HUMANITRIBUTARY_API/releases/check
   with `{"status": "held", "notes": "<the problems>"}` for the owner, and post that.
 
 ```bash
-api HUMANITRIBUTARY_TOKEN_PUBLISHER -X POST "$HUMANITRIBUTARY_API/releases/publish" -H "Idempotency-Key: round-12-publish" \
+api PUBLISHER -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/releases/publish" -H "Idempotency-Key: round-12-publish" \
   -d '{"check": <check id>, "round": 12, "reason": "Round #12: 9 drafts approved by independent review; every release gate passed"}'
 ```
 
@@ -244,7 +252,7 @@ releases above and the drafts held only for a person's read. Leave it out when t
 ## Fetching: honest, one tab, never forced
 
 - **Ask the policy before every fetch** (ADR 0042). Before any WebFetch or `curl` of a source page, every agent
-  and every reviewer calls `api <TOKEN_VAR> -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"` and
+  and every reviewer calls `api <ROLE> -G "${MANYAGES_API:-$HUMANITRIBUTARY_API}/policy" --data-urlencode "url=<the page>"` and
   fetches only when `may_fetch` is true, `crawl_delay` seconds apart per host. `citation_only`, `browser_only`,
   `never_fetch`, `ai_blocked`, `robots`, `blocked`, `unrated`, `forbidden`, and `api_only` outside its `api_base`
   are never read by script (in the rounds of November 27 a writer read nbcnews.com, `citation_only` with a

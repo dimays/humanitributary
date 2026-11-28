@@ -45,7 +45,7 @@ To review and publish without the skill, use procedures [02](02-review-drafts-an
 4. Set the base URL of the agent API:
 
    ```bash
-   export HUMANITRIBUTARY_API=https://data.manyages.com/api/agent
+   export MANYAGES_API=https://data.manyages.com/api/agent
    ```
 
    Make sure that the URL has no token in it.
@@ -59,7 +59,7 @@ To review and publish without the skill, use procedures [02](02-review-drafts-an
 6. Put the round token in its variable. Paste the token when the shell waits:
 
    ```bash
-   read -rs HUMANITRIBUTARY_TOKEN_ROUND && export HUMANITRIBUTARY_TOKEN_ROUND
+   read -rs MANYAGES_TOKEN_ROUND && export MANYAGES_TOKEN_ROUND
    ```
 
    Make sure that the token is not on the screen.

@@ -77,15 +77,19 @@ how.
 
 | Secret | Token name | Scope | Use |
 |---|---|---|---|
-| `HUMANITRIBUTARY_TOKEN_ROUND` | `round-recorder` | `round` | It records the round. |
-| `HUMANITRIBUTARY_TOKEN_WRITER` | `round-writer` | `write_event` | The writers |
-| `HUMANITRIBUTARY_TOKEN_FILLER` | `round-filler` | `fill_gap` | The gap fillers |
-| `HUMANITRIBUTARY_TOKEN_VERIFIER` | `round-verifier` | `verify_claim` | The verifiers |
-| `HUMANITRIBUTARY_TOKEN_MAPPER` | `round-mapper` | `map_branch_entities` | The mappers |
-| `HUMANITRIBUTARY_TOKEN_REVIEWER` | `round-reviewer` | `review` | It examines and applies the edit file. |
-| `HUMANITRIBUTARY_TOKEN_PUBLISHER` | `round-publisher` | `publish` | It does the release gates and publishes. |
+| `MANYAGES_TOKEN_ROUND` | `round-recorder` | `round` | It records the round. |
+| `MANYAGES_TOKEN_WRITER` | `round-writer` | `write_event` | The writers |
+| `MANYAGES_TOKEN_FILLER` | `round-filler` | `fill_gap` | The gap fillers |
+| `MANYAGES_TOKEN_VERIFIER` | `round-verifier` | `verify_claim` | The verifiers |
+| `MANYAGES_TOKEN_MAPPER` | `round-mapper` | `map_branch_entities` | The mappers |
+| `MANYAGES_TOKEN_REVIEWER` | `round-reviewer` | `review` | It examines and applies the edit file. |
+| `MANYAGES_TOKEN_PUBLISHER` | `round-publisher` | `publish` | It does the release gates and publishes. |
 
 The scope `*` does not give `review`, `publish` or `round`. The owner must name each of these scopes.
+
+The old names of these secrets start with `HUMANITRIBUTARY_TOKEN_`. The routine reads the new name first. If the new
+name has no value, it reads the old name. Procedure [20](procedures/20-move-to-the-new-variable-names.md) removes
+the old names.
 
 > **CAUTION:** Do not put a token in a URL, in a log or in a file that git tracks. If another person gets a token,
 > revoke it with procedure [09](procedures/09-replace-an-agent-token.md).

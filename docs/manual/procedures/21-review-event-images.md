@@ -1,4 +1,4 @@
-# 20. Review the pictures for events
+# 21. Review the pictures for events
 
 Purpose: This procedure tells how to decide the pictures that the `image_search` job found. It also tells how to
 blur a picture, or show it unblurred again.

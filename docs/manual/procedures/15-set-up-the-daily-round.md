@@ -45,27 +45,27 @@ Do this procedure one time. After that, the routine starts one round each day ([
    ```
 
    Make sure that the value names the project and a contact address.
-4. Open `https://claude.ai/code` and make a new cloud environment with the name `humanitributary-round`.
+4. Open `https://claude.ai/code` and make a new cloud environment with the name `manyages-work`.
    Make sure that no other routine or person uses this environment.
 5. Set the network access of the environment to Full.
    Make sure that the agents can get pages from many sites, and from `data.manyages.com`.
 6. Add the environment variables in the form `KEY=value`, one on each line:
 
    ```text
-   HUMANITRIBUTARY_API=https://data.manyages.com/api/agent
+   MANYAGES_API=https://data.manyages.com/api/agent
    INGEST_USER_AGENT=<the value from step 3>
-   HUMANITRIBUTARY_TOKEN_ROUND=<the token of round-recorder>
-   HUMANITRIBUTARY_TOKEN_WRITER=<the token of round-writer>
-   HUMANITRIBUTARY_TOKEN_FILLER=<the token of round-filler>
-   HUMANITRIBUTARY_TOKEN_VERIFIER=<the token of round-verifier>
-   HUMANITRIBUTARY_TOKEN_MAPPER=<the token of round-mapper>
-   HUMANITRIBUTARY_TOKEN_REVIEWER=<the token of round-reviewer>
-   HUMANITRIBUTARY_TOKEN_PUBLISHER=<the token of round-publisher>
+   MANYAGES_TOKEN_ROUND=<the token of round-recorder>
+   MANYAGES_TOKEN_WRITER=<the token of round-writer>
+   MANYAGES_TOKEN_FILLER=<the token of round-filler>
+   MANYAGES_TOKEN_VERIFIER=<the token of round-verifier>
+   MANYAGES_TOKEN_MAPPER=<the token of round-mapper>
+   MANYAGES_TOKEN_REVIEWER=<the token of round-reviewer>
+   MANYAGES_TOKEN_PUBLISHER=<the token of round-publisher>
    ```
 
    Make sure that each token is in the variable with the correct name.
 7. Open `https://claude.ai/code/routines` and make a new scheduled task. Use the values of the table below.
-   Make sure that the task uses the environment `humanitributary-round`.
+   Make sure that the task uses the environment `manyages-work`.
 8. Set the schedule to the custom cron `0 6 * * *`.
    Make sure that the page shows the time 06:00 UTC each day.
 9. If you use another schedule, set the same cron on the app:
@@ -88,7 +88,7 @@ Do this procedure one time. After that, the routine starts one round each day ([
 |---|---|
 | Name | `Daily agent round` |
 | Repository | `dimays/manyages`, the default branch `main` |
-| Cloud environment | `humanitributary-round` |
+| Cloud environment | `manyages-work` |
 | Schedule | the cron `0 6 * * *` (UTC) |
 | Prompt | `Run today's agent round. Follow .claude/skills/run-round/SKILL.md exactly, with the trigger "schedule". Do not change, commit or push files in the repository.` |
 
