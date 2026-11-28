@@ -532,7 +532,8 @@ A cluster becomes a `write_event` task when its priority is at least `WRITE_EVEN
 `--opt threshold=`) and at least one member comes from the portal or a year page (Wikipedia backs it). Clusters are
 taken highest first, up to `MAX_TASK_UPDATES` (150) a run. The task's dedupe key is `cluster:<key>` and its
 priority the rounded cluster priority, so re-running never duplicates it. While the task is still queued, its
-payload and priority are refreshed (keeping any `suggested_sources` that `enrich_tasks` added).
+payload and priority are refreshed (keeping any `suggested_sources` that `enrich_tasks` added, the evidence pack's
+keys and `work.queue.PAYLOAD_KEYS`: a release's recorded `needs`, ADR 0041).
 
 - **The threshold's method.** About the top 12.5% of clusters should qualify (the middle of 10–15%): 64 is the
   priority of the cluster at the 12.5th percentile from the top of the first real run's 682 clusters (64.86),

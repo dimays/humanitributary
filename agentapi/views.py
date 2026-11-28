@@ -9,7 +9,7 @@ validates the result against its kind's schema and applies it through the servic
     GET  /api/agent/tasks/<id>              a task (yours, or any queued one)
     POST /api/agent/tasks/<id>/extend       {"minutes": 30}
     POST /api/agent/tasks/<id>/complete     {"result": {...}} → validated, applied (in review), done
-    POST /api/agent/tasks/<id>/release      hand it back untouched
+    POST /api/agent/tasks/<id>/release      {"reason", "defer_minutes": 60, "needs": "browser"|"owner"} → back, deferred
     POST /api/agent/tasks/<id>/fail         {"error": "…", "retry": true}
     GET  /api/agent/entries/<slug>          an entry, its claims (with status) and where it sits
     GET  /api/agent/branches/<slug>         a branch summary: its events, latest metrics, open proposals
@@ -18,6 +18,13 @@ validates the result against its kind's schema and applies it through the servic
     GET  /api/agent/documents/<id>          a stored page's clean text (in the evidence pack of a task you hold)
     GET  /api/agent/documents?url=…         the same, by the cited URL
     POST /api/agent/evidence/check-excerpt  {"doc_id" | "url", "excerpt"} → verbatim on the stored page? (and the closest passage)
+    GET  /api/agent/policy?url=…            may an agent's script fetch this page? {publisher, policy, may_fetch, why, …}
+
+A release is deferred (ADR 0041): the task isn't offered again for `defer_minutes` (0 to 10080; 60 by default, also
+for a bare POST), so the next claim doesn't return the same task. `needs` ("browser": only a browser may read a page
+it needs; "owner": a decision for the owner) defers it a week unless `defer_minutes` says otherwise, and records the
+need in the task's payload for the console. `GET policy` (agentapi/policy.py) is the source policy for an agent's own
+reads: call it before any scripted fetch of a source page.
 
 Evidence packs (agentapi/evidence.py, ADR 0036): `complete` and `edits/check` / `edits/apply` check every excerpt
 whose cited page is stored; one that isn't on it is a 422 naming the closest passage.
@@ -166,7 +173,16 @@ def task_action(request, task_id, action):
                 return error(400, "minutes must be an integer from 1 to 240")
             return _ok(_task_out(queue.extend(task_id, agent=actor, minutes=minutes)))
         if action == "release":
-            return _ok(_task_out(queue.release(task_id, agent=actor)))
+            reason, defer, needs = body.get("reason", ""), body.get("defer_minutes"), body.get("needs") or ""
+            if not isinstance(reason, str):
+                return error(400, "reason must be a string")
+            if defer is not None and (isinstance(defer, bool) or not isinstance(defer, int) or not 0 <= defer <= queue.MAX_DEFER_MINUTES):
+                return error(400, f"defer_minutes must be an integer from 0 to {queue.MAX_DEFER_MINUTES}")
+            if needs and needs not in queue.NEEDS:
+                return error(400, f"needs must be one of {', '.join(queue.NEEDS)}")
+            if needs and not reason.strip():
+                return error(400, 'a release that needs a person says why: {"needs": "browser", "reason": "<url>: <why>"}')
+            return _ok(_task_out(queue.release(task_id, agent=actor, reason=reason, defer_minutes=defer, needs=needs)))
         if action == "fail":
             msg = body.get("error")
             if not isinstance(msg, str) or not msg.strip():

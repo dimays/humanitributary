@@ -6,7 +6,7 @@
   <div><h1>Task #{{ t.pk }} {% badge t|task_state %}</h1><div class="sub">{{ t.get_kind_display|capfirst }}.</div></div>
   <div class="tools"><div class="acts">
     {% if t.status == 'claimed' %}{% act "release_lease" "Release the lease" "sm" task=t.pk holder=t.claimed_by %}{% act "extend_lease" "Extend the lease" "sm" task=t.pk holder=t.claimed_by %}{% endif %}
-    {% if t.status == 'failed' or t.status == 'cancelled' %}{% act "requeue_tasks" "Requeue" "sm" task=t.pk %}{% endif %}
+    {% if t.status == 'failed' or t.status == 'cancelled' or deferred %}{% act "requeue_tasks" "Requeue" "sm" task=t.pk %}{% endif %}
     {% if t.status == 'queued' or stale %}{% act "cancel_tasks" "Cancel" "sm danger" task=t.pk %}{% endif %}
     <a class="btn sm quiet" href="{% url 'admin:work_agenttask_change' t.pk %}">In the admin</a></div></div>
 </div>
@@ -18,7 +18,8 @@
       {% if t.target_candidate_id %}candidate #{{ t.target_candidate_id }}{% endif %}{% if t.target_claim_id %}claim #{{ t.target_claim_id }}{% endif %}
       {% if t.target_proposal_id %}proposal #{{ t.target_proposal_id }}{% endif %}{% if t.target_ref %}<span class="mono">{{ t.target_ref }}</span>{% endif %}
       {% if t.dedupe_key %}<div class="small muted mono">{{ t.dedupe_key }}</div>{% endif %}</dd>
-    {% if t.not_before %}<dt>Not before</dt><dd>{{ t.not_before|date:"M j, H:i" }}</dd>{% endif %}
+    {% if t.not_before %}<dt>Not before</dt><dd>{{ t.not_before|date:"M j, H:i" }}{% if deferred %} <span class="muted">(deferred by a release; Requeue offers it now)</span>{% endif %}</dd>{% endif %}
+    {% if needs %}<dt>Needs</dt><dd><b>{{ needs.kind }}</b>{% if needs.reason %}: {{ needs.reason }}{% endif %} <span class="muted">({{ needs.by }}, {{ needs.at|slice:":16" }} UTC)</span></dd>{% endif %}
   </dl></div>
   <div class="card"><dl class="kv">
     <dt>Agent</dt><dd>{{ t.claimed_by|default:"–" }}</dd>

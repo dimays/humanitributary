@@ -102,7 +102,7 @@ A gap is skipped when:
 
 | Reason | Counted as | What |
 |---|---|---|
-| An open task | `<wave>.open` | A queued or claimed `fill_gap` with the same key. A queued one gets its payload and priority refreshed (keeping `pointers` and the evidence-pack keys, `ingest.prefetch.PAYLOAD_KEYS`). |
+| An open task | `<wave>.open` | A queued or claimed `fill_gap` with the same key. A queued one gets its payload and priority refreshed (keeping `pointers`, the evidence-pack keys, `ingest.prefetch.PAYLOAD_KEYS`, and a release's recorded `needs`, `work.queue.PAYLOAD_KEYS`: ADR 0041). |
 | Recently attempted | `<wave>.recent_<outcome>` | The window's last task ended less than `retry_after_days` ago: 180 days after `nothing_notable`, 60 after events were written (they wait in review, and the window counts as a gap until one is published), 30 after a failure, none after a cancellation. |
 | The branch is busy | `<wave>.held_branch` | The branch already has `max_open_per_branch` (2; env `FILL_GAP_MAX_OPEN_PER_BRANCH`) open `fill_gap` task. One at a time lets each agent see the last one's events, and spreads the day's tasks across branches. |
 | The daily cap | `<wave>.held_cap` | `settings.FILL_GAP_TASKS_PER_DAY` (40, env `FILL_GAP_TASKS_PER_DAY`; `--opt per_day=` for one run) new tasks a local day, counted like `write_event`'s cap. |

@@ -3,7 +3,7 @@
     manage.py tasks next --kind verify_claim --claim --agent agent:claude-1   # lease the best task (or print null)
     manage.py tasks complete 42 --result result.json --agent agent:claude-1
     manage.py tasks fail 42 --error "page gone" --agent agent:claude-1
-    manage.py tasks release 42 --agent agent:claude-1
+    manage.py tasks release 42 --agent agent:claude-1 [--reason "…"] [--defer-minutes 60] [--needs browser|owner]
     manage.py tasks extend 42 --minutes 30 --agent agent:claude-1
     manage.py tasks list [--status queued] [--kind …]
     manage.py tasks add verify_claim --entry me-hastings --payload '{"field": "date"}' --by human:david
@@ -50,6 +50,10 @@ class Command(BaseCommand):
                 p.add_argument("--no-retry", action="store_true")
             if name == "extend":
                 p.add_argument("--minutes", type=int)
+            if name == "release":  # deferred (ADR 0041): not offered again for --defer-minutes
+                p.add_argument("--reason", default="")
+                p.add_argument("--defer-minutes", type=int, help=f"0 to {queue.MAX_DEFER_MINUTES} (default {queue.DEFAULT_DEFER_MINUTES}; {queue.NEEDS_DEFER_MINUTES} with --needs).")
+                p.add_argument("--needs", choices=queue.NEEDS, default="", help="A person must act first: a browser read, or the owner's decision.")
         p = sub.add_parser("list")
         p.add_argument("--status", default="")
         p.add_argument("--kind", default="")
@@ -78,7 +82,7 @@ class Command(BaseCommand):
             elif action == "fail":
                 self.out(queue.as_json(queue.fail(o["id"], agent=_agent(o["agent"]), error=o["error"], retry=not o["no_retry"])))
             elif action == "release":
-                self.out(queue.as_json(queue.release(o["id"], agent=_agent(o["agent"]))))
+                self.out(queue.as_json(queue.release(o["id"], agent=_agent(o["agent"]), reason=o["reason"], defer_minutes=o["defer_minutes"], needs=o["needs"])))
             elif action == "extend":
                 self.out(queue.as_json(queue.extend(o["id"], agent=_agent(o["agent"]), minutes=o["minutes"])))
             elif action == "list":

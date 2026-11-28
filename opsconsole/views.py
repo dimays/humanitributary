@@ -39,6 +39,7 @@ from django.views.decorators.http import require_POST, require_safe
 from ingest.models import Feed, FetchRun, RunLog
 from ingest.policy import mask_secrets
 from publish.models import Release
+from work import queue as work_queue
 from work import rounds as WR
 from work.models import AgentTask, Round
 
@@ -378,6 +379,7 @@ def work_kind(request, kind):
         t.summary = Q.result_summary(t)
         t.subject = Q.task_subject(t)
         t.stale = t.status == "claimed" and t.lease_until and t.lease_until < now
+        t.deferred = t.status == "queued" and ((t.not_before and t.not_before > now) or bool(t.needs_kind))
     return _render(request, "work_kind.html", {
         "kind": kind, "label": AgentTask.Kind(kind).label, "tabs": Q.TABS, "tab": tab, "status": tabs[tab][1], "q": q,
         "page": page, "qs": qs_rest, "counts": Q.kind_counts(kind, now), "max_batch": acts.MAX_TASKS,
@@ -393,6 +395,7 @@ def task_detail(request, pk):
     now = timezone.now()
     return _render(request, "task_detail.html", {
         "t": task, "now": now, "stale": task.status == "claimed" and task.lease_until and task.lease_until < now,
+        "deferred": work_queue.is_deferred(task, now), "needs": (task.payload or {}).get("needs") if isinstance((task.payload or {}).get("needs"), dict) else None,
         "revisions": revs[:50], "revision_count": revs.count(), "error": mask_secrets(task.error), "pack": Q.evidence_pack(task),
     }, section="work")
 

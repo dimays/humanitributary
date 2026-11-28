@@ -1,6 +1,6 @@
 # 0036 — Evidence packs: a job pre-fetches the allowed pages a task needs, stores their text privately for a limited time, and the API checks every excerpt against it
 
-**Status:** proposed (November 2026; revised before merge: rated publishers only, official APIs for catalog pages); amends [0013](0013-source-policy.md) (full text of `allowed` pages kept privately, with a retention limit; task payloads carry ranked passages; a verdict for sec.gov), [0016](0016-object-storage.md) (a second, deletable prefix in the `raw` store) and [0017](0017-agent-api.md) (stored pages over the API, and excerpts checked on `complete` and on edit files); amended by [0037](0037-source-ratings-2026-11-28.md) (API bases, keys and AI-crawler blocks)
+**Status:** proposed (November 2026; revised before merge: rated publishers only, official APIs for catalog pages); amends [0013](0013-source-policy.md) (full text of `allowed` pages kept privately, with a retention limit; task payloads carry ranked passages; a verdict for sec.gov), [0016](0016-object-storage.md) (a second, deletable prefix in the `raw` store) and [0017](0017-agent-api.md) (stored pages over the API, and excerpts checked on `complete` and on edit files); amended by [0037](0037-source-ratings-2026-11-28.md) (API bases, keys and AI-crawler blocks); amended by [0041](0041-deferred-releases-and-the-fetch-policy-endpoint.md) (agents' own reads follow the same policy, through `GET policy`)
 
 ## Context
 

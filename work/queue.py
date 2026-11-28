@@ -9,6 +9,12 @@ Operators (the console, ADR 0028) have their own versions, each naming who acts 
 `error` as `human:<username>: …`: `release_stuck` and `extend_for` (checked against the holder the operator saw, so
 a lease that changed hands in the meantime is refused), `requeue` (failed or cancelled tasks back to the queue, their
 attempts reset) and `cancel` (queued tasks, or claimed ones whose lease ran out), at most MAX_BATCH at once.
+
+Deferral (docs/adr/0041-deferred-releases-and-the-fetch-policy-endpoint.md): an agent's `release` sets `not_before`
+(DEFAULT_DEFER_MINUTES from now unless it says otherwise), so the next claim doesn't hand the same task straight back;
+a release that `needs` a person (a browser read, the owner's decision) waits NEEDS_DEFER_MINUTES and records the need
+in `payload["needs"]`, where the console shows it. An operator's `requeue` also takes such a deferred task, and clears
+both.
 """
 
 from datetime import timedelta
@@ -25,6 +31,14 @@ S = AgentTask.Status
 
 class TaskError(Exception):
     pass
+
+
+DEFAULT_DEFER_MINUTES = 60            # a release with no defer_minutes waits this long before it is offered again
+NEEDS_DEFER_MINUTES = 7 * 24 * 60     # a release that needs a person waits a week, unless defer_minutes says otherwise
+MAX_DEFER_MINUTES = 7 * 24 * 60
+NEEDS = ("browser", "owner")          # browser: a page only a browser may read; owner: a decision only the owner makes
+# Payload keys the queue owns: the jobs that refresh a queued task's payload (process, gap_waves, branches review) keep them.
+PAYLOAD_KEYS = ("needs",)
 
 
 def enqueue(kind: str, *, created_by: str, dedupe_key: str = "", priority: int = 0, payload: dict | None = None, **targets) -> tuple[AgentTask, bool]:
@@ -102,13 +116,31 @@ def fail(task_id: int, *, agent: str, error: str, retry: bool = True) -> AgentTa
         return task
 
 
-def release(task_id: int, *, agent: str) -> AgentTask:
-    """Hand a claimed task back untouched (the attempt is not counted against it)."""
+def release(task_id: int, *, agent: str, reason: str = "", defer_minutes: int | None = None, needs: str = "") -> AgentTask:
+    """Hand a claimed task back untouched (the attempt is not counted against it), deferred: it isn't offered again
+    for `defer_minutes` (DEFAULT_DEFER_MINUTES; NEEDS_DEFER_MINUTES when it `needs` a person), so an agent that can't
+    do a task doesn't claim it again at once, and nor does the next one. `needs` ("browser" or "owner") is recorded in
+    `payload["needs"]` ({kind, by, at, reason}) for the console; the reason and the deferral go in `error`'s notes."""
+    if needs and needs not in NEEDS:
+        raise TaskError(f"needs is one of {', '.join(NEEDS)}")
+    if defer_minutes is None:
+        defer_minutes = NEEDS_DEFER_MINUTES if needs else DEFAULT_DEFER_MINUTES
+    if not 0 <= defer_minutes <= MAX_DEFER_MINUTES:
+        raise TaskError(f"defer_minutes runs from 0 to {MAX_DEFER_MINUTES}")
+    reason = " ".join((reason or "").split())[:500]
     with transaction.atomic():
         task = _held(task_id, agent)
+        now = timezone.now()
         task.status, task.claimed_by, task.lease_until = S.QUEUED, "", None
         task.attempts = max(0, task.attempts - 1)
-        task.save(update_fields=["status", "claimed_by", "lease_until", "attempts"])
+        task.not_before = now + timedelta(minutes=defer_minutes) if defer_minutes else None
+        fields = ["status", "claimed_by", "lease_until", "attempts", "not_before", "error"]
+        if needs:
+            task.payload = {**(task.payload or {}), "needs": {"kind": needs, "by": agent, "at": now.isoformat(timespec="seconds"), "reason": reason}}
+            fields.append("payload")
+        when = f"deferred until {task.not_before:%Y-%m-%d %H:%M} UTC" if task.not_before else "not deferred"
+        _note(task, agent, "released" + (f", needs {needs}" if needs else "") + (f": {reason}" if reason else "") + f" ({when})")
+        task.save(update_fields=fields)
         return task
 
 
@@ -124,6 +156,20 @@ def extend(task_id: int, *, agent: str, minutes: int | None = None) -> AgentTask
 
 MAX_BATCH = 50
 REQUEUEABLE = (S.FAILED, S.CANCELLED)
+
+
+def deferred_q(now) -> Q:
+    """Queued tasks held back by a release: `not_before` still ahead, or a recorded need."""
+    return Q(status=S.QUEUED) & (Q(not_before__gt=now) | Q(payload__has_key="needs"))
+
+
+def requeueable_q(now) -> Q:
+    """What `requeue` takes: failed or cancelled tasks, and deferred ones (deferred_q)."""
+    return Q(status__in=REQUEUEABLE) | deferred_q(now)
+
+
+def is_deferred(task: AgentTask, now) -> bool:
+    return task.status == S.QUEUED and ((task.not_before is not None and task.not_before > now) or "needs" in (task.payload or {}))
 
 
 def _note(task: AgentTask, by: str, text: str):
@@ -174,16 +220,19 @@ def _batch(ids) -> list[int]:
 
 
 def requeue(ids, *, by: str, reason: str) -> dict:
-    """Failed or cancelled tasks back to the queue with their attempts reset. Others are skipped. → {"done": [ids],
+    """Failed, cancelled or deferred tasks back to the queue with their attempts reset, `not_before` cleared and any
+    recorded need (`payload["needs"]`) dropped: offered at once. Others are skipped. → {"done": [ids],
     "skipped": {id: why}}"""
     ids = _batch(ids)
+    now = timezone.now()
     out = {"done": [], "skipped": {}}
     with transaction.atomic():
         tasks = {t.pk: t for t in AgentTask.objects.select_for_update().filter(pk__in=ids)}
         opened = set()
         for i in ids:
             t = tasks.get(i)
-            if t is None or t.status not in REQUEUEABLE:
+            deferred = t is not None and is_deferred(t, now)
+            if t is None or not (t.status in REQUEUEABLE or deferred):
                 out["skipped"][i] = "gone" if t is None else f"is {t.status}"
                 continue
             if t.dedupe_key and (t.kind, t.dedupe_key) in opened:
@@ -192,9 +241,12 @@ def requeue(ids, *, by: str, reason: str) -> dict:
             if t.dedupe_key and AgentTask.objects.filter(kind=t.kind, dedupe_key=t.dedupe_key, status__in=[S.QUEUED, S.CLAIMED]).exclude(pk=t.pk).exists():
                 out["skipped"][i] = "another open task has its dedupe key"
                 continue
-            _note(t, by, f"requeued (was {t.status}, {t.attempts} attempts): {reason}")
-            t.status, t.attempts, t.claimed_by, t.lease_until, t.completed_at = S.QUEUED, 0, "", None, None
-            t.save(update_fields=["status", "attempts", "claimed_by", "lease_until", "completed_at", "error"])
+            was = "deferred" + (f" until {t.not_before:%Y-%m-%d %H:%M} UTC" if t.not_before and t.not_before > now else "") if deferred else t.status
+            needs = (t.payload or {}).get("needs")
+            _note(t, by, f"requeued (was {was}" + (f", needs {needs.get('kind')}" if isinstance(needs, dict) else "") + f", {t.attempts} attempts): {reason}")
+            t.status, t.attempts, t.claimed_by, t.lease_until, t.completed_at, t.not_before = S.QUEUED, 0, "", None, None, None
+            t.payload = {k: v for k, v in (t.payload or {}).items() if k != "needs"}
+            t.save(update_fields=["status", "attempts", "claimed_by", "lease_until", "completed_at", "not_before", "payload", "error"])
             opened.add((t.kind, t.dedupe_key))
             out["done"].append(i)
     return out
@@ -231,6 +283,7 @@ def as_json(task: AgentTask) -> dict:
         },
         "payload": task.payload, "claimed_by": task.claimed_by or None,
         "lease_until": task.lease_until.isoformat() if task.lease_until else None,
+        "not_before": task.not_before.isoformat() if task.not_before else None,
         "attempts": task.attempts, "max_attempts": task.max_attempts, "created_by": task.created_by, "round": task.round_id,
         "result": task.result, "error": task.error or None,
     }

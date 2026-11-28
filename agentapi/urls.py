@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import evidence, operations, views
+from . import evidence, operations, policy, views
 
 urlpatterns = [
     path("", views.index),
@@ -17,6 +17,8 @@ urlpatterns = [
     path("documents", evidence.documents),
     path("documents/<int:doc_id>", evidence.documents),
     path("evidence/check-excerpt", evidence.check_excerpt),
+    # The source policy for an agent's own reads (ADR 0041)
+    path("policy", policy.policy),
     # A round's operations (ADR 0035)
     path("queue", operations.queue),
     path("edits/check", operations.edits_check),

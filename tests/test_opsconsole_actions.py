@@ -259,6 +259,33 @@ class QuickActionTests(ActionsBase):
         self.assertEqual(failed.status, "cancelled")
         self.assertIn("human:op: cancelled (was queued): testing the console", failed.error)
 
+    def test_a_deferred_release_is_shown_and_requeue_clears_it(self):
+        # ADR 0041: an agent's release defers the task and may record a need; the Work → kind page shows both, and
+        # the operator's requeue (one task, or the Deferred tab as a batch) offers it at once.
+        from work import queue
+
+        t = self.task("queued", kind="write_event", payload={"items": []})
+        queue.next_task(agent="agent:writer", claim=True)
+        queue.release(t.pk, agent="agent:writer", needs="browser", reason="https://www.nbcnews.com/x: citation_only")
+        plain = self.task("queued", kind="write_event")
+        r = self.client.get(reverse("opsconsole:work_kind", args=["write_event"]), {"tab": "deferred"})
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, f"#{t.pk}")
+        self.assertNotContains(r, f"#{plain.pk}<")
+        self.assertContains(r, "not before ")
+        self.assertContains(r, "needs browser")
+        self.assertContains(r, "https://www.nbcnews.com/x: citation_only")
+        self.assertContains(r, "Requeue these")
+        self.assertContains(self.client.get(reverse("opsconsole:task", args=[t.pk])), "<dt>Needs</dt>")
+        a = self.do("requeue_tasks", task=t.pk, reason="read it in my browser")
+        self.assertEqual(a.result["done"], [t.pk])
+        t.refresh_from_db()
+        self.assertEqual((t.status, t.not_before, "needs" in t.payload), ("queued", None, False))
+        self.assertEqual(self.act("requeue_tasks", task=plain.pk).status_code, 409, "a plain waiting task has nothing to requeue")
+        queue.next_task(agent="agent:writer", claim=True)
+        queue.release(t.pk, agent="agent:writer")
+        self.assertEqual(self.do("cancel_tasks", task=t.pk).result["done"], [t.pk], "cancel still takes a deferred task")
+
     def test_a_live_lease_is_not_cancelled(self):
         t = self.task("claimed", claimed_by="agent:a", claimed_at=timezone.now(), lease_until=timezone.now() + timedelta(hours=1))
         r = self.act("cancel_tasks", task=t.pk)

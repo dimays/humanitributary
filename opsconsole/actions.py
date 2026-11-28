@@ -352,7 +352,7 @@ TASK_FILTERS = ("kind", "status", "agent", "q")
 
 def _eligible(kind: str, qs, now):
     if kind == A.REQUEUE_TASKS:
-        return qs.filter(status__in=queue.REQUEUEABLE)
+        return qs.filter(queue.requeueable_q(now))
     return qs.filter(DQ(status=AgentTask.Status.QUEUED) | DQ(status=AgentTask.Status.CLAIMED, lease_until__lt=now))
 
 
@@ -374,16 +374,16 @@ def _tasks_plan(kind: str, data) -> Plan:
     eligible = _eligible(kind, qs, now)
     total = eligible.count()
     if not total:
-        verb = "requeue (failed or cancelled)" if kind == A.REQUEUE_TASKS else "cancel (queued, or claimed with an expired lease)"
+        verb = "requeue (failed, cancelled or deferred)" if kind == A.REQUEUE_TASKS else "cancel (queued, or claimed with an expired lease)"
         raise Refused(f"none of {how} can be {verb.split(' (')[0]}d: only tasks to {verb}")
-    pick = list(eligible.order_by("-priority", "created_at", "id").only("id", "kind", "status", "priority", "created_at", "dedupe_key", "claimed_by")[:MAX_TASKS])
+    pick = list(eligible.order_by("-priority", "created_at", "id").only("id", "kind", "status", "priority", "created_at", "dedupe_key", "claimed_by", "not_before")[:MAX_TASKS])
     verb = "Requeue" if kind == A.REQUEUE_TASKS else "Cancel"
     rows = [("Selection", how), ("Eligible", f"{total}" + (f": this acts on the first {MAX_TASKS} (priority, then age); run it again for the rest" if total > MAX_TASKS else "")),
-            ("Then", "back to queued with attempts reset to 0" if kind == A.REQUEUE_TASKS else "cancelled; agents will not be offered them"),
+            ("Then", "back to queued with attempts reset to 0, any deferral (not before) and recorded need cleared: offered at once" if kind == A.REQUEUE_TASKS else "cancelled; agents will not be offered them"),
             ("Note", "each task's error gets a line: who, and the reason")]
     warnings = [f"{total} tasks match; the cap is {MAX_TASKS} at once"] if total > MAX_TASKS else []
     table = {"head": ["Task", "Kind", "Status", "Priority", "Created (UTC)", "Dedupe key"],
-             "rows": [[f"#{t.pk}", t.kind, t.status + (f" by {t.claimed_by}" if t.claimed_by else ""), t.priority, t.created_at.strftime("%Y-%m-%d %H:%M"), t.dedupe_key[:60]] for t in pick]}
+             "rows": [[f"#{t.pk}", t.kind, t.status + (f" by {t.claimed_by}" if t.claimed_by else "") + (f", not before {t.not_before:%Y-%m-%d %H:%M}" if t.status == "queued" and t.not_before and t.not_before > now else ""), t.priority, t.created_at.strftime("%Y-%m-%d %H:%M"), t.dedupe_key[:60]] for t in pick]}
     check = "\n".join(f"{k}: {v}" for k, v in rows) + "\n" + "tasks: " + ", ".join(str(t.pk) for t in pick)
     return Plan(kind, f"tasks:{len(pick)}", {"ids": [t.pk for t in pick], "filters": {k: v for k, v in f.items() if v}, "eligible": total},
                 f"{verb} {len(pick)} task{'s' if len(pick) != 1 else ''}", check_output=check, rows=rows, table=table, warnings=warnings)

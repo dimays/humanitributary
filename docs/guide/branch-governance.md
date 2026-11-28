@@ -150,7 +150,8 @@ review`), in one transaction:
    it creates or keeps gets a `review_branch_proposal` task (dedupe key
    `proposal:<id>`, priority 30 + min(20, ⌊10 × strength⌋)), whose payload
    is in [the work queue chapter](work-queue-and-agents.md#the-kinds-of-task).
-   A queued task's payload is refreshed when the finding changes.
+   A queued task's payload is refreshed when the finding changes, keeping a
+   release's recorded `needs` (`work.queue.PAYLOAD_KEYS`, ADR 0041).
 5. Every open proposal this job created whose finding didn't come up this
    run is **withdrawn** ("the rule no longer fires"), and its queued task is
    cancelled. A claimed task stays with its agent.

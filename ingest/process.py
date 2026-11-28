@@ -397,7 +397,7 @@ def run(ctx):
             room -= 1
         elif task.status == "queued":
             old = {**(task.payload or {})}
-            keep = {x: old[x] for x in ("suggested_sources", *PREFETCH_KEYS) if x in old}
+            keep = {x: old[x] for x in ("suggested_sources", *PREFETCH_KEYS, *queue.PAYLOAD_KEYS) if x in old}
             if {**payload, **keep} != old or task.priority != int(round(parts["priority"])):
                 task.payload, task.priority = {**payload, **keep}, int(round(parts["priority"]))
                 task.save(update_fields=["payload", "priority"])
