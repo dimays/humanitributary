@@ -4,7 +4,8 @@ Purpose: This procedure tells how to find the tasks that have no stored source o
 that cause this.
 
 The job `prefetch_sources` reads the pages of each queued task before an agent claims it (ADR 0036). It reads only
-the sites whose publisher has the fetch policy `allowed`. It keeps the clean text of each page in the private store
+the sites whose publisher has a tier and the fetch policy `allowed`. For catalog pages, it reads the
+official API of the catalog. It keeps the clean text of each page in the private store
 for 180 days (365 days for an open license). Agents copy their excerpts from this text.
 
 A task is "ready" when its evidence pack has one or more stored pages that are not Wikipedia. A task is "possible"
@@ -35,12 +36,21 @@ on a site that did not refuse the job.
    Make sure that you know the sites that refuse the job. These sources need a replacement.
 6. Find the groups where "Ready" is less than "Open".
    Make sure that you know which tasks the job has not read yet. The next runs read them.
-7. Open the page of one task from a group with a low share.
+7. Show the unrated domains:
+
+   ```bash
+   heroku run python manage.py unrated_domains -a humanitributary-staging
+   ```
+
+   Make sure that you have the list of domains with the most tasks. Give each a tier only after you read its terms.
+8. Open the page of one task from a group with a low share.
    Make sure that the evidence pack shows the stored pages and the pages to read by hand.
 
 > **NOTE:** A new source needs its terms first. Do procedure [12](12-add-a-data-source.md) for each new source.
 
 > **NOTE:** The report makes no requests. It reads only the queue and the `PrefetchedPage` rows.
+
+> **CAUTION:** Do not give a publisher a tier before you read its terms. The tier lets the job keep its text.
 
 > **CAUTION:** Do not change a `browser_only` publisher to `allowed` to increase the share. Change the fetch policy
 > only when the terms of the site permit automated access.

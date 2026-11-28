@@ -34,6 +34,7 @@ import json
 import re
 from collections import Counter
 from datetime import timedelta
+from typing import NamedTuple
 from urllib.parse import quote, unquote, urlsplit
 
 from django.conf import settings
@@ -102,7 +103,16 @@ def policy_reason(fetcher, url: str) -> tuple[str, str]:
         return pol, f"publisher {domain_of(url)} is {pol}"
     if why := policy.never_fetch_reason(url):
         return "never_fetch", why[:300]
+    if not rated(url):
+        return "unrated", f"{domain_of(url)} has no rating: a job fetches only publishers whose terms were read and rated allowed"
     return "", ""
+
+
+def rated(url: str) -> bool:
+    """The publisher (the nearest Publisher row for the domain or a parent) has a tier: someone rated it, its terms
+    read (ADR 0036). An unknown domain, or a row the import made without a rating, is not fetched by this job."""
+    pub = _publisher(url)
+    return pub is not None and pub.tier is not None
 
 
 def host_refusal(host: str, now) -> str:
@@ -137,43 +147,49 @@ def _wiki_url(title: str) -> str:
     return "https://en.wikipedia.org/wiki/" + quote(title.replace(" ", "_"), safe="()_,'!:-./")
 
 
-def candidates(task: AgentTask, limit: int) -> list[tuple[str, str, str]]:
-    """[(page key, the URL as given, where it came from)] for a task, most useful first, at most `limit`. The page
-    is requested at the URL as given (less tracking parameters) and stored under its key."""
+class Cand(NamedTuple):
+    key: str        # what the page is stored under and citations match on (page_key)
+    url: str        # what is requested (the URL as given, less fragment and tracking parameters)
+    why: str        # citation, source, suggested, pointer, edgar, wikipedia
+    hit: dict       # the lookup hit it came from ({adapter, ids, …}), or {}: what an API route reads
+
+
+def candidates(task: AgentTask, limit: int) -> list[Cand]:
+    """The pages a task points at, most useful first, at most `limit`."""
     p = task.payload or {}
     out = []
     if task.kind == "verify_claim":
-        out += [(e.get("url"), "citation") for e in p.get("evidence", [])]
+        out += [(e.get("url"), "citation", {}) for e in p.get("evidence", [])]
         if "evidence" not in p and task.target_claim_id:  # second_source's tasks name the claim, not its citations
             from evidence.models import Evidence
 
-            out += [(u, "citation") for u in Evidence.objects.filter(claim_id=task.target_claim_id).order_by("position").values_list("citation__url", flat=True)]
-        out += [(s.get("url"), "suggested") for s in p.get("suggested_sources", [])]
+            out += [(u, "citation", {}) for u in Evidence.objects.filter(claim_id=task.target_claim_id).order_by("position").values_list("citation__url", flat=True)]
+        out += [(s.get("url"), "suggested", s) for s in p.get("suggested_sources", [])]
     elif task.kind == "write_event":
-        out += [(s.get("url"), "source") for s in p.get("sources", [])]
-        out += [(u, "edgar") for u in p.get("_edgar", [])]
-        out += [(s.get("url"), "suggested") for s in p.get("suggested_sources", [])]
+        out += [(s.get("url"), "source", {}) for s in p.get("sources", [])]
+        out += [(u, "edgar", {}) for u in p.get("_edgar", [])]
+        out += [(s.get("url"), "suggested", s) for s in p.get("suggested_sources", [])]
         if p.get("story_article"):
-            out.append((p["story_article"], "wikipedia"))
+            out.append((p["story_article"], "wikipedia", {}))
     elif task.kind == "fill_gap":
         ptr = p.get("pointers") or {}
-        out += [(h.get("url"), "pointer") for h in ptr.get("lookups", [])]
-        out += [(s.get("url"), "pointer") for s in ptr.get("wikipedia_sections", [])]
-        out += [(_wiki_url(t), "pointer") for t in ptr.get("pages", [])]
+        out += [(h.get("url"), "pointer", h) for h in ptr.get("lookups", [])]
+        out += [(s.get("url"), "pointer", {}) for s in ptr.get("wikipedia_sections", [])]
+        out += [(_wiki_url(t), "pointer", {}) for t in ptr.get("pages", [])]
         b = p.get("branch") or {}
         if b.get("article"):
-            out.append((_wiki_url(b["article"]), "wikipedia"))
+            out.append((_wiki_url(b["article"]), "wikipedia", {}))
     seen, keep = set(), []
-    for u, why in out:
+    for u, why, hit in out:
         if not isinstance(u, str) or not u.startswith(("http://", "https://")):
             continue
         k = page_key(u)
         if k not in seen:
             seen.add(k)
-            keep.append((k, _fetchable(u, k), why))
+            keep.append(Cand(k, _fetchable(u, k), why, {"adapter": hit.get("adapter", ""), "ids": hit.get("ids") or {}} if hit else {}))
     # Citations and sources first, then lookups, then Wikipedia; at most a third of the slots for Wikipedia pages.
-    non_wiki = [x for x in keep if not is_wikipedia(x[0])]
-    wiki = [x for x in keep if is_wikipedia(x[0])]
+    non_wiki = [x for x in keep if not is_wikipedia(x.key)]
+    wiki = [x for x in keep if is_wikipedia(x.key)]
     n_wiki = min(len(wiki), max(1, limit // 3))
     return (non_wiki[: limit - n_wiki] + wiki[:n_wiki])[:limit]
 
@@ -340,18 +356,22 @@ def _unreadable(page: PrefetchedPage | None, url: str, reason: str, detail: str,
 
 
 def store_page(page: PrefetchedPage | None, *, url: str, fetched_url: str, final_url: str, publisher, raw: bytes, text: str, title: str,
-               language: str, content_type: str, http_status: int, etag: str, last_modified: str, now, fetcher) -> PrefetchedPage:
-    """Write raw bytes and clean text to the private store and record the page. Refuses anything but an `allowed`
-    publisher, checked again here, so a policy change between the request and the write can't store a page."""
-    pol = fetcher._publisher_policy(domain_of(final_url or url))
-    if pol != "allowed" or policy.never_fetch_reason(final_url or url):
-        raise Refused(f"{domain_of(final_url or url)} is {pol or 'never fetched'}: its text is never stored")
+               language: str, content_type: str, http_status: int, etag: str, last_modified: str, now, fetcher, policy_url: str = "",
+               via: str = "", detail: str = "") -> PrefetchedPage:
+    """Write raw bytes and clean text to the private store and record the page. Refuses anything but a rated,
+    `allowed` publisher (of the page, or of the API that answered: `policy_url`), checked again here, so a policy
+    change between the request and the write can't store a page."""
+    check = policy_url or final_url or url
+    why, _ = policy_reason(fetcher, check)
+    if why:
+        raise Refused(f"{domain_of(check)} is {why}: its text is never stored")
     text = text[:MAX_TEXT_CHARS]
     rh, th = hashlib.sha256(raw).hexdigest(), hashlib.sha256(text.encode()).hexdigest()
     storage.write(storage.RAW, _store_key("raw", rh), raw)
     storage.write(storage.RAW, _store_key("text", th), text.encode())
     page = page or PrefetchedPage(url=url, host=(urlsplit(fetched_url or url).hostname or "").lower())
-    page.fetched_url, page.final_url, page.publisher, page.status, page.reason, page.detail = fetched_url, final_url, publisher, "stored", "", ""
+    page.fetched_url, page.final_url, page.publisher, page.status, page.reason, page.detail = fetched_url, final_url, publisher, "stored", "", detail[:500]
+    page.via = via
     page.http_status, page.fetched_at, page.checked_at, page.etag, page.last_modified = http_status, now, now, etag[:300], last_modified[:100]
     page.content_type, page.raw_hash, page.raw_key, page.text_hash, page.text_key = content_type[:100], rh, _store_key("raw", rh), th, _store_key("text", th)
     page.words, page.title, page.language = P.words(text), title[:500], language[:20]
@@ -370,9 +390,11 @@ def read_text(page: PrefetchedPage) -> str | None:
         return None
 
 
-def stored(url: str) -> PrefetchedPage | None:
-    """The stored page for a cited URL, if the store has its text."""
-    return PrefetchedPage.objects.filter(url=page_key(url), status="stored").exclude(text_key="").select_related("publisher").first()
+def stored(url: str, *, pages_only: bool = False) -> PrefetchedPage | None:
+    """The stored page for a cited URL, if the store has its text. pages_only: not an API's record of it (`via`),
+    which holds less than the page itself (what auto-verify needs)."""
+    qs = PrefetchedPage.objects.filter(url=page_key(url), status="stored").exclude(text_key="").select_related("publisher")
+    return qs.filter(via="").first() if pages_only else qs.first()
 
 
 def _fetch_wikipedia(fetcher, url: str, page, now):
@@ -415,29 +437,47 @@ def _fetch_page(fetcher, url: str, page, now):
                 last_modified=r.headers.get("last-modified", ""), final_url=page_key(r.final_url)), None
 
 
-def read(fetcher, url: str, now, counts: Counter, budget: list, per_host: Counter, host_cap: int, *, fetch_url: str = "") -> tuple[PrefetchedPage | None, str, str]:
+def _caps(host: str, budget: list, per_host: Counter, host_cap: int, counts: Counter) -> bool:
+    if budget[0] <= 0 or per_host[host] >= host_cap * (3 if host in policy.API_HOSTS else 1):
+        counts["deferred"] += 1
+        return False
+    budget[0] -= 1
+    per_host[host] += 1
+    counts["requests"] += 1
+    return True
+
+
+def read(fetcher, url: str, now, counts: Counter, budget: list, per_host: Counter, host_cap: int, *, fetch_url: str = "",
+         hit: dict | None = None) -> tuple[PrefetchedPage | None, str, str]:
     """→ (page or None, reason, detail) for the page stored under `url` (a page key), requested at `fetch_url`. A
-    fresh stored or recent unreadable row is reused with no request."""
+    fresh stored or recent unreadable row is reused with no request. A catalog page with an official API (an
+    OpenAlex work, a DOI, a Library of Congress item, a Smithsonian or Europeana record: ingest/prefetch_api.py) is
+    read through the API and never as a page: those pages refuse scripts (robots.txt, bot walls), and a bot wall on
+    loc.gov would also refuse its JSON API for the rest of the run. Stored with `via` naming the API."""
+    from . import prefetch_api
+
     fetch_url = fetch_url or url
     page = PrefetchedPage.objects.filter(url=url).select_related("publisher").first()
     reason, detail = policy_reason(fetcher, fetch_url)
-    if reason:
+    if reason and reason != "unrated":
         return None, reason, detail
     if page and page.status == "stored" and page.checked_at >= now - timedelta(days=REFRESH_DAYS) and read_text(page) is not None:
         counts["pages_reused"] += 1
         return page, "", ""
-    if page and page.status == "unreadable" and page.checked_at >= now - timedelta(days=RETRY_DAYS):
+    route = prefetch_api.route(url if is_wikipedia(url) else fetch_url, hit)
+    recent = page and page.status == "unreadable" and page.checked_at >= now - timedelta(days=RETRY_DAYS)
+    host = (urlsplit(fetch_url).hostname or "").lower()
+    if isinstance(route, prefetch_api.Route) and not (recent and page.reason.startswith("api_")):
+        return read_api(fetcher, url, route, page, now, counts, budget, per_host, host_cap)
+    if reason:  # unrated, with no API
+        return None, reason, detail if route != "api_key_missing" else f"{detail}; its API needs a key that isn't set"
+    if recent:
         counts["unreadable_reused"] += 1
         return None, page.reason, page.detail
-    host = (urlsplit(fetch_url).hostname or "").lower()
     if host not in policy.API_HOSTS and (why := host_refusal(host, now)):
         return None, why, f"{host} refused automated readers within {HOST_COOLDOWN_DAYS} days"
-    if budget[0] <= 0 or per_host[host] >= host_cap * (3 if host in policy.API_HOSTS else 1):
-        counts["deferred"] += 1
+    if not _caps(host, budget, per_host, host_cap, counts):
         return None, "deferred", "this run's request cap was reached: tried again next run"
-    budget[0] -= 1
-    per_host[host] += 1
-    counts["requests"] += 1
     try:
         got, err = _fetch_wikipedia(fetcher, url, page, now) if WIKI_RE.match(url) else _fetch_page(fetcher, fetch_url, page, now)
     except Refused as e:
@@ -471,6 +511,52 @@ def read(fetcher, url: str, now, counts: Counter, budget: list, per_host: Counte
     return page, "", ""
 
 
+def read_api(fetcher, url: str, route, page, now, counts: Counter, budget: list, per_host: Counter, host_cap: int):
+    """The page's record from its official API (ingest/prefetch_api.py), stored under the page's key with `via` set
+    to the API, the API's publisher (rated, allowed: checked like a page) and the terms clause relied on. A route
+    whose API answers 404 tries its fallback (a DOI: OpenAlex, then Crossref)."""
+    from . import prefetch_api
+
+    while route is not None:
+        why, detail = policy_reason(fetcher, route.api_url)
+        if why:
+            return None, f"api_{why}", detail
+        host = (urlsplit(route.api_url).hostname or "").lower()
+        if not _caps(host, budget, per_host, host_cap, counts):
+            return None, "deferred", "this run's request cap was reached: tried again next run"
+        try:
+            r = fetcher.get(route.api_url, headers=route.headers)
+        except Refused as e:
+            reason = "api_robots" if "robots.txt" in str(e) else "api_blocked"
+            p = _unreadable(page, url, reason, str(e), now, fetch_url=route.api_url)
+            return (p, "", "") if p.status == "stored" else (None, reason, str(e)[:300])
+        except FetchError as e:
+            counts["errors"] += 1
+            return None, "api_error", str(e)[:300]
+        if r.status == 404 and route.fallback is not None:
+            route = route.fallback
+            continue
+        if not r.ok or r.blocked:
+            reason = f"api_http_{r.status}"
+            p = _unreadable(page, url, reason, f"{route.name} API answered HTTP {r.status}", now, http_status=r.status, fetch_url=route.api_url)
+            return (p, "", "") if p.status == "stored" else (None, reason, f"{route.name} API answered HTTP {r.status}")
+        try:
+            title, text = prefetch_api.render(route.name, r.json())
+        except (ValueError, TypeError, KeyError, AttributeError) as e:
+            return None, "api_error", f"{route.name}: {type(e).__name__}"
+        if P.words(text) < 5:
+            p = _unreadable(page, url, "api_empty", f"{route.name} API: {P.words(text)} words", now, fetch_url=route.api_url)
+            return (p, "", "") if p.status == "stored" else (None, "api_empty", f"{route.name} API returned no text")
+        page = store_page(page, url=url, fetched_url=route.api_url, final_url=url, publisher=_publisher(route.api_url), raw=r.content, text=text,
+                          title=title, language="", content_type=f"application/json ({route.name} API)", http_status=r.status,
+                          etag=r.headers.get("etag", ""), last_modified=r.headers.get("last-modified", ""), now=now, fetcher=fetcher,
+                          policy_url=route.api_url, via=route.name, detail=f"via the {route.name} API ({route.clause})")
+        counts[f"api_{route.name}"] += 1
+        counts["pages_stored"] += 1
+        return page, "", ""
+    return None, "api_error", "no route"
+
+
 # ── the pack ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def pack_entry(page: PrefetchedPage, cited_url: str, terms: P.Terms, n: int) -> dict:
@@ -478,7 +564,7 @@ def pack_entry(page: PrefetchedPage, cited_url: str, terms: P.Terms, n: int) -> 
     pub = page.publisher
     return {"url": cited_url, "title": page.title, "publisher": pub.domain if pub else domain_of(page.url), "tier": pub.tier if pub else None,
             "fetched_at": page.fetched_at.isoformat(timespec="seconds"), "doc_id": page.pk, "words": page.words,
-            "passages": [x.as_json() for x in P.rank(text, terms, n)]}
+            "passages": [x.as_json() for x in P.rank(text, terms, n)]} | ({"via": "api", "api": page.via} if page.via else {})
 
 
 def _size(x) -> int:
@@ -501,13 +587,17 @@ def _order(e: dict) -> tuple:
     return (e["publisher"] == "wikipedia.org", e["tier"] if e["tier"] is not None else 5, -max([p["score"] for p in e["passages"]] or [0]))
 
 
+# Bumped when what a pack holds changes (the rules, the APIs), so every queued task is packed again.
+PACK_VERSION = 2
+
+
 def urls_sha(urls: list[str]) -> str:
-    return hashlib.sha256("\n".join(sorted(urls)).encode()).hexdigest()[:16]
+    return hashlib.sha256((f"v{PACK_VERSION}\n" + "\n".join(sorted(urls))).encode()).hexdigest()[:16]
 
 
 def build(fetcher, task: AgentTask, opts: dict, now, counts: Counter, budget: list, per_host: Counter) -> dict:
     """The payload keys for one task (PAYLOAD_KEYS)."""
-    base = [k for k, _, _ in candidates(task, opts["urls"])]  # what needs_pack compares against
+    base = [c.key for c in candidates(task, opts["urls"])]  # what needs_pack compares against
     if task.kind == "write_event":
         p = dict(task.payload or {})
         p["_edgar"] = edgar_urls(fetcher, task, counts, budget)
@@ -515,12 +605,12 @@ def build(fetcher, task: AgentTask, opts: dict, now, counts: Counter, budget: li
     urls = candidates(task, opts["urls"])
     terms = terms_for(task)
     pack, unreadable = [], []
-    for key, url, _why in urls:
-        page, reason, detail = read(fetcher, key, now, counts, budget, per_host, opts["per_host"], fetch_url=url)
+    for c in urls:
+        page, reason, detail = read(fetcher, c.key, now, counts, budget, per_host, opts["per_host"], fetch_url=c.url, hit=c.hit)
         if page is not None:
-            pack.append(pack_entry(page, key, terms, opts["passages"]))
+            pack.append(pack_entry(page, c.key, terms, opts["passages"]))
         else:
-            unreadable.append({"url": url, "reason": reason, "detail": detail[:200]})
+            unreadable.append({"url": c.url, "reason": reason, "detail": detail[:200]})
     pack = fit(sorted(pack, key=_order), opts["pack_bytes"])
     deferred = any(u["reason"] == "deferred" for u in unreadable)
     return {"evidence_pack": pack, "unreadable": unreadable,
@@ -531,7 +621,7 @@ def build(fetcher, task: AgentTask, opts: dict, now, counts: Counter, budget: li
 
 def needs_pack(task: AgentTask, limit: int) -> bool:
     """No pack yet, a pack built from other URLs (the payload gained sources or pointers since), or one the caps cut short."""
-    return (task.payload or {}).get("evidence_urls") != urls_sha([k for k, _, _ in candidates(task, limit)])
+    return (task.payload or {}).get("evidence_urls") != urls_sha([c.key for c in candidates(task, limit)])
 
 
 def run(ctx) -> None:
@@ -561,12 +651,19 @@ def run(ctx) -> None:
 # ── retention ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def purge(now, counts: Counter | None = None, *, limit: int = 500) -> int:
-    """Pages past retain_until: their text and bytes leave the store (unless another page still in retention holds
-    the same content), the row becomes `purged`, and the packs that quoted them lose those passages."""
+    """Pages past retain_until, and pages whose publisher is no longer rated and `allowed`: their text and bytes
+    leave the store (unless another page still kept holds the same content), the row becomes `purged`, and the
+    packs that quoted them lose those passages."""
     counts = counts if counts is not None else Counter()
     n = 0
-    for page in PrefetchedPage.objects.filter(status="stored", retain_until__lt=now).order_by("retain_until", "id")[:limit]:
-        live = PrefetchedPage.objects.filter(status="stored", retain_until__gte=now).exclude(pk=page.pk)
+    # Past retention, and pages whose publisher is no longer rated and allowed (a policy change, or stored before
+    # the rule): neither keeps its text.
+    unfit = Q(publisher__isnull=True) | Q(publisher__tier__isnull=True) | ~Q(publisher__fetch_policy="allowed")
+    expired = list(PrefetchedPage.objects.filter(status="stored", retain_until__lt=now).order_by("retain_until", "id")[:limit])
+    gone = list(PrefetchedPage.objects.filter(unfit, status="stored").exclude(pk__in=[p.pk for p in expired]).order_by("id")[: max(0, limit - len(expired))])
+    counts["pages_unrated_purged"] += len(gone)
+    for page in expired + gone:
+        live = PrefetchedPage.objects.filter(status="stored", retain_until__gte=now).exclude(unfit).exclude(pk=page.pk)
         for field, key in (("raw_key", page.raw_key), ("text_key", page.text_key)):
             if key and not live.filter(**{field: key}).exists():
                 try:

@@ -30,7 +30,7 @@ def _check(url: str, excerpt: str, where: str, cache: dict) -> dict | None:
         return None
     key = prefetch.page_key(url)
     if key not in cache:
-        page = prefetch.stored(url)
+        page = prefetch.stored(url, pages_only=True)  # an API's record holds less than the page: not a reason to refuse
         cache[key] = (page, prefetch.read_text(page) if page else None)
     page, text = cache[key]
     if text is None or P.contains(text, excerpt):

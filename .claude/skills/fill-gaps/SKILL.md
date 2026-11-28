@@ -64,9 +64,13 @@ publishers whose policy lets a job read them, and put them in the payload:
   and `passages` (the page's sentences that name the task's dates, years, numbers, entities or title words, best
   first, each with its `score` and `matches`, such as `"date:June 6"`, `"entity:Normandy (Q8205)"`).
 - `unreadable`: the URLs it did not read, each with a `reason`: `browser_only` (read it in a browser),
+  `unrated` (nobody has rated the publisher yet, so the job doesn't fetch it: read it yourself, honestly),
   `forbidden` (never), `never_fetch`, `robots`, `blocked`, `tdm_reserved` (the page opts out of text and data mining: read it by hand), `http_404`, `error`, `unsupported` (a PDF, say), `empty`,
   `deferred` (not yet: the next run reads it).
 - `evidence_ready`: true when at least one stored page is not Wikipedia.
+- An entry with `"via": "api"` is a catalog page read through its official API (`"api"`: openalex,
+  crossref, loc, smithsonian, europeana): the record (title, metadata, an abstract), not the page. Cite the entry's
+  `url`; an excerpt from the record is fine. If you cite the page for more than the record says, read the page.
 
 How to use it:
 

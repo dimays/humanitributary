@@ -1,6 +1,6 @@
 # 0036 — Evidence packs: a job pre-fetches the allowed pages a task needs, stores their text privately for a limited time, and the API checks every excerpt against it
 
-**Status:** proposed (November 2026); amends [0013](0013-source-policy.md) (full text of `allowed` pages kept privately, with a retention limit; task payloads carry ranked passages; a verdict for sec.gov), [0016](0016-object-storage.md) (a second, deletable prefix in the `raw` store) and [0017](0017-agent-api.md) (stored pages over the API, and excerpts checked on `complete` and on edit files)
+**Status:** proposed (November 2026; revised before merge: rated publishers only, official APIs for catalog pages); amends [0013](0013-source-policy.md) (full text of `allowed` pages kept privately, with a retention limit; task payloads carry ranked passages; a verdict for sec.gov), [0016](0016-object-storage.md) (a second, deletable prefix in the `raw` store) and [0017](0017-agent-api.md) (stored pages over the API, and excerpts checked on `complete` and on edit files)
 
 ## Context
 
@@ -26,11 +26,32 @@ deletes nothing (ADR 0016). Excerpts are at most 25 words and must be verbatim (
   (citations and sources first, at most a third Wikipedia), plus, for a story naming an SEC filing (8-K, 10-K …),
   the filing itself on EDGAR: the company's Central Index Key from Wikidata (P5531), EDGAR's submissions API, and the
   filing's primary document filed within 3 days of the story.
-- **Policy first.** A URL whose publisher is `browser_only` or `forbidden`, or whose host is in NEVER_FETCH, is never
-  requested; it goes in the payload's `unreadable` list with its reason, which is what tells an agent to open a
-  browser. A page that reserves text and data mining (the W3C TDM Reservation Protocol's `tdm-reservation: 1`
-  header or meta tag) is read but never stored (`tdm_reserved`). Everything else goes through the Fetcher (robots.txt, bot walls, backoff). A host that blocked us or
-  refused by robots.txt in the last 14 days is not asked again (read from its page rows).
+- **Policy first: only rated, `allowed` publishers.** The job fetches a page only when its publisher (the nearest
+  Publisher row for the domain or a parent) is **rated** (has a tier: someone read its terms and rated it) and
+  `allowed`. An unrated domain (no row, or a row the import made without a tier: 575 of 633 rows when this was
+  written) is never requested and goes in `unreadable` as `unrated`, so it shows up for rating; `manage.py
+  unrated_domains` lists them with counts. A `browser_only` or `forbidden` publisher, or a NEVER_FETCH host, is
+  never requested either; `browser_only` is what tells an agent to open a browser. A page that reserves text and
+  data mining (the W3C TDM Reservation Protocol's `tdm-reservation: 1` header or meta tag) is read but never stored
+  (`tdm_reserved`). Everything else goes through the Fetcher (robots.txt, bot walls, backoff). A host that blocked
+  us or refused by robots.txt in the last 14 days is not asked again (read from its page rows). The rule is the
+  job's: link health and the other jobs keep the Fetcher's policy as it was.
+- **Official APIs for catalog pages** (`ingest/prefetch_api.py`). The lookup adapters point at pages that refuse
+  scripts. Each of those has a published API whose terms (ADR 0013's verdicts) allow what we do, so the job reads
+  the API and never the page, and stores the record with `via` naming the API and the clause relied on:
+
+  | Page | API | Stored | Clause relied on |
+  |---|---|---|---|
+  | openalex.org works; a DOI (doi.org), first | api.openalex.org | title, venue, year, authors, the abstract (rebuilt from its inverted index), the open-access link | openalex.org: "ALLOW: CC0 metadata, keyless …; descriptive User-Agent" |
+  | a DOI OpenAlex lacks | api.crossref.org | title, venue, date, publisher, type: no abstract | crossref.org: "public pool, 1 request a second …; titles as snippets (not abstracts)" |
+  | loc.gov `/item/`, `/resource/` | the same URL with `?fo=json` | title, date, contributors, subjects, summary, description, notes | loc.gov: "no more than 10 requests a minute …; uses … ?fo=json" |
+  | Smithsonian records (siris-libraries.si.edu, n2t.net ARKs, repository.si.edu), by the hit's EDAN id | api.si.edu content (key in a header) | title and the record's free-text fields | si.edu: "Open Access API (api.data.gov key …), CC0 metadata; store metadata only" |
+  | europeana.eu items | api.europeana.eu Record API (key in a header) | title, description, date, creator, provider | europeana.eu: "key in the X-Api-Key header …; metadata CC0" |
+
+  The API's publisher must itself be rated and `allowed`; a keyed API without its key is skipped
+  (`api_key_missing`). The record is less than the page, so `complete` never refuses an excerpt because it isn't in
+  an API's record (auto-verify reads only `via`-less pages); `check-excerpt` still answers. OpenAlex's abstracts are
+  the publishers' text: they are kept privately under the same retention as any page and quoted at most 25 words.
 - Caps: 60 requests a run, 8 a host (24 for the Wikimedia API), 40 tasks a run; what a cap leaves is `deferred` and
   done next run. A page stored less than 7 days ago is reused without a request; an older one gets a conditional GET.
   English Wikipedia is read through the MediaWiki API (TextExtracts' plain text), other pages with the existing
@@ -49,14 +70,15 @@ pointers is repacked). `process` and `gap_waves` keep these keys when they refre
 **Data.** One new table, `ingest.PrefetchedPage`: one row per canonical URL (`ingest.prefetch.page_key`: the
 canonical URL, an English Wikipedia article by its decoded title), with its host, publisher, status (`stored`,
 `unreadable` with a reason, `purged`), the conditional-GET validators, the content hashes and store keys, the word
-count and `retain_until`. It is the page's record and, grouped by host, the host's fetch health (the console and the
+count, `via` (empty, or the API whose record is stored) and `retain_until`. It is the page's record and, grouped by host, the host's fetch health (the console and the
 coverage report read it), so no separate host table. Passages stay in the payload rather than a table: they are
 ranked against one task's terms, so they aren't shared between tasks, and the payload is what the agent already
 reads; the page's text is what is shared. Not canonical (no audit trigger), like the rest of `ingest`.
 
 **Storage, copyright and retention** (amends ADR 0013 and 0016). Raw bytes and clean text go in the private `raw`
-store under `pages/raw/<hash[:2]>/<hash>` and `pages/text/<hash[:2]>/<hash>`, only for an `allowed` publisher
-(checked again just before writing). They are never published: not in a snapshot, a release or the public page,
+store under `pages/raw/<hash[:2]>/<hash>` and `pages/text/<hash[:2]>/<hash>`, only for a rated, `allowed`
+publisher (checked again just before writing). A stored page whose publisher stops being rated and `allowed` is
+purged on the job's next run, as a page past its retention is. They are never published: not in a snapshot, a release or the public page,
 and served only over the agent API to the agents below. Each page's text and bytes are deleted
 `EVIDENCE_RETENTION_DAYS` (180) after it was last fetched, or `EVIDENCE_RETENTION_DAYS_OPEN` (365) when the
 publisher's license is open (CC0, CC BY, public domain, the Open Government Licence); the row stays as `purged`, and
@@ -92,8 +114,10 @@ filings show as `blocked` and are read by hand.
 
 **Measuring it.** `manage.py evidence_coverage [--out var/]` (`ingest/coverage.py`, no requests) reports, per task
 kind, region and era, the share of queued tasks whose pack holds a non-Wikipedia page ("ready"), that point at one
-a job may fetch at all ("possible"), and at one on a site that hasn't refused us ("open"), the unreadable hosts and reasons, and the host health: where new sources are
-needed. The console's Work page shows the "evidence ready" share per queue, and a task's page shows its pack.
+a job may fetch at all, as a page or through its API ("possible"), and at one on a site that hasn't refused us
+("open"), the pages stored through each API, the unrated domains, the unreadable hosts and reasons, and the host
+health: where new sources are needed. `manage.py unrated_domains [--json]` lists the unrated domains alone: each
+with the tasks and URLs that name it and an example, for the round that rates them. The console's Work page shows the "evidence ready" share per queue, and a task's page shows its pack.
 
 ## Consequences
 
@@ -112,11 +136,12 @@ needed. The console's Work page shows the "evidence ready" share per queue, and 
   adapters' catalog pages (siris-libraries.si.edu and loc.gov items behind bot walls; europeana.eu, doi.org,
   n2t.net and openalex.org refused by robots.txt), and 200 of the 248 claims cite Wikipedia alone. Evidence packs
   help most once the lookups point at readable full text: the next source-discovery round's job.
-- `allowed` is the default for a domain nobody rated (`evidence.publishers.defaults_for`), so on the first run the
-  job stored pages from news publishers whose terms nobody has read for this use (ft.com, time.com, nbcnews.com
-  among them), as link health already fetched them. The TDMRep check catches the ones that say no in the page; the
-  rest wait on the source-discovery round, which should rate the frequent hosts (`evidence_coverage` lists them)
-  and set the ones whose terms forbid it `browser_only`.
+- **Unrated means not fetched.** The Fetcher's default for a domain nobody rated is `allowed`
+  (`evidence.publishers.defaults_for`), and a first version of this job followed it: it stored news pages from
+  publishers whose terms nobody had read (ft.com, time.com, nbcnews.com among them). Now the job needs a rating,
+  those pages were deleted, and a stored page whose publisher loses its rating is purged. The cost: most news
+  sources wait for a rating, so the share of ready `write_event` tasks drops until a source-discovery round rates
+  the frequent hosts (`manage.py unrated_domains`), terms first.
 - The job adds up to 60 polite requests every 15 minutes to the worker's load; the caps are job options.
 - What would make us revisit it: a publisher objecting to stored copies (shorten the retention or drop the host),
   passages that rank badly (the weights are in `ingest/passages.py`), or a need to share passages across tasks

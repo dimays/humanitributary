@@ -53,6 +53,7 @@ PAYLOAD = {
         {"url": "https://blocked.example.org/story", "domain": "blocked.example.org"},
         {"url": "https://robots.example.net/private/page", "domain": "robots.example.net"},
         {"url": "https://tdm.example.com/article", "domain": "tdm.example.com"},
+        {"url": "https://www.unrated-news.example/story", "domain": "unrated-news.example"},
     ],
     "story_article": "https://en.wikipedia.org/wiki/Normandy_landings",
 }
@@ -87,6 +88,16 @@ ROUTES = {
 }
 
 
+EXAMPLE_HOSTS = ("blocked.example.org", "robots.example.net", "tdm.example.com", "openalex.org", "crossref.org", "doi.org")
+
+
+def rate_examples():
+    """Rated, allowed rows for the made-up hosts: the job fetches only rated publishers (ADR 0036)."""
+    for d in EXAMPLE_HOSTS:
+        Publisher.objects.update_or_create(domain=d, defaults={"name": d, "tier": 2 if d in ("openalex.org", "crossref.org", "doi.org") else 3,
+                                                               "license": "CC0 1.0 (metadata)" if d == "openalex.org" else ""})
+
+
 class Ctx:
     def __init__(self, fetcher, **opts):
         self.fetcher, self.options, self.counts, self.errors = fetcher, opts, Counter(), []
@@ -104,6 +115,7 @@ class PackTests(FreshStorage, TestCase):
         import_content(small())
         with revising("human:test", reason="test publishers"):
             Publisher.objects.update_or_create(domain="archives.gov", defaults={"name": "US National Archives", "tier": 1, "license": "public domain"})
+            rate_examples()
             Publisher.objects.update_or_create(domain="britannica.com", defaults={"name": "Britannica", "tier": 2, "fetch_policy": "browser_only"})
             Publisher.objects.update_or_create(domain="theguardian.com", defaults={"name": "The Guardian", "tier": 3, "fetch_policy": "browser_only"})
         self.task, _ = queue.enqueue("write_event", created_by="job:process", payload=PAYLOAD, priority=80)
@@ -130,6 +142,8 @@ class PackTests(FreshStorage, TestCase):
         self.assertEqual(reasons["blocked.example.org"], "blocked")
         self.assertEqual(reasons["robots.example.net"], "robots")
         self.assertEqual(reasons["tdm.example.com"], "tdm_reserved", "a page that reserves text and data mining is never stored")
+        self.assertEqual(reasons["unrated-news.example"], "unrated", "a domain nobody rated is never fetched")
+        self.assertNotIn("www.unrated-news.example", hosts)
         self.assertNotIn("robots.example.net/private/page", self.mock.seen, "robots.txt refuses before the page is asked for")
         self.assertFalse(PrefetchedPage.objects.filter(host__in=["britannica.com", "theguardian.com", "openstax.org"]).exists())
         self.assertFalse(PrefetchedPage.objects.filter(host="tdm.example.com", status="stored").exists())
@@ -166,7 +180,7 @@ class PackTests(FreshStorage, TestCase):
         for x in e["passages"]:
             self.assertTrue(P.contains(text, x["text"]), "every passage is verbatim on the stored page")
         self.assertTrue(page.text_key.startswith("pages/text/") and storage.exists(storage.RAW, page.raw_key))
-        self.assertEqual(p["evidence_urls"].split("+")[0], prefetch.urls_sha([k for k, _, _ in prefetch.candidates(self.task, 12)]))
+        self.assertEqual(p["evidence_urls"].split("+")[0], prefetch.urls_sha([c.key for c in prefetch.candidates(self.task, 12)]))
 
     def test_the_pack_is_capped_in_size(self):
         self.run_job(pack_bytes=900)
@@ -256,6 +270,83 @@ class PackTests(FreshStorage, TestCase):
                                 raw=b"x", text="x " * 50, title="", language="", content_type="text/html", http_status=200, etag="",
                                 last_modified="", now=timezone.now(), fetcher=fetcher)
 
+    # ── official APIs where the web pages refuse ──
+    def test_catalog_pages_that_refuse_are_read_through_their_api(self):
+        inv = {"The": [0], "treaty": [1], "ended": [2], "the": [3], "war": [4], "in": [5], "1648,": [6], "after": [7], "long": [8], "talks.": [9]}
+        routes = {**ROUTES,
+                  "openalex.org/robots.txt": (200, "text/plain", "User-agent: *\nDisallow: /\n"),
+                  "doi.org/robots.txt": (200, "text/plain", "User-agent: *\nDisallow: /\n"),
+                  "api.openalex.org/works/W42": (200, "application/json", json.dumps(
+                      {"display_name": "Peace of Westphalia revisited", "publication_year": 1998, "abstract_inverted_index": inv,
+                       "primary_location": {"source": {"display_name": "Journal of Early Modern History"}},
+                       "authorships": [{"author": {"display_name": "A. Historian"}}], "open_access": {"oa_url": None}})),
+                  "api.openalex.org/works/doi:10.1234/xyz": (404, "application/json", "{}"),
+                  "api.crossref.org/works/10.1234/xyz": (200, "application/json", json.dumps(
+                      {"message": {"title": ["Westphalia and its treaties"], "container-title": ["Diplomatic History"],
+                       "issued": {"date-parts": [[2001, 5]]}, "publisher": "Example Press", "type": "journal-article", "DOI": "10.1234/xyz",
+                       "abstract": "<jats:p>Never stored: Crossref abstracts are not ours to keep.</jats:p>"}}))}
+        t, _ = queue.enqueue("fill_gap", created_by="job:gap_waves", dedupe_key="gap:x", priority=99, payload={
+            "window": {"from": 1600, "to": 1700}, "branch": {"id": "un", "name": "Peace of Westphalia", "qids": []},
+            "pointers": {"lookups": [{"adapter": "openalex", "url": "https://openalex.org/W42", "ids": {"openalex": "https://openalex.org/W42"}},
+                                     {"adapter": "crossref", "url": "https://doi.org/10.1234/xyz", "ids": {"doi": "10.1234/xyz"}}]}})
+        self.mock = Mock(routes)
+        prefetch.run(Ctx(Fetcher(transport=httpx.MockTransport(self.mock), sleep=lambda s: None)))
+        t.refresh_from_db()
+        self.assertNotIn("openalex.org/W42", self.mock.seen, "a catalog page is read through its API, never as a page")
+        by = {e["url"]: e for e in t.payload["evidence_pack"]}
+        oa = by["https://openalex.org/W42"]
+        self.assertEqual((oa["via"], oa["api"], oa["publisher"]), ("api", "openalex", "openalex.org"))
+        page = PrefetchedPage.objects.get(pk=oa["doc_id"])
+        text = prefetch.read_text(page)
+        self.assertIn("The treaty ended the war in 1648, after long talks.", text, "the abstract, rebuilt from OpenAlex's inverted index")
+        self.assertIn("openalex.org verdict", page.detail, "the terms clause relied on is recorded")
+        self.assertTrue(any("year:1648" in x["matches"] for x in oa["passages"]))
+        cr = by["https://doi.org/10.1234/xyz"]
+        self.assertEqual(cr["api"], "crossref", "OpenAlex didn't have the DOI: Crossref's metadata")
+        cr_text = prefetch.read_text(PrefetchedPage.objects.get(pk=cr["doc_id"]))
+        self.assertIn("Diplomatic History", cr_text)
+        self.assertNotIn("Never stored", cr_text, "Crossref's verdict: titles, not abstracts")
+        self.assertTrue(t.payload["evidence_ready"])
+        self.assertIsNone(prefetch.stored("https://openalex.org/W42", pages_only=True), "auto-verify never checks against an API's record")
+
+    def test_a_key_is_needed_for_the_keyed_apis(self):
+        from django.test import override_settings
+
+        from ingest import prefetch_api
+
+        with override_settings(SMITHSONIAN_API_KEY="", EUROPEANA_API_KEY="k" * 10):
+            self.assertEqual(prefetch_api.route("https://siris-libraries.si.edu/x", {"adapter": "smithsonian", "ids": {"si": "ld1-1"}}), "api_key_missing")
+            r = prefetch_api.route("https://www.europeana.eu/item/2048128/618580", {})
+            self.assertEqual((r.api_url, list(r.headers)), ("https://api.europeana.eu/record/v2/2048128/618580.json", ["X-Api-Key"]))
+            self.assertNotIn("k" * 10, r.api_url, "keys go in headers, never URLs")
+        self.assertEqual(prefetch_api.route("https://www.loc.gov/item/2001234567/").api_url, "https://www.loc.gov/item/2001234567/?fo=json")
+
+    # ── unrated publishers ──
+    def test_pages_of_publishers_no_longer_rated_are_purged(self):
+        self.run_job()
+        page = PrefetchedPage.objects.get(url=prefetch.page_key(ARTICLE))
+        text_key = page.text_key
+        with revising("human:test", reason="unrate"):
+            p = Publisher.objects.get(domain="archives.gov")
+            p.tier = None
+            p.save()
+        counts = Counter()
+        prefetch.purge(timezone.now(), counts)
+        page.refresh_from_db()
+        self.assertEqual((page.status, counts["pages_unrated_purged"]), ("purged", 1))
+        self.assertFalse(storage.exists(storage.RAW, text_key))
+
+    def test_unrated_domains_are_listed_for_rating(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command("unrated_domains", "--json", stdout=out)
+        rows = json.loads(out.getvalue())
+        self.assertEqual([r["domain"] for r in rows], ["unrated-news.example"])
+        self.assertEqual((rows[0]["tasks"], rows[0]["urls"], rows[0]["row"]), (1, 1, "no row"))
+
 
 class EvidenceApiTests(FreshStorage, TestCase):
     """documents/<id>, check-excerpt, and the auto-verify on complete and edits/check."""
@@ -265,6 +356,7 @@ class EvidenceApiTests(FreshStorage, TestCase):
         import_content(small())
         with revising("human:test", reason="test publishers"):
             Publisher.objects.update_or_create(domain="archives.gov", defaults={"name": "US National Archives", "tier": 1, "license": "public domain"})
+            rate_examples()
         self.task, _ = queue.enqueue("write_event", created_by="job:process", payload={**PAYLOAD, "sources": PAYLOAD["sources"][:1]}, priority=80)
         prefetch.run(Ctx(Fetcher(transport=httpx.MockTransport(Mock(ROUTES)), sleep=lambda s: None)))
         self.task.refresh_from_db()
@@ -340,6 +432,7 @@ class ConsoleTests(FreshStorage, TestCase):
         import_content(small())
         with revising("human:test", reason="test publishers"):
             Publisher.objects.update_or_create(domain="archives.gov", defaults={"name": "US National Archives", "tier": 1, "license": "public domain"})
+            rate_examples()
             Publisher.objects.update_or_create(domain="britannica.com", defaults={"name": "Britannica", "tier": 2, "fetch_policy": "browser_only"})
         self.task, _ = queue.enqueue("write_event", created_by="job:process", payload=PAYLOAD, priority=80)
         queue.enqueue("write_event", created_by="job:process", dedupe_key="bare", payload={"sources": []})

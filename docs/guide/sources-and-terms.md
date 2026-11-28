@@ -242,14 +242,22 @@ The `prefetch_sources` job ([ingestion](ingestion.md#evidence-packs), [ADR 0036]
 is the one place a job keeps a page's **full text**: the clean main text and the raw bytes, in the private `raw`
 store under `pages/`, so agents can check excerpts against it. What holds it to the terms:
 
-- **Only `allowed` publishers.** A `browser_only` or `forbidden` publisher, or a NEVER_FETCH host, is never
-  requested (`policy_reason`, before the Fetcher's own checks), and `store_page` checks the policy again just before
-  writing. Those URLs go in the task's `unreadable` list for an agent's browser. A page that reserves text and data
+- **Only rated, `allowed` publishers.** Jobs keep full text only from publishers whose terms were read and rated
+  `allowed`: the nearest Publisher row has a tier and `fetch_policy` `allowed`. An unrated domain is never requested
+  by the job (`unrated` in the task's `unreadable` list; `manage.py unrated_domains` lists them for rating), nor is
+  a `browser_only` or `forbidden` publisher or a NEVER_FETCH host (`policy_reason`, before the Fetcher's own
+  checks), and `store_page` checks the policy again just before writing; a stored page whose publisher loses its
+  rating is purged. Those URLs go in the task's `unreadable` list for an agent's browser. A page that reserves text and data
   mining (the W3C TDM Reservation Protocol: a `tdm-reservation: 1` header or meta tag) is never stored either
   (`tdm_reserved`), whatever its publisher's policy.
-- **`allowed` is also the default.** A domain without a Publisher row, or one created by the import without a terms
-  check, is `allowed` (`defaults_for`), so news pages from publishers nobody reviewed are stored too. Setting such a
-  publisher `browser_only` in the admin stops it; its stored pages age out.
+- **Official APIs, under their own verdicts.** A catalog page that refuses scripts (an OpenAlex work, a DOI, a
+  Library of Congress item, a Smithsonian or Europeana record) is read through its API instead, never as a page,
+  and only what that API's verdict allows is kept: OpenAlex (CC0 metadata, the abstract), Crossref (titles and
+  metadata, never abstracts), loc.gov `?fo=json` (at most 10 requests a minute), the Smithsonian Open Access API
+  and Europeana's Record API (keys in headers; metadata only). The clause relied on is stored with each record
+  ([ingestion](ingestion.md#evidence-packs)).
+- **Rating is the gate.** Rating a publisher (a tier, in the admin, as `human:`) is what lets the job fetch it:
+  read its terms first ([adding a source](#adding-a-source)) and record the verdict in `access_notes`.
 - **Never published.** The text is in neither a snapshot, a release, the public page nor the database; the agent
   API serves it only to the agent holding a task whose pack names it, or to a reviewer (scope `review`) when an
   entry in review cites it.

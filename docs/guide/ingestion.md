@@ -641,26 +641,52 @@ disallows it) and no crawling ([sources and terms](sources-and-terms.md#the-verd
 **Reading a page** (`read`), in order:
 
 1. **Policy** (`policy_reason`): a publisher that is `browser_only` or `forbidden` (named so even when NEVER_FETCH
-   lists the host too, since that is what tells an agent to open a browser), then NEVER_FETCH (`never_fetch`). No
-   request is made.
-2. **Reuse**: a page stored less than `REFRESH_DAYS` (7) ago, with its text in the store, is used as is; a page
+   lists the host too, since that is what tells an agent to open a browser), then NEVER_FETCH (`never_fetch`), then
+   **`unrated`**: the job fetches only publishers that are rated (`rated()`: the nearest Publisher row for the domain
+   or a parent has a tier) and `allowed`. A domain with no row, or a row without a tier, is never requested by this
+   job (the Fetcher's own default for other jobs is unchanged). No request is made.
+2. **An official API** (`ingest/prefetch_api.py` `route`): a catalog page that has one is read through it, and
+   never as a page (below), even when its own domain is unrated (n2t.net). Reused like a page.
+3. **Reuse**: a page stored less than `REFRESH_DAYS` (7) ago, with its text in the store, is used as is; a page
    found unreadable less than `RETRY_DAYS` (3) ago keeps its reason.
-3. **Host health** (`host_refusal`): a host with an unreadable page whose reason is `blocked` or `robots` in the last
+4. **Host health** (`host_refusal`): a host with an unreadable page whose reason is `blocked` or `robots` in the last
    `HOST_COOLDOWN_DAYS` (14) isn't asked (not the Wikimedia API hosts). The page rows are the host's record;
    `health()` sums them by host and outcome for the console and the coverage report.
-4. **Caps**: `per_run` (60) requests a run, `per_host` (8) a host (three times that for `API_HOSTS`); past a cap the
+5. **Caps**: `per_run` (60) requests a run, `per_host` (8) a host (three times that for `API_HOSTS`); past a cap the
    page is `deferred`, its task's `evidence_urls` ends in `+deferred`, and the next run packs it again.
-5. **Fetch** through the Fetcher (robots.txt, bot walls, delays, backoff, the honest User-Agent), with the stored
+6. **Fetch** through the Fetcher (robots.txt, bot walls, delays, backoff, the honest User-Agent), with the stored
    page's `etag` / `last_modified` for a conditional GET (a 304 moves `fetched_at` and `retain_until` on). English
    Wikipedia goes through the MediaWiki API (`prop=extracts|info`, plain text, `etag` `rev:<lastrevid>`). Other
    pages: a page that reserves text and data mining (the W3C TDMRep `tdm-reservation: 1` header or meta tag,
    `TDM_META_RE`) is `tdm_reserved` and never stored; HTML through `extract_html`, `text/plain` as is; anything
    else (a PDF) is `unsupported`, more than
    `MAX_BYTES` (5 MB) `too_large`, fewer than `MIN_TEXT_WORDS` (40) of main text `empty`.
-6. **Outcomes**: a 401, 403, 429, 451 or a bot wall is `blocked`; another 4xx or 5xx `http_<status>`; a refusal by
+7. **Outcomes**: a 401, 403, 429, 451 or a bot wall is `blocked`; another 4xx or 5xx `http_<status>`; a refusal by
    robots.txt `robots`; a network error `error`. A stored page whose refresh fails keeps its stored copy.
 
-**Storing** (`store_page`): only for an `allowed` publisher, checked again just before writing (a `Refused`
+**Official APIs** (`ingest/prefetch_api.py`). The lookup adapters' hits are catalog pages that refuse scripts (the
+first measurement: siris-libraries.si.edu and loc.gov items behind bot walls; europeana.eu, doi.org, n2t.net and
+openalex.org refused by robots.txt). `route(url, hit)` maps each to its API, using the hit's `ids` where the URL
+alone doesn't say (a Smithsonian record's EDAN id); `read_api` checks the API's own publisher like a page (rated,
+`allowed`), counts it against the caps, follows a 404 to the route's `fallback`, and `render(name, json)` turns the
+answer into the stored text:
+
+| Route | For | Request | Stored |
+|---|---|---|---|
+| `openalex` | `openalex.org/W…`, an OpenAlex hit; a DOI first | `api.openalex.org/works/W…` or `/works/doi:<doi>` | title, venue and year, authors, DOI, open-access link, the abstract rebuilt from `abstract_inverted_index` (`abstract`) |
+| `crossref` | a DOI OpenAlex answers 404 for | `api.crossref.org/works/<doi>` | title, venue, date, publisher, type, DOI; never the abstract (the Crossref verdict) |
+| `loc` | `loc.gov/item/…`, `/resource/…` | the same URL `?fo=json` | title, date, contributors, subjects, summary, description, notes |
+| `smithsonian` | a Smithsonian hit, any `*.si.edu` or `n2t.net` URL with an EDAN id | `api.si.edu/openaccess/api/v1.0/content/<id>`, `X-Api-Key` | title, the `freetext` dates, names, place, publisher, physical description and notes |
+| `europeana` | `europeana.eu/item/…`, a Europeana hit | `api.europeana.eu/record/v2/<id>.json`, `X-Api-Key` | title, description, date, creator, provider |
+
+A keyed route without its key is `api_key_missing`; an API failure is `api_<reason>` (`api_http_404`,
+`api_robots`, `api_empty` …), reused for `RETRY_DAYS`. The record is stored under the page's key with `via` set to
+the route's name, the API's publisher, `fetched_url` the API URL, and `detail` the terms clause relied on
+(`prefetch_api.CLAUSES`); its pack entry adds `"via": "api", "api": <name>`. `stored(url, pages_only=True)` skips
+these records: auto-verify checks excerpts only against pages, since a record holds less than the page.
+
+**Storing** (`store_page`): only for a rated, `allowed` publisher (of the page, or of the API that answered,
+`policy_url`), checked again just before writing (a `Refused`
 otherwise, so a redirect or a policy change can't store a page). The raw bytes go to `pages/raw/<hash[:2]>/<hash>`
 and the clean text (at most `MAX_TEXT_CHARS`, 400,000) to `pages/text/<hash[:2]>/<hash>` in the `raw` store, by
 sha256. A **PrefetchedPage** row records the page: `url` (the key), `fetched_url`, `final_url`, `host`,
@@ -691,7 +717,8 @@ passage, each `{url, title, publisher, tier, fetched_at, doc_id, words, passages
 `unreadable`, `[{url, reason, detail}]`; `evidence_ready` (a stored page that isn't Wikipedia), `evidence_pack_at`
 and `evidence_urls`. All the limits are job options (`--opt per_run=…`, `DEFAULTS`).
 
-**Retention** (`purge`, first thing each run, 500 pages at most): a stored page past `retain_until` loses its raw
+**Retention** (`purge`, first thing each run, 500 pages at most): a stored page past `retain_until`, or whose
+publisher is no longer rated and `allowed` (`pages_unrated_purged`), loses its raw
 bytes and text from the store (unless another stored page still in retention has the same hash), becomes `purged`
 with empty keys, and every task payload whose pack names it gets that entry's passages emptied and `purged: true`.
 `retain_until` is `fetched_at` plus `EVIDENCE_RETENTION_DAYS` (180), or `EVIDENCE_RETENTION_DAYS_OPEN` (365) when
@@ -700,10 +727,17 @@ the publisher's license is open (`OPEN_LICENSE_RE`: CC0, CC BY, public domain, t
 
 **Coverage** ([ingest/coverage.py](../../ingest/coverage.py), `manage.py evidence_coverage [--out var/]`, no
 requests): per task kind, region (the task's branch's) and era (`ERAS`), the share of queued tasks that are packed,
-**ready** (`evidence_ready`), **possible** (pointing at a non-Wikipedia URL the policy lets a job fetch) and **open**
-(such a URL on a site that hasn't refused us by robots.txt, a bot wall or a TDM reservation), the
+**ready** (`evidence_ready`: a stored non-Wikipedia page or API record), **ready (page)** (the page itself),
+**possible** (pointing at a non-Wikipedia URL the job may read, as a page or through its API) and **open** (such a
+URL on a site that hasn't refused us by robots.txt, a bot wall or a TDM reservation), the pages stored per API,
+the unrated domains (`unrated()`), the
 groups with no such URL, the unreadable reasons and hosts, the hosts the policy keeps jobs off, and the host health.
-`--out` writes `evidence-coverage-<date>.md` and `.json`.
+`--out` writes `evidence-coverage-<date>.md` and `.json`. `manage.py unrated_domains [--json] [--limit N]` prints
+`unrated()` alone: each unrated domain the queued and claimed tasks point at, with the tasks and URLs naming it,
+whether it has a row, and an example URL, most tasks first.
+
+**Repacking.** `evidence_urls` hashes the candidate keys with `PACK_VERSION` (2): a change to what a pack holds bumps
+it, and every queued task is packed again on the next runs.
 
 ## Link health
 

@@ -529,8 +529,10 @@ results, so `process` reads `result.entry` unchanged.
 4. **Excerpts are checked against stored pages** (`agentapi/evidence.py`
    `result_mismatches`, before anything is applied, and not on a replay): for
    `write_event`, `fill_gap` (and `audit`) every cite's `excerpt`, for
-   `verify_claim` every evidence row's, whose URL's page is stored
-   (`ingest.prefetch.stored`) must be on it, verbatim up to whitespace. A
+   `verify_claim` every evidence row's, whose URL's page itself is stored
+   (`ingest.prefetch.stored(url, pages_only=True)`: an API's record of a page
+   holds less than the page, so it never causes a refusal) must be on it,
+   verbatim up to whitespace. A
    mismatch is a 422 with `problems` and `excerpts`
    (`[{where, url, doc_id, fetched_at, excerpt, closest}]`); the task is still
    yours. A page that isn't stored isn't checked here.
@@ -590,8 +592,8 @@ The `prefetch_sources` job ([ingestion](ingestion.md#evidence-packs),
 
 | Key | What |
 |---|---|
-| `evidence_pack` | `[{url, title, publisher, tier, fetched_at, doc_id, words, passages: [{text, score, matches}]}]`: each stored page (non-Wikipedia first), with up to five ranked passages; at most 20,000 bytes. A page purged by retention keeps its entry with no passages and `purged: true`. |
-| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `browser_only` is the only reason an agent opens a browser for; `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
+| `evidence_pack` | `[{url, title, publisher, tier, fetched_at, doc_id, words, passages: [{text, score, matches}]}]`: each stored page (non-Wikipedia first), with up to five ranked passages; at most 20,000 bytes. A page read through its official API adds `"via": "api", "api": "openalex"` (or `crossref`, `loc`, `smithsonian`, `europeana`): the record (abstract, metadata), not the page, and its `publisher` is the API's. A page purged by retention keeps its entry with no passages and `purged: true`. |
+| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it (an agent may read it itself, with the honest User-Agent); `api_<…>` that a catalog page's API failed or lacks its key. `browser_only` is the only reason an agent opens a browser for; `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
 | `evidence_ready` | A stored page that isn't Wikipedia: what the console's "evidence ready" share counts. |
 | `evidence_pack_at`, `evidence_urls` | When it was built, and from which URLs (a hash; `+deferred` when a cap cut it short). |
 
