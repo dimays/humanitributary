@@ -225,7 +225,7 @@ jobs off it.
 
 ## The November 28 ratings
 
-[ingest/ratings.py](../../ingest/ratings.py) ([ADR 0037](../adr/0037-source-ratings-2026-11-28.md), and a second batch, [ADR 0044](../adr/0044-source-ratings-batch-2.md); see the end of this section). Each record of
+[ingest/ratings.py](../../ingest/ratings.py) ([ADR 0037](../adr/0037-source-ratings-2026-11-28.md), a second batch, [ADR 0044](../adr/0044-source-ratings-batch-2.md), and a third, [ADR 0049](../adr/0049-source-ratings-batch-3.md); see the end of this section). Each record of
 the round names a source, its domains, a verdict, whether a key is needed, the license, what robots.txt said, the
 terms URL and clause, rate limits, eras, regions and notes. `decide()` makes each one a `Decision`:
 
@@ -245,7 +245,7 @@ through `timeline.services.apply_changes`: a missing row is created from `defaul
 robots.txt: … API: …") is appended to `access_notes`; a `forbidden` row is never changed. On the scratch database:
 117 domains, 6 `allowed`, 5 `api_only`, 26 `browser_only`, 26 `citation_only`, 54 notes only.
 
-**Batches.** Each round is a `Batch` (`BATCH_1`, `BATCH_2`, `BATCHES`): its label in the notes, its own JobState (a
+**Batches.** Each round is a `Batch` (`BATCH_1`, `BATCH_2`, `BATCH_3`, `BATCHES`): its label in the notes, its own JobState (a
 database that applied the first still applies the second once), its ADR and its files. `seed_sources` calls
 `apply_all`, which applies each batch in order; `decisions`, `merged`, `apply` and `follow_ups` take a batch and
 default to the first. A later rating never loosens a restrictive policy a row already has: `citation_only` stays
@@ -261,6 +261,14 @@ the NCBI site, through E-utilities, OAI-PMH and the ID converter; the Smithsonia
 confidence). Nine sites name AI crawlers in robots.txt (Nature, the African Union, UNESCO and its two sub-sites, the
 British Museum, africa.si.edu, americanhistory.si.edu, GlobalSecurity), and ten refused robots.txt. PMC's web pages
 stay closed to scripts: its robots.txt disallows `/`, and its copyright page bars bulk download from the pages.
+
+**Batch 3** (`ingest/ratings/2026-11-28c-sources.json`, label "2026-11-28c", JobState "ratings_2026_11_28c"; ADR 0049)
+has 33 records for the domains agents were refused after batch 2 (encyclopedias, university presses and libraries,
+religious-text libraries, magazines, open textbooks). Same rules. Counts: 24 `browser_only`, 6 `citation_only`
+(Christianity Today, the Vatican, JSTOR, Cambridge, TheCollector, Encyclopedia.com) and 3 `allowed`, all applied:
+penelope.uchicago.edu (public-domain pages only; it blocks Wget), ccel.org (non-commercial use, Crawl-delay 10) and
+doi.org (the resolver; the publisher it redirects to is checked separately). A site whose robots.txt names AI
+crawlers with `Disallow: /`, or whose terms page refused us, is never `allowed`.
 
 ## Citation-only sources and browser_only publishers
 
