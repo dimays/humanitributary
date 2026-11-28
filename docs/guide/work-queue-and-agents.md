@@ -418,8 +418,9 @@ only way to complete a kind without a result schema.
 | `tasks list [--status S] [--kind K] [--limit N]` | Tasks in queue order, 50 by default. |
 | `tasks add <kind> --by WHO [--entry SLUG] [--ref R] [--payload JSON] [--priority P] [--dedupe KEY]` | Queue a task by hand. Only an entry target can be given. |
 
-The agent's name comes from `--agent` or the `HUMANITRIBUTARY_AGENT`
-environment variable, and must match `revisions.context.ACTOR_RE`
+The agent's name comes from `--agent` or the `MANYAGES_AGENT` environment
+variable (else the old `HUMANITRIBUTARY_AGENT`, read by `_env` until the owner
+deletes the old names: ADR 0047), and must match `revisions.context.ACTOR_RE`
 (`agent:`, `human:` or `job:` and a name). Queue errors, unknown entries and
 bad JSON come back as command errors.
 
@@ -429,9 +430,13 @@ Skills are instructions a Claude agent loads for one kind of work. They live
 in `.claude/skills/` and are part of the contract: when a payload, a result
 schema or an endpoint changes, the skill must change with it. Every skill
 works through the agent API: it reads the base URL from
-`HUMANITRIBUTARY_API` and the token from `HUMANITRIBUTARY_API_TOKEN` in its
-environment, so the same skill runs against `make up` locally and the
-production URL.
+`MANYAGES_API` and the token from `MANYAGES_API_TOKEN` in its environment,
+so the same skill runs against `make up` locally and the production URL.
+Until the owner deletes the old names (ADR 0047), each snippet falls back to
+`HUMANITRIBUTARY_API` and `HUMANITRIBUTARY_API_TOKEN`
+(`${MANYAGES_API:-$HUMANITRIBUTARY_API}`), and `run-round`'s `tokvar <ROLE>`
+names `MANYAGES_TOKEN_<ROLE>`, else `HUMANITRIBUTARY_TOKEN_<ROLE>`, without
+printing a value; `tests/test_agent_env.py` holds every skill's helper to it.
 
 | Skill | Works | What it covers |
 |---|---|---|

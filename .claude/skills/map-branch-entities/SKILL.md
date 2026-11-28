@@ -16,12 +16,14 @@ routes the wrong stories to the branch for months. Precision beats recall: an em
 ## The API
 
 Work through the agent API, never the database (ADR 0017). Two variables come from your environment:
-`HUMANITRIBUTARY_API` (the base URL) and `HUMANITRIBUTARY_API_TOKEN` (made by the owner with
+`MANYAGES_API` (the base URL) and `MANYAGES_API_TOKEN` (made by the owner with
 `manage.py agent_token create <name> --scope map_branch_entities`; never print or log it).
+Until the owner deletes the old names (ADR 0047), `HUMANITRIBUTARY_API` and `HUMANITRIBUTARY_API_TOKEN` stand in
+for them: every call below falls back to them.
 
 ```bash
-api() { curl -sS -H "Authorization: Bearer $HUMANITRIBUTARY_API_TOKEN" -H "Content-Type: application/json" "$@"; }
-api "$HUMANITRIBUTARY_API/schemas/map_branch_entities"   # the result shape `complete` accepts
+api() { curl -sS -H "Authorization: Bearer ${MANYAGES_API_TOKEN:-$HUMANITRIBUTARY_API_TOKEN}" -H "Content-Type: application/json" "$@"; }
+api "${MANYAGES_API:-$HUMANITRIBUTARY_API}/schemas/map_branch_entities"   # the result shape `complete` accepts
 ```
 
 A claim is a lease (30 minutes by default): `POST tasks/<id>/release` hands it back untouched,
@@ -34,7 +36,7 @@ minutes (a slow site, a long read, a second source to find), extend it before it
 minutes while you still work on it:
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/extend" -d '{"minutes": 30}'
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/extend" -d '{"minutes": 30}'
 ```
 
 A lease that runs out may be taken over by another agent; then your `complete` is refused (409) and the work is
@@ -50,7 +52,7 @@ waits for the owner (the console's Review page: no agent is offered it again), a
   itself), ask the API whether your script may read it (ADR 0042):
 
   ```bash
-  api -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"
+  api -G "${MANYAGES_API:-$HUMANITRIBUTARY_API}/policy" --data-urlencode "url=<the page>"
   # {"policy": "allowed", "may_fetch": true, "browser_read": true, "why": "…", "crawl_delay": 1.0, "publisher": {…}}
   ```
 
@@ -65,7 +67,7 @@ waits for the owner (the console's Review page: no agent is offered it again), a
      means a person's browser.
   3. **Don't cite it unread.** No task skill allows a citation-only cite: a page you could not read is no source.
   4. **Release the task** when it can't be done without that page, so a person can read it:
-     `api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
+     `api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
      It waits for the owner (the console's Review page) instead of coming straight back to you or the next agent.
 - **Never disguise the client.** Every page you fetch by script sends the project's honest User-Agent:
   `curl -sS -A "$INGEST_USER_AGENT" <url>` (the same value as the app's `INGEST_USER_AGENT`). No spoofed browser
@@ -77,7 +79,7 @@ waits for the owner (the console's Review page: no agent is offered it again), a
 ## 1. Claim and read the payload
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/claim" -d '{"kinds": ["map_branch_entities"]}'   # {"task": {...}} or {"task": null}
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/claim" -d '{"kinds": ["map_branch_entities"]}'   # {"task": {...}} or {"task": null}
 ```
 
 | Key | What |
@@ -132,7 +134,7 @@ note; the job then leaves the branch alone, and the owner can add a hand-checked
 ## 4. Complete
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" -d '{"result": {"branch": "<slug>",
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/complete" -d '{"result": {"branch": "<slug>",
   "entities": [{"qid": "Q794", "role": "polity", "label": "Iran"}],
   "note": "Q794 is the state across the whole span (cited article Iran); Q1356 (Qajar Iran) ended 1925, too early."}}'
 ```

@@ -52,15 +52,15 @@ Do this procedure one time. After that, the routine starts one round each day ([
 6. Add the environment variables in the form `KEY=value`, one on each line:
 
    ```text
-   HUMANITRIBUTARY_API=https://data.manyages.com/api/agent
+   MANYAGES_API=https://data.manyages.com/api/agent
    INGEST_USER_AGENT=<the value from step 3>
-   HUMANITRIBUTARY_TOKEN_ROUND=<the token of round-recorder>
-   HUMANITRIBUTARY_TOKEN_WRITER=<the token of round-writer>
-   HUMANITRIBUTARY_TOKEN_FILLER=<the token of round-filler>
-   HUMANITRIBUTARY_TOKEN_VERIFIER=<the token of round-verifier>
-   HUMANITRIBUTARY_TOKEN_MAPPER=<the token of round-mapper>
-   HUMANITRIBUTARY_TOKEN_REVIEWER=<the token of round-reviewer>
-   HUMANITRIBUTARY_TOKEN_PUBLISHER=<the token of round-publisher>
+   MANYAGES_TOKEN_ROUND=<the token of round-recorder>
+   MANYAGES_TOKEN_WRITER=<the token of round-writer>
+   MANYAGES_TOKEN_FILLER=<the token of round-filler>
+   MANYAGES_TOKEN_VERIFIER=<the token of round-verifier>
+   MANYAGES_TOKEN_MAPPER=<the token of round-mapper>
+   MANYAGES_TOKEN_REVIEWER=<the token of round-reviewer>
+   MANYAGES_TOKEN_PUBLISHER=<the token of round-publisher>
    ```
 
    Make sure that each token is in the variable with the correct name.

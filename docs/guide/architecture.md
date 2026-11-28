@@ -163,7 +163,8 @@ gives the overview.
 Agents work through the agent API under `/api/agent/` (`agentapi/`, served by the `web` process), never the
 database ([ADR 0017](../adr/0017-agent-api.md)). An agent holds a token, made by the owner with `manage.py
 agent_token create <name> --scope <kind>`, stored only as a hash and scoped to the task kinds it may claim; it
-reads the base URL and the token from `HUMANITRIBUTARY_API` and `HUMANITRIBUTARY_API_TOKEN`. The queue endpoints
+reads the base URL and the token from `MANYAGES_API` and `MANYAGES_API_TOKEN` (the old `HUMANITRIBUTARY_*` names
+until the owner deletes them: [ADR 0047](../adr/0047-manyages-variable-names.md)). The queue endpoints
 call `work.queue` unchanged. `complete` checks the result against its kind's JSON Schema (`agentapi/schemas.py`; a
 422 lists the problems) and `agentapi/apply.py` applies it through the service layer inside
 `revising("agent:<name>", task=task)`, completing the task in the same transaction, so each change links back to

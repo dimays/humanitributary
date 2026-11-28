@@ -10,7 +10,8 @@
     manage.py agent_token revoke claude-writer
 
 `create` prints the token once (it is stored only as a hash): put it in the agent's environment as
-HUMANITRIBUTARY_API_TOKEN, beside HUMANITRIBUTARY_API (the base URL, e.g. http://127.0.0.1:8000/api/agent).
+MANYAGES_API_TOKEN, beside MANYAGES_API (the base URL, e.g. http://127.0.0.1:8000/api/agent). The skills fall
+back to the old HUMANITRIBUTARY_* names until the owner deletes them (ADR 0047).
 """
 
 import getpass
@@ -52,7 +53,7 @@ class Command(BaseCommand):
                 raise CommandError(f"a token named {o['name']!r} exists (revoke it first) or the name is not valid") from e
             self.stdout.write(f"agent:{row.name}, scopes {row.scopes}. The token (shown once; it is stored only as a hash):\n")
             self.stdout.write(token)
-            self.stdout.write("\nSet HUMANITRIBUTARY_API_TOKEN to it in the agent's environment.")
+            self.stdout.write("\nSet MANYAGES_API_TOKEN to it in the agent's environment.")
         elif action == "list":
             rows = [{"name": t.name, "prefix": t.prefix, "scopes": t.scopes, "created_by": t.created_by, "created_at": t.created_at.isoformat(timespec="seconds"),
                      "last_used_at": t.last_used_at.isoformat(timespec="seconds") if t.last_used_at else None, "revoked": bool(t.revoked_at)}

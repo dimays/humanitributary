@@ -22,10 +22,15 @@ from work import queue
 from work.models import AgentTask
 
 
+def _env(name: str) -> str:
+    """MANYAGES_<name>, else the old HUMANITRIBUTARY_<name> until the owner deletes it (ADR 0047)."""
+    return os.getenv(f"MANYAGES_{name}") or os.getenv(f"HUMANITRIBUTARY_{name}", "")
+
+
 def _agent(value: str) -> str:
-    agent = value or os.getenv("HUMANITRIBUTARY_AGENT", "")
+    agent = value or _env("AGENT")
     if not ACTOR_RE.match(agent):
-        raise CommandError('name yourself with --agent "agent:<name>" (or HUMANITRIBUTARY_AGENT)')
+        raise CommandError('name yourself with --agent "agent:<name>" (or MANYAGES_AGENT)')
     return agent
 
 

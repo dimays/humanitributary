@@ -10,15 +10,17 @@ The branch rules (`docs/branch-rules.md`) propose structural changes; you decide
 ## The API
 
 Work through the agent API, never the database: you hold a token, not database credentials (ADR 0017). Two
-variables come from your environment: `HUMANITRIBUTARY_API` (the base URL: `http://127.0.0.1:8000/api/agent` when
-the owner runs `make up`, the production URL later) and `HUMANITRIBUTARY_API_TOKEN` (made by the owner with
-`manage.py agent_token create <name> --scope <kind>`; never print or log it). The same calls work locally and in
+variables come from your environment: `MANYAGES_API` (the base URL: `http://127.0.0.1:8000/api/agent` when
+the owner runs `make up`, the production URL later) and `MANYAGES_API_TOKEN` (made by the owner with
+`manage.py agent_token create <name> --scope <kind>`; never print or log it).
+Until the owner deletes the old names (ADR 0047), `HUMANITRIBUTARY_API` and `HUMANITRIBUTARY_API_TOKEN` stand in
+for them: every call below falls back to them. The same calls work locally and in
 production.
 
 ```bash
-api() { curl -sS -H "Authorization: Bearer $HUMANITRIBUTARY_API_TOKEN" -H "Content-Type: application/json" "$@"; }
-api "$HUMANITRIBUTARY_API/"                        # who you are, your scopes, every endpoint
-api "$HUMANITRIBUTARY_API/schemas/<kind>"          # the result shape `complete` accepts
+api() { curl -sS -H "Authorization: Bearer ${MANYAGES_API_TOKEN:-$HUMANITRIBUTARY_API_TOKEN}" -H "Content-Type: application/json" "$@"; }
+api "${MANYAGES_API:-$HUMANITRIBUTARY_API}/"                        # who you are, your scopes, every endpoint
+api "${MANYAGES_API:-$HUMANITRIBUTARY_API}/schemas/<kind>"          # the result shape `complete` accepts
 ```
 
 A claim is a lease (30 minutes by default): `POST tasks/<id>/extend` for more, `POST tasks/<id>/release` to hand
@@ -32,7 +34,7 @@ minutes (a slow site, a long read, a second source to find), extend it before it
 minutes while you still work on it:
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/extend" -d '{"minutes": 30}'
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/extend" -d '{"minutes": 30}'
 ```
 
 A lease that runs out may be taken over by another agent; then your `complete` is refused (409) and the work is
@@ -45,7 +47,7 @@ waits for the owner (the console's Review page: no agent is offered it again), a
 ## 1. Claim a task
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/claim" -d '{"kinds": ["review_branch_proposal"]}'
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/claim" -d '{"kinds": ["review_branch_proposal"]}'
 ```
 
 The payload has everything: `proposal`, `rule`, `summary`, `strength`, `metrics` of each branch involved, `evidence`
@@ -69,7 +71,7 @@ Ask whether a reader would be better served by the change:
 
 Look things up as you would to write an event (`site/SCHEMA.md` citation rules: fetch and read every page you cite;
 never openstax.org; britannica.com never: a person reads it). **Before any WebFetch or `curl` of a source page, ask the
-policy** (ADR 0042): `api -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"`, and fetch only when
+policy** (ADR 0042): `api -G "${MANYAGES_API:-$HUMANITRIBUTARY_API}/policy" --data-urlencode "url=<the page>"`, and fetch only when
 `may_fetch` is true. When it is false, use another source (Wikipedia's references often lead to a readable one), and
 never reach the page another way: not a browser either (the in-app one, Claude in Chrome), since a page the policy
 refuses is read by a person (ADR 0046). A proposal you can't decide
@@ -83,7 +85,7 @@ every statement supported), `start_when` / `end_when` as the source puts them, a
 the rule missed; keep the shape of each op.
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" -d '{"result": {"decision": "accept", "proposal": <id>,
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/complete" -d '{"result": {"decision": "accept", "proposal": <id>,
   "note": "why, in one sentence", "operations": [ … ]}}'
 ```
 
@@ -95,7 +97,7 @@ the page at once.
 ## 3b. Reject
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" -d '{"result": {"decision": "reject", "proposal": <id>, "note": "why, in one sentence"}}'
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/complete" -d '{"result": {"decision": "reject", "proposal": <id>, "note": "why, in one sentence"}}'
 ```
 
 The rule will not propose it again for 180 days, and then only if its evidence grew by half. Say why so the owner can

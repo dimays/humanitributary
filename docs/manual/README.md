@@ -102,3 +102,4 @@ script. Write a comment that tells why.
 | 17 | [Archive and unarchive a job](procedures/17-archive-and-unarchive-a-job.md) |
 | 18 | [Do a task that needs a browser](procedures/18-do-a-task-that-needs-a-browser.md) |
 | 19 | [Review the items that need a person](procedures/19-review-the-items-that-need-a-person.md) |
+| 20 | [Move to the new variable names](procedures/20-move-to-the-new-variable-names.md) |
