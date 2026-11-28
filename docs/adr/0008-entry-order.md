@@ -1,6 +1,6 @@
 # 0008 — Entry order is a sort key assigned once
 
-**Status:** accepted (November 2026). Amends the last consequence of [0007](0007-one-snapshot-shape-byte-identical-both-ways.md).
+**Status:** accepted (November 2026). Amends the last consequence of [0007](0007-one-snapshot-shape-byte-identical-both-ways.md); amended by [0045](0045-short-sort-keys-and-json-errors.md) (appends step instead of halving, and a used-up gap respaces its neighbours in the same order)
 
 ## Context
 

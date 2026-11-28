@@ -343,7 +343,7 @@ class PackTests(FreshStorage, TestCase):
 
         out = StringIO()
         call_command("unrated_domains", "--json", stdout=out)
-        rows = json.loads(out.getvalue())
+        rows = json.loads(out.getvalue())["cited_by_tasks"]
         self.assertEqual([r["domain"] for r in rows], ["unrated-news.example"])
         self.assertEqual((rows[0]["tasks"], rows[0]["urls"], rows[0]["row"]), (1, 1, "no row"))
 

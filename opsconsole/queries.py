@@ -701,6 +701,15 @@ def today(now) -> dict:
     return {"since": mid, "documents": docs, "candidates": cands}
 
 
+def unrated_asked(limit: int = 10) -> dict:
+    """The unrated domains agents asked GET policy about and were refused, most asked first, rated ones left out
+    (agentapi.policy.unrated_lookups, ADR 0045): which sites to rate next."""
+    from agentapi.policy import unrated_lookups
+    from ingest.models import UnratedLookup
+
+    return {"rows": unrated_lookups(limit), "domains": UnratedLookup.objects.count()}
+
+
 def wave(now) -> dict:
     """The active content wave and its last gap_waves numbers (one query on JobState, no row created)."""
     from governance import waves as gw

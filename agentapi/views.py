@@ -47,7 +47,8 @@ import json
 from datetime import date
 
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db import IntegrityError, OperationalError, transaction
+from django.core.exceptions import ValidationError
+from django.db import DataError, IntegrityError, OperationalError, transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -206,7 +207,11 @@ def complete(request, task_id, body):
 
     A conflict that Postgres reports only at COMMIT (a deferred constraint such as `entry_sort_key_unique`, or a
     serialization failure or deadlock between two agents writing at once) rolls everything back and is a 409 with
-    `"retryable": true`, never a 500: the task is still the agent's, and the same request may simply be sent again."""
+    `"retryable": true`, never a 500: the task is still the agent's, and the same request may simply be sent again.
+
+    A value that doesn't fit its column (a ValidationError from `services.apply_changes`, or a DataError from
+    Postgres) is a 422 naming the field, with everything rolled back and the task still claimed by the agent, so it
+    can fix the result and send it again. Anything else is the JSON 500 of `agent_view` (ADR 0045)."""
     actor = request.agent_token.actor
     result = body.get("result")
     task = AgentTask.objects.filter(pk=task_id).only("kind", "status", "claimed_by", "result").first()
@@ -232,10 +237,29 @@ def complete(request, task_id, body):
             done = queue.complete(task_id, agent=actor, result={**result, "applied": applied, "result_sha256": digest})
     except appliers.ApplyError as e:
         return error(422, str(e))
+    except ValidationError as e:
+        fields = e.message_dict if hasattr(e, "error_dict") else {"(result)": e.messages}
+        return error(422, "a value does not fit its field: " + "; ".join(f"{k}: {', '.join(v)}" for k, v in fields.items())
+                     + "; nothing was kept and the task is still yours: fix it and send the result again", fields=fields, task=task_id)
+    except DataError as e:
+        field = _data_error_field(e)
+        return error(422, f"a value does not fit its field{f' ({field})' if field else ''}: {_first_line(e)}; nothing was kept and the task is "
+                          "still yours: fix it and send the result again", fields={field or "(unknown)": [_first_line(e)]}, task=task_id)
     except (IntegrityError, OperationalError) as e:
         return error(409, f"another write conflicted with this one ({type(e).__name__}); nothing was kept and the task is still yours: "
                           "send the same request again", retryable=True, task=task_id)
     return _ok(_task_out(done))
+
+
+def _first_line(e: Exception) -> str:
+    return (str(e).strip().splitlines() or [type(e).__name__])[0][:300]
+
+
+def _data_error_field(e: DataError) -> str:
+    """The column Postgres names in a DataError's diagnostics, when it names one (psycopg's `diag`)."""
+    diag = getattr(e.__cause__, "diag", None)
+    table, column = getattr(diag, "table_name", None), getattr(diag, "column_name", None)
+    return f"{table}.{column}" if column else ""
 
 
 # ── Reads ────────────────────────────────────────────────────────────────────────────────────────────────────────

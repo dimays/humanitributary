@@ -47,4 +47,14 @@
   {% if wave.next %}<div class="acts" style="justify-content:flex-start;margin-top:12px">{% act "advance_wave" "Advance to "|add:wave.next "sm" %}</div>{% endif %}
 </div>
 </div>
+
+<div class="card" style="margin-top:18px">
+  <div class="card-head"><h2>Unrated sites agents asked for<span class="count">{{ unrated.rows|length }}</span></h2><a class="more" href="{% url 'admin:ingest_unratedlookup_changelist' %}">every lookup →</a></div>
+  {% if unrated.rows %}<div class="scroll"><table><thead><tr><th>Domain</th><th class="n">Asked</th><th>First seen</th><th>Last seen</th><th>Latest URL</th></tr></thead><tbody>
+    {% for r in unrated.rows %}<tr><td><a href="{% url 'admin:evidence_publisher_changelist' %}?q={{ r.domain|urlencode }}" title="rate it in the admin: tier, fetch_policy, access_notes">{{ r.domain }}</a></td>
+      <td class="n">{{ r.lookups }}</td><td class="small muted">{{ r.first_seen|slice:":10" }}</td><td class="small muted">{{ r.last_seen|slice:":16" }}</td>
+      <td class="small t">{{ r.example|truncatechars:80 }}</td></tr>{% endfor %}</tbody></table></div>
+    <p class="small muted" style="margin:12px 0 0">Agents asked GET policy about these sites and were told not to fetch them, because nobody has rated them. Read a site's terms, then rate it in the admin. Rated sites leave this list.</p>
+  {% else %}<p class="empty-note">None: no agent has been refused an unrated site{% if unrated.domains %} that is still unrated{% endif %}.</p>{% endif %}
+</div>
 {% endblock %}

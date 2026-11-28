@@ -69,10 +69,11 @@ class Entry(models.Model):
     text = models.TextField(help_text="One or two sentences, every claim supported by the entry's citations.")
     why = models.TextField(blank=True, help_text='"Why it matters" (TL.enrich), ≤ 700 chars; blank = not enriched.')
     sort_key = models.CharField(
-        max_length=64,
+        max_length=255,
         db_collation="C",
-        help_text="Order within its kind in the snapshot, which the page breaks sort ties by: a fractional index assigned "
-        "once, so inserting or removing an entry never moves another (timeline/ordering.py).",
+        help_text="Order within its kind in the snapshot, which the page breaks sort ties by: a fractional index, so "
+        "inserting or removing an entry moves no other, until a gap is used up and its neighbours are respaced in the "
+        "same order (timeline/ordering.py, ADR 0045). Kept to 16 characters; the column's 255 is a backstop.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

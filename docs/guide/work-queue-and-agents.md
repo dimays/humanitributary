@@ -556,7 +556,15 @@ results, so `process` reads `result.entry` unchanged.
    match the kind's schema. If it doesn't, the answer is a 422 that lists
    each problem as `path: message`, with the schema's URL; nothing is
    written and the task stays yours to fix and resend. A kind without a
-   schema is refused the same way.
+   schema is refused the same way. The same list counts every excerpt's
+   words (`schemas.excerpts()` finds them: a `write_event`'s event's cites,
+   an `audit`'s or a `fill_gap`'s events' cites, a `verify_claim`'s evidence
+   rows): one over `EXCERPT_WORDS` (25, split on whitespace, as the
+   `evidence_excerpt_25_words` constraint counts) is a problem such as
+   `evidence/0/excerpt: the excerpt is 30 words; at most 25` (ADR 0045).
+   Before, the appliers cut a long excerpt to 25 words without a word, so
+   a `verify_claim` with a 30-word excerpt was accepted; edit files already
+   refused one (`timeline/edits.py`).
 2. **A retry is safe.** The completed result stores `result_sha256`, the
    hash of what was sent. The same agent sending the same result for a task
    it already completed gets the task back (200, `"replayed": true`) and
@@ -587,6 +595,22 @@ results, so `process` reads `result.entry` unchanged.
    proposal, operations with placeholders left, a `fill_gap` event outside
    its window) raises `ApplyError`: a 422
    with the reason, everything rolled back, the task still held.
+6. **A value that doesn't fit its column** is a 422 too, never a 500 (ADR
+   0045): a `ValidationError` from `services.apply_changes` (it checks each
+   text against its `CharField`'s `max_length` before saving) or a
+   `DataError` from Postgres. The body names the field: `fields` is
+   `{"<model>.<field>": [messages]}` (for a `DataError`, the column from
+   psycopg's diagnostics when Postgres gives one, else `(unknown)`), and
+   `error` says the same in words. Everything is rolled back and the task is
+   still yours, so the agent fixes the result and sends it again.
+
+Any other exception in an agent endpoint is caught by `agent_view`
+(`agentapi/auth.py`): it is logged with its traceback (logger `agentapi`)
+and answered as a JSON 500, `{"error", "exception": "<type>"}`, never
+Django's HTML page. On November 27, 2026 a `fill_gap` complete answered an
+HTML 500 (`DataError: value too long for type character varying(64)`, the
+sort key: [content model](content-model.md#how-entries-are-ordered)), and
+the agent's work was lost.
 
 Nothing a task's result writes is published: events land in `review`,
 evidence is evidence, a branch change waits for the owner. Only a round's
@@ -687,6 +711,18 @@ Wikimedia's API hosts skip the robots checks, as in the Fetcher. A robots.txt
 nobody has read yet (a rated host the job never asked) isn't known here: the
 endpoint answers from records only. It is an ordinary read: any scope, the
 per-token rate limit, 400 for a missing or non-http(s) `url`.
+
+**Unrated answers are counted** ([ADR 0045](../adr/0045-short-sort-keys-and-json-errors.md)).
+Each `unrated` answer upserts one `ingest.UnratedLookup` row for the domain
+(`record_unrated`: one `INSERT … ON CONFLICT` inside a savepoint, so agents
+asking at once each count and a failure only logs): `lookups` + 1,
+`first_seen`, `last_seen`, the latest URL as `example_url`, and who asked as
+`last_actor`. No other answer is recorded. `unrated_lookups(limit)` lists
+them, most asked first, leaving out any domain that is rated since (it runs
+`decide()` on each row's URL); `manage.py unrated_domains` prints them under
+the domains tasks cite, and the console's Work page shows the top ten. Before
+this, agents were refused dozens of unrated sites in a round (wto.org,
+pbs.org, olympics.com, fifa.com …) and nothing showed which to rate.
 
 When `may_fetch` is false a skill doesn't fetch: it finds another source
 (Wikipedia's references often lead to a readable one), or cites the page
