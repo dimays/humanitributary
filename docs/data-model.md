@@ -78,7 +78,7 @@ entries to a **release** snapshot, and the site is built from it.
 | `Connection` | TL.enrich's sourced link from one entry to another, with a ≤ 90-char note. |
 | `Location` | TL.geo: `scope` (place, region, global, cosmic), lat/lon, `radius_km` (`r`), label, `src` (the page whose coordinates are the place), `scale` for cosmic entries. |
 | `PaleoPin` | Where a present-day coordinate lay at a PaleoDEM slice's age (PALEOMAP via the GPlates Web Service), imported from `globe-assets.json`. The site build still reads that file; these rows make the positions queryable. |
-| `Image` | TL.image: a public-domain or CC0 Commons image (`src` under `site/images/`, size, title, credit, license, Commons page). |
+| `Image` | TL.image: an openly licensed picture (`src` under `site/images/` or the source's own https URL, size, title, alt, credit, license and its URL, the source page, `sensitive`: blurred on the page until a viewer asks; ADR 0048). Public domain, "No known restrictions", CC0, CC BY or CC BY-SA only; an attribution license needs a credit and a license URL. |
 
 ## evidence (canonical)
 
@@ -115,6 +115,8 @@ Working state, not canonical (ADR 0012). The jobs that fill these tables are lis
 | `SuggestedSource` | A lookup adapter's hit for a claim or a candidate (adapter, URL, title, ≤ 25-word snippet, score): a suggestion for an agent, never evidence; status suggested / accepted / rejected. |
 | `PrefetchedPage` | A page the `prefetch_sources` job read for evidence packs (ADR 0036), by canonical URL (unique): the URL as fetched and after redirects, `host`, publisher, status (stored, unreadable with `reason` and `detail`, purged), HTTP status, `via` (empty for the page itself, or the official API whose record is stored: openalex, crossref, loc, smithsonian, europeana), `fetched_at` and `checked_at`, ETag / Last-Modified, content type, the raw bytes' and clean text's sha256 and their keys in the `raw` store (`pages/raw/…`, `pages/text/…`; emptied when purged), word count, title, language, `retain_until` and `purged_at`. The text itself is never in the database. A host's rows are its fetch health. Task payloads name a row by `doc_id`. |
 | `UnratedLookup` | A domain agents asked `GET /api/agent/policy?url=` about and were refused as unrated (ADR 0045): `domain` (unique, the host without www.), `lookups` (a count), `first_seen`, `last_seen`, `example_url` (the latest) and `last_actor`. Written only by `agentapi.policy.record_unrated`, never for allowed or rated answers; read by `manage.py unrated_domains` and the console's Work page. Not canonical. |
+| `ImageSearch` | The `image_search` job's pacing for one entry (ADR 0048): attempts (at most 3), last and next attempt (14, then 42 days apart), the outcome (attached, review, none, error), a note and the last ten attempts. |
+| `ImageCandidate` | A picture found for an entry, by reference (ADR 0048): kind (picture, or flag: an attached picture's sensitive flag to confirm), status (review, alternate, attached, denied, superseded), source and its id, file page, image and thumbnail URLs and sizes, title, alt, creator, credit, license and its URL, the match score and its signals, `sensitive` and its signals, the checks (license, AI rules, categories), the thumbnailing relied on, the `Image` made, the owner's backlog mark and decision. Unique per entry, kind, source and id: a denied picture is never proposed again. |
 | `JobState` | A job's bookmark between runs (the second-source walk, the terms verdicts applied, the active content wave and the last `gap_waves` run), and the paused jobs ("paused_jobs"). |
 
 ## work
@@ -168,6 +170,6 @@ hash and counts, `changes.json` / `changes.md` the change report and
 | `link` | the first `EventLink` |
 | `cites`, `whyCites` | the `as_written` / `why` claim's supporting evidence in order: `cited_title`, the citation's URL, `cited_kind` |
 | `geo` | `Location` (`radius_km` → `r`) |
-| `images` | `Image` in order (`width`/`height` → `w`/`h`) |
+| `images` | `Image` in order (`width`/`height` → `w`/`h`, `license_url` → `licenseUrl`; `alt`, `licenseUrl` and `sensitive` only when set) |
 | `connections` | `Connection` in order |
 | event `singleSource` | `true` when the supporting evidence on the record claim and its atomic parts comes from one independent witness; absent otherwise (derived at publish time, additive: ADR 0018) |

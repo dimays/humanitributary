@@ -37,7 +37,7 @@ citation rules, style) are in [site/SCHEMA.md](../../site/SCHEMA.md).
 | `Connection` | `TL.enrich` connections | A sourced link from one entry to another. |
 | `Location` | `TL.geo` | Where an entry happened, for the globe. |
 | `PaleoPin` | `site/globe-assets.json` `pts` | Where a present-day point lay millions of years ago. |
-| `Image` | `TL.image` | A public-domain or CC0 picture from Wikimedia Commons. |
+| `Image` | `TL.image`, `images` | An openly licensed picture: a file in `site/images/` or the source's own copy by URL ([ADR 0048](../adr/0048-event-images.md)). |
 
 Citations are not in this app. An entry's sources are `Claim` and `Evidence`
 rows in `evidence/` that point at the `Entry` (see
@@ -162,11 +162,33 @@ the GPlates Web Service. The import reads them from
 `site/globe-assets.json`. They make the positions queryable; the page still
 reads the JSON file, and pins are not part of the snapshot.
 
-`Image` is `TL.image`: `src` is a path under `site/images/`, with `width` and
-`height` (the snapshot's `w`/`h`), title, credit, license and the Commons
-page. The constraint `image_license_pd_or_cc0` refuses any license that doesn't
-start with "PD", "Public domain" or "CC0". Images are ordered by `position`,
-unique per entry.
+`Image` is `TL.image` and a snapshot's `images`. `src` is either a path under
+`site/images/` (the legacy set, PD or CC0, kept next to the page) or, since
+[ADR 0048](../adr/0048-event-images.md), the source's own resized copy by its https URL (a Wikimedia
+thumbnail, the Library of Congress's derivative, the Smithsonian's delivery service, NASA's rendition),
+never re-hosted or altered; the constraint `image_src_local_or_https` allows nothing else. `width` and
+`height` (the snapshot's `w`/`h`) are the size shown. Then the caption (`title`), `alt` (what the picture
+shows; empty: the title is read), `credit`, `license`, `license_url` (the snapshot's `licenseUrl`) and the
+source `page`. `image_license_open` accepts a license starting "PD", "Public domain", "No known
+restrictions" (the Library of Congress's rights advisory), "CC0", "CC BY <version>" or "CC BY-SA
+<version>"; non-commercial, no-derivatives and closed licenses are refused. `image_attribution_complete`
+refuses a CC BY or CC BY-SA picture without a credit and a license URL: the attribution travels with it.
+`sensitive` marks a picture likely to disturb (war dead, atrocities, executions, disasters with victims,
+graphic medicine). Images are ordered by `position`, unique per entry; the page shows the first.
+
+New pictures are written by the `image_search` job or the owner's Review page (`ingest/images.py`,
+[Ingestion](ingestion.md#pictures-for-events-image_search)), through `services.apply_changes` inside
+`revising()` like any canonical row. The admin can edit one too (as `human:<username>`).
+
+**On the page** (`site/template.html`, between `// <images>` and `// </images>`): `imageBlock` renders the
+first picture in the event panel (a branch's when the marker is the branch's), with `loading="lazy"`,
+`decoding="async"`, `referrerpolicy="no-referrer"`, its width and height (no layout shift; CSS caps it at
+300 px high), a caption with the credit, the license (linked to `licenseUrl` when there is one) and the
+source page. A `sensitive` picture renders blurred (`figure.pic.blurred`) behind the notice "This image may
+be disturbing." and a native "Show image" button: while hidden, the picture has no alt text and its link is
+out of the tab order; `revealImage` unblurs that one figure, restores both, and moves focus to it. The
+choice isn't remembered: the panel drawn again blurs it again. `site/test-images.mjs` (run by
+`tests/test_site_images.py`) checks both renderings and the reveal.
 
 ## How dates are stored
 

@@ -11,7 +11,8 @@ A `browser_only` page is read by a person, never by an agent (ADR 0046). The Rev
 | Draft | A draft in review that only a `browser_only` or `citation_only` page supports, together with Wikipedia | Publishes the draft with the next release | Retracts the draft |
 | Task | A `fill_gap` or `write_event` task that an agent released with `needs: browser` | Gives the task back to the agents with a page that they can read, or with your summary | Cancels the task |
 
-No agent gets an item on this page. The item waits until you decide.
+No agent gets an item on this page. The item waits until you decide. The pictures for events (the kinds Image and Image flag) are on the same page: do procedure
+[21](21-review-event-images.md) for them.
 
 ## Before you start
 

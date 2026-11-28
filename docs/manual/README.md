@@ -103,3 +103,4 @@ script. Write a comment that tells why.
 | 18 | [Do a task that needs a browser](procedures/18-do-a-task-that-needs-a-browser.md) |
 | 19 | [Review the items that need a person](procedures/19-review-the-items-that-need-a-person.md) |
 | 20 | [Move to the new variable names](procedures/20-move-to-the-new-variable-names.md) |
+| 21 | [Review the pictures for events](procedures/21-review-event-images.md) |

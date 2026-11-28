@@ -670,15 +670,15 @@ def _wants_json(request) -> bool:
 @console
 def review(request):
     """The owner's review queue: one item at a time (`?item=`), a compact list to jump between them, oldest first;
-    the Backlog tab (`?tab=backlog`); the filter `?agents=1` adds the verify_claim tasks agents can still do, in the
+    the Images tab (`?tab=images`: pictures and their flags, ADR 0048); the Backlog tab (`?tab=backlog`); the filter `?agents=1` adds the verify_claim tasks agents can still do, in the
     agents' order. Reading writes nothing: an agent-workable item is leased to the owner by the page's script
     (review_hold), not by this GET."""
     from . import review as RV
 
     now = timezone.now()
-    tab = "backlog" if request.GET.get("tab") == "backlog" else "review"
+    tab = request.GET.get("tab") if request.GET.get("tab") in ("backlog", "images") else "review"
     agents = tab == "review" and request.GET.get("agents") == "1"
-    rows = RV.items(now, backlog=tab == "backlog", agents=agents)
+    rows = RV.image_items() if tab == "images" else RV.items(now, backlog=tab == "backlog", agents=agents)
     key = request.GET.get("item", "")
     current = next((i for i in rows if i.key == key), None) or (RV.find(key, now) if key else None) or (rows[0] if rows else None)
     pos = next((n for n, i in enumerate(rows) if current and i.key == current.key), None)
@@ -687,8 +687,8 @@ def review(request):
     return _render(request, "review.html", {
         "tab": tab, "agents": agents, "rows": rows, "item": current, "d": RV.detail(current) if current else None, "next_key": nxt,
         "people": sum(1 for i in rows if i.kind != "agent"), "agent_rows": sum(1 for i in rows if i.kind == "agent"),
-        "backlog_count": RV.count(backlog=True),
-        "me": actor_of(request.user), "key": uuid.uuid4().hex, "done": done, "error": request.GET.get("error", "")[:300],
+        "backlog_count": RV.count(backlog=True), "image_count": RV.image_count(),
+        "me": actor_of(request.user), "key": uuid.uuid4().hex, "flag_key": uuid.uuid4().hex, "done": done, "error": request.GET.get("error", "")[:300],
         "lease_minutes": work_queue.HUMAN_LEASE_MINUTES, "excerpt_words": RV.EXCERPT_WORDS, "public_site": settings.PUBLIC_SITE_URL,
     }, section="review")
 

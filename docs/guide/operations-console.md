@@ -76,7 +76,7 @@ Work queue card names the jobs that feed it ("fed by process"), from one map (`w
 | Dashboard | `/ops/` | **One status line**: "All good", or "N problems" with one sentence each, worst first (a store that can't be reached; no worker running and no run for 30 minutes; a job failing runs in a row, red at the alert threshold; stuck leases; jobs overdue by 30 minutes; no live release), each linking to where to look. A paused job is never a problem, whatever its last runs did: it is listed under the problems apart, with an amber Paused badge, who paused it and why, and how many failed runs before the pause are not counted ("N paused" beside the count); resumed, its failures count again. **Runs, last 24 hours**: the run graph, one row per job that ran, a bar per run placed at its start and as wide as it took (at least a sliver), green Completed, amber completed with errors, red Failed, blue Running; each bar links to its run, and pointing at it
 (or focusing it, or tapping it once) shows its [run card](#run-cards). **Needs attention**: each job's (or feed's) last run that failed, with Retry and Dismiss; not a paused job's, and not a run an operator dismissed ([ADR 0039](../adr/0039-dismiss-a-failed-run.md)). A run being retried shows that instead of the buttons: **Retry queued** (amber, a console retry or run of it waiting for the worker) or **Retrying** (blue, the worker has taken it, or a run of the same job and feed is running), with links to the action and the run. A retry that completes takes the row off; one that fails replaces it with the new failure. With nothing left, the card says so, and how many failures were dismissed. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck (the owner's review backlog is in none of them, and a person's lapsed lease from the Review page is not stuck), and a "Review: N waiting for you" link to the Review page. **Latest round**: the last agent round's number, state badge, age, trigger, drafts, ops applied and release, the ten-round strip, and when the next is due (or Rounds paused). Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
 | New events | `/ops/new/` | The content the platform makes, newest activity first: every current event (`write_event`), history-wave event (`fill_gap`) and branch addition (an edit file's `add_branch` or `add_event`), each with its five steps (Fetched, Queued, Drafted, Reviewed, Published) and their times, its branches, date, sources, agent and verdict, and its links; tabs, filters and a 14-day pulse above ([below](#new-events)). |
-| Review | `/ops/review/` | The owner's review queue ([below](#review)): the items that wait for a person's read, one at a time, with a compact list to jump between them, oldest first, each with its kind; Approve, Deny and Defer; a Backlog tab; and the filter "Also show items agents can do". |
+| Review | `/ops/review/` | The owner's review queue ([below](#review)): the items that wait for a person's read, one at a time, with a compact list to jump between them, oldest first, each with its kind; Approve, Deny and Defer; an Images tab for pictures and their flags ([ADR 0048](../adr/0048-event-images.md)); a Backlog tab; and the filter "Also show items agents can do". |
 | Jobs | `/ops/jobs/` | One row per job, in run order: its name and one-sentence description (the docstring's first sentence), its tags, its schedule in words ("every 15 minutes", "every hour" with "per feed · 1 of 1 on" for a feed job), its last run's state and age, its last ten runs as squares (oldest left, each its state's color and a link to the run, with its [run card](#run-cards) on hover, focus or tap; empty slots when it has run fewer times), its next run (or Paused, or Pending), and Run now / Pause, or Resume. Chips across the top filter by tag (`?tag=`), with counts, and "Archived jobs" (with their count, when there are any) leads to the archived jobs. An archived job is not listed ([ADR 0041](../adr/0041-archive-a-job.md)). |
 | Archived jobs | `/ops/jobs/archived/` | Every archived job, most recently archived first (`queries.archived`): its name and description (or "no longer in `ingest/job_defs.py`"), when and by whom it was archived with a link to the action, the reason and whether the archive paused it, its runs kept (a link to the Runs page filtered by it), its last run, and Unarchive. |
 | A job | `/ops/jobs/<name>/` | The description and tags; the schedule, next run, last run, failures in a row, console runs waiting; the ten-run strip and whether it may be run again straight away (`not_idempotent`); for a feed job its feeds (schedule, last fetched, next, a Run button each); its run history, 25 a page. For an operator, **Archive…** beside the job's buttons opens the [archive dialog](#archiving-a-job). An archived job's page stays reachable: an Archived banner (who, when, the action, why), "never: archived" as its next run, its history, and only Unarchive. |
@@ -412,6 +412,8 @@ happens. Its items, each named by a key the page and the decisions share:
 | Draft | `draft-<slug>` | a draft in review whose only support besides Wikipedia is a page only a person reads | `work.rounds.owner_read_drafts` |
 | Task | `task-<id>` | a `fill_gap` or `write_event` task released with `needs: browser` | `review.person_tasks` |
 | Agents can do | `task-<id>` | a `verify_claim` task agents may still claim (only with the filter on) | `review.agent_tasks` |
+| Image | `image-<id>` | a picture the `image_search` job found but may not attach alone ([ADR 0048](../adr/0048-event-images.md)) | `review.image_qs` (`ImageCandidate` in review) |
+| Image flag | `image-<id>` | a picture already attached that the job's sensitivity signals blurred, to confirm or clear | the same, `kind` flag |
 
 **The page.** One item at a time (`?item=<key>`; the first when none is named), and on the left a compact list of
 them all with each one's kind and age. The queue is oldest first: a task by when it was released with its need, a
@@ -421,7 +423,11 @@ next for Claude), at most `AGENT_LIMIT` (50), with the ones an agent holds now m
 decision rests on: for a claim, its entry, the claim's text, its status and confidence, and the agent's release
 reason; for a draft, its title, date, branch and text and the reviewer's **hold note** (the newest edit-file
 Revision on the entry or its evidence, one that says HOLD first, its reason after the op); for a task, its context
-(the branch and window of a `fill_gap`, the story and its items of a `write_event`). Then **Read these in your
+(the branch and window of a `fill_gap`, the story and its items of a `write_event`); for a picture or a flag, the
+event (its text, branch and a link to it on the public page), the picture's title, its page at the source, credit,
+license (linked to its deed), how it was found and its score's parts, the runners-up kept, the sensitivity signals,
+the thumbnailing it relies on, and the picture itself (`review.preview_src`: the source's URL, or the public page's
+copy of a file in `site/images/`), blurred behind "Show image" when it is flagged. Then, for the other kinds, **Read these in your
 browser**: the pages to read, each a prominent link (`target="_blank" rel="noopener"`) with its publisher, its
 policy (`agentapi.policy.decide`, what `GET policy` says) and why it is listed: the URLs in the agent's reason, the
 `PERSON_READ` citations (for an atomic claim, its record's too), the evidence pack's unreadable pages, a
@@ -436,6 +442,23 @@ disclosure. Nothing is chosen for the owner: a claim's page is picked only when 
 | Deny | evidence that the page does not support it (`unrelated`), or with "contradicts" checked, that it conflicts (`conflicts`: the claim may become contested); the task completes | a `reject` op: retracted | cancelled (`queue.cancel`) with the note |
 | Defer | the backlog: `payload["needs"]["backlog"]` (an item agents could do gets a need of kind `owner` marked `from_defer`) | the backlog: the `owner_review` JobState row | as a claim |
 
+**Pictures** (`review._decide_image`; the form's **Sensitive** box, ticked when the job's signals fired):
+Approve attaches the picture (`ingest.images.attach`: a `timeline.Image` through the services as
+`human:<username>`, `sensitive` as the box says; the entry's other candidates are superseded; refused if the entry
+has a picture already); Deny refuses it for good (`images.deny`: never proposed again for the entry; the best
+runner-up goes to review, or with none the event waits its cooldown); Defer and Bring back set and clear the
+candidate's `backlog`. A **flag** item's Approve keeps the flag as the box says and its Deny clears it
+(`images.set_flag`, audited); the job never sets a flag the owner cleared. On the Images tab, **A picture's sensitive
+flag** sets or clears the flag of any entry's picture (decision `flag`, OpsAction `review_flag`; refused when the
+entry has no picture or the flag is already so). The next release carries every change.
+
+**The Images tab** (`?tab=images`, `review.image_items`, its count `review.image_count`): the picture and flag items,
+oldest first, apart from the reads. `review.count` (the To review tab's count, the sidebar's badge, the Dashboard's
+link and the agents' `owner_review` in `GET queue`) counts claims, drafts and tasks only, so pictures never bury a
+read; with `backlog` it counts every deferred item, pictures included. The decisions, the undo and the backlog work
+as for any item: a deferred picture is listed in the one Backlog tab and Bring back returns it to the Images tab. A
+decision made on the Images tab comes back to it (the form's hidden `tab`). The flag form is on this tab.
+
 A deferred item leaves the count, the badge, `/healthz`'s queue counts and every agent's queue, and never comes
 back by itself. The **Backlog** tab lists the deferred items, oldest deferral first, each with who deferred it,
 when and why, and **Bring back** (`restore`), which returns it where it was: an item that needed a person to
@@ -443,8 +466,8 @@ the To review tab, an item agents could do to the agents' queue.
 
 **No confirmation page, still audited.** A decision POSTs to `/ops/review/decide/` (`views.review_decide`, the
 `ops_operator` permission and CSRF as every action). The form carries a fresh idempotency key, so a double submit
-acts once. `actions.ACTIONS` has the four kinds (`review_approve`, `review_deny`, `review_defer`, `review_restore`,
-`direct`: no confirmation step): `prepare` checks the item against the database now (`review.check`: still
+acts once. `actions.ACTIONS` has the five kinds (`review_approve`, `review_deny`, `review_defer`, `review_restore`, and
+`review_flag` for the flag form; `direct`: no confirmation step): `prepare` checks the item against the database now (`review.check`: still
 waiting, not in the backlog unless restoring, not held by an agent, a page that is the item's, the excerpt's
 length, a readable source for a task), and the OpsAction is created and run in the request, in one transaction
 (`run_now`), with the note as its reason (or a default per decision) and the item, decision, note and page in its

@@ -1,6 +1,6 @@
 # 0046 — Pages only a person may read go to the owner's review queue, and no agent is offered them
 
-**Status:** proposed (November 2026); amends [0028](0028-operations-console.md) (a Review page, and decisions made with one click, without a confirmation page, still audited), [0035](0035-automated-daily-rounds.md) (a draft held only for a person's read is not carried over to a round's reviewers, and the round hands such reads to the owner) and [0042](0042-deferred-releases-and-the-fetch-policy-endpoint.md) (a task that needs a person is never offered to an agent, however long ago its week ran out)
+**Status:** proposed (November 2026); amends [0028](0028-operations-console.md) (a Review page, and decisions made with one click, without a confirmation page, still audited), [0035](0035-automated-daily-rounds.md) (a draft held only for a person's read is not carried over to a round's reviewers, and the round hands such reads to the owner) and [0042](0042-deferred-releases-and-the-fetch-policy-endpoint.md) (a task that needs a person is never offered to an agent, however long ago its week ran out); amended by [0048](0048-event-images.md) (pictures and their sensitive flags on the Review page)
 
 ## Context
 

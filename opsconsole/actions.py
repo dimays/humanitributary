@@ -872,10 +872,12 @@ def execute_review_held(action, log):
 # One click and an optional note: no confirmation page (the page itself shows everything the decision rests on, and
 # approve and deny wait a few seconds in the browser for an undo before they are sent), but an OpsAction all the same.
 
-REVIEW_KINDS = {A.REVIEW_APPROVE: "approve", A.REVIEW_DENY: "deny", A.REVIEW_DEFER: "defer", A.REVIEW_RESTORE: "restore"}
+REVIEW_KINDS = {A.REVIEW_APPROVE: "approve", A.REVIEW_DENY: "deny", A.REVIEW_DEFER: "defer", A.REVIEW_RESTORE: "restore",
+                A.REVIEW_FLAG: "flag"}  # flag: a picture's sensitive flag set or cleared (ADR 0048)
 REVIEW_RATE_LIMIT = 120      # review decisions per user per RATE_WINDOW_MINUTES (a quick queue, apart from the other actions)
 REVIEW_DEFAULT_REASON = {"approve": "approved from the Review page", "deny": "denied from the Review page",
-                         "defer": "deferred to the review backlog", "restore": "brought back from the review backlog"}
+                         "defer": "deferred to the review backlog", "restore": "brought back from the review backlog",
+                         "flag": "a picture's sensitive flag changed from the Review page"}
 
 
 def _review_plan(kind):
@@ -888,7 +890,8 @@ def _review_plan(kind):
         except review.ReviewError as e:
             raise Refused(str(e)) from None
         rows = [("Item", f"{item.key} ({item.kind_label.lower()}): {item.title}"), ("Decision", decision)] + \
-            [(k.capitalize(), str(v)) for k, v in params.items() if k in ("url", "excerpt", "source", "note") and v]
+            [(k.capitalize(), str(v)) for k, v in params.items() if k in ("url", "excerpt", "source", "note", "entry") and v] + \
+            ([("Sensitive", "yes: blurred on the page" if params["sensitive"] else "no")] if "sensitive" in params else [])
         return Plan(kind, item.key, params, f"{decision.capitalize()} {item.key}", check_output="\n".join(f"{k}: {v}" for k, v in rows), rows=rows)
 
     return prepare

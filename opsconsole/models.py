@@ -44,6 +44,8 @@ class OpsAction(models.Model):
         REVIEW_DENY = "review_deny", "deny an item in review"
         REVIEW_DEFER = "review_defer", "defer an item to the review backlog"
         REVIEW_RESTORE = "review_restore", "bring an item back from the review backlog"
+        # An image's sensitive flag, set or cleared from the Review page (ADR 0048).
+        REVIEW_FLAG = "review_flag", "set or clear an image's sensitive flag"
 
     class Status(models.TextChoices):
         PENDING = "pending"      # waiting for the worker

@@ -14,7 +14,7 @@ export const KEYS = {
   origin: ["note", "links", "cites"],
   originLink: ["id", "how", "note"],
   geo: ["scope", "lat", "lon", "r", "label", "src", "scale"],
-  image: ["src", "w", "h", "title", "credit", "license", "page"],
+  image: ["src", "w", "h", "title", "alt", "credit", "license", "licenseUrl", "page", "sensitive"],
   connection: ["id", "note"],
 };
 

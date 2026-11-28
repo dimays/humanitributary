@@ -68,6 +68,7 @@ things work now; an ADR says why, and what was given up.
 | [0045](0045-short-sort-keys-and-json-errors.md) | Sort keys stay short and a used-up gap is respaced; the agent API answers every error as JSON, refuses long excerpts and counts unrated lookups | proposed |
 | [0046](0046-the-owners-review-queue.md) | Pages only a person may read go to the owner's review queue, and no agent is offered them | proposed |
 | [0047](0047-manyages-variable-names.md) | The agent environment variables take the ManyAges name, with a fallback to the old one until the owner deletes it | proposed |
+| [0048](0048-event-images.md) | Events get openly licensed pictures by reference, found by a paced job; pictures that may disturb are blurred until the viewer asks | proposed |
 | [0049](0049-source-ratings-batch-3.md) | A third batch of source ratings: thirty-three more records for the domains agents were refused | proposed |
 <!-- index:end -->
 

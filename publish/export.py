@@ -58,7 +58,9 @@ def build_content() -> dict:
 
     images = defaultdict(list)
     for im in Image.objects.filter(entry_id__in=slug).order_by("entry_id", "position"):
-        d = {"src": im.src, "w": im.width, "h": im.height, "title": im.title, "credit": im.credit, "license": im.license, "page": im.page}
+        # alt, licenseUrl and sensitive only when set (ADR 0048): additive, so the older pictures' bytes are unchanged (ADR 0007).
+        d = {"src": im.src, "w": im.width, "h": im.height, "title": im.title, "alt": im.alt or None, "credit": im.credit, "license": im.license,
+             "licenseUrl": im.license_url or None, "page": im.page, "sensitive": True if im.sensitive else None}
         images[im.entry_id].append(_ordered({k: v for k, v in d.items() if v is not None}, "image"))
 
     claim_of = {}

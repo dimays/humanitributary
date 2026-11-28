@@ -147,7 +147,7 @@ counts) unknown keys, which the build reports as a warning.
 | event `link` | the first `EventLink` by position |
 | `cites` | the `as_written` claim's shown evidence in `position` order: `t` = `cited_title`, `u` = the citation's URL, `k` = `cited_kind` when set |
 | `geo` | `Location`, without null fields (`radius_km` → `r`) |
-| `images` | `Image` in `position` order (`width`/`height` → `w`/`h`), without null fields |
+| `images` | `Image` in `position` order (`width`/`height` → `w`/`h`, `license_url` → `licenseUrl`), without null fields; `alt` and `licenseUrl` only when not empty and `sensitive` only when true (ADR 0048, additive under ADR 0007: the older pictures' bytes are unchanged). The loader reads them back (absent: empty, false). |
 | `why`, `connections`, `whyCites` | only when `Entry.why` is set: the text, `Connection` rows in order, and the `why` claim's shown evidence |
 | event `singleSource` | `true` when `single_source_events()` finds one independent witness behind the event; absent otherwise |
 
@@ -518,8 +518,9 @@ skipped left-over version and each gate (an export that isn't deterministic,
 | `--archive [dir]` | Reads the frozen legacy files (default `archive/site-data`) instead of a snapshot, applying their `TL.*` calls; only with `--dump-json` or `--check` (`--file <prefix>` limits the report to some files) |
 
 It refuses to build or dump while there are errors (an unknown id, a missing
-citation, a non-https URL, a bad region, an image that isn't public domain or
-CC0 …); warnings (a long text or title, an event outside its branch's dates,
+citation, a non-https URL, a bad region, a legacy `TL.image` that isn't public
+domain or CC0 …; a snapshot's pictures are held to their licenses by the
+database's constraints instead, ADR 0048); warnings (a long text or title, an event outside its branch's dates,
 entries without a usable location) don't stop it.
 
 ### The panel's globe
