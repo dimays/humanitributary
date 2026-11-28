@@ -455,4 +455,6 @@ class NewEventsQueryCountTests(FreshStorage, TestCase):
         seed_content(days=12, scale=3, release=True)
         big_counts = [self.count(range="all"), self.count(tab="rejected"), self.count(branch="un", state="published")]
         self.assertEqual(small_counts, big_counts)
-        self.assertLessEqual(max(big_counts), 10)  # session, user, two permission reads, the branch, counts and pulse, a page, the live release, details, the branch list
+        # session, user, two permission reads, the branch, counts and pulse, a page, the live release, details, the branch
+        # list; and the sidebar's Review count (one query, ADR 0046)
+        self.assertLessEqual(max(big_counts), 11)

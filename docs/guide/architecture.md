@@ -75,7 +75,8 @@ the adapter's on/off switch. Smithsonian and Europeana stay off until their keys
 Some publishers are citation-only: we may cite their pages, but no job ever fetches them. `ingest/policy.py`
 `NEVER_FETCH` lists Britannica, the Guardian, the BBC, NPR, Al Jazeera, AP and Olympedia, plus OpenStax, which is
 never cited either. Publishers whose `fetch_policy` is `browser_only` (the UN, UNESCO, nobelprize.org and others)
-are refused the same way. Agents read these in a browser. The decision and every verdict are in
+are refused the same way. A person reads these in their own browser, never an agent with any tool
+([ADR 0046](../adr/0046-the-owners-review-queue.md)). The decision and every verdict are in
 [ADR 0013](../adr/0013-source-policy.md).
 
 ## Stage 2: ingest

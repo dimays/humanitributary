@@ -19,8 +19,8 @@ class Publisher(models.Model):
     class Fetch(models.TextChoices):
         ALLOWED = "allowed", "automated fetching allowed"
         API_ONLY = "api_only", "jobs only through its API (api_base), and only with a key where one is needed"
-        BROWSER_ONLY = "browser_only", "blocks automated readers: read in a browser"
-        CITATION_ONLY = "citation_only", "cite the link; never fetched by a job (an agent may read it in a browser)"
+        BROWSER_ONLY = "browser_only", "blocks automated readers: a person reads it in a browser"
+        CITATION_ONLY = "citation_only", "cite the link; never fetched by a job or read by an agent (a person reads it in a browser)"
         FORBIDDEN = "forbidden", "never fetch or cite (terms forbid it)"
 
     domain = models.CharField(max_length=200, unique=True)

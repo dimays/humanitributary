@@ -52,6 +52,8 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, m
 .nav a:hover { background: var(--hover); color: var(--text); text-decoration: none; }
 .nav a.on { background: var(--accent-bg); color: var(--accent); }
 .nav svg { width: 17px; height: 17px; flex: none; }
+.nav .nav-n { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11.5px;
+  font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 .side .foot { margin-top: auto; padding: 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
 .side .foot b { display: block; color: var(--text); font-weight: 500; }
 main { padding: 28px 36px 64px; max-width: 1320px; width: 100%; }
@@ -354,6 +356,8 @@ tr.group th { background: var(--hover); font-weight: 500; text-align: left; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Dashboard</span></a>
     <a href="{% url 'opsconsole:new_events' %}" class="{% if section == 'new_events' %}on{% endif %}"{% if section == 'new_events' %} aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>New events</span></a>
+    <a href="{% url 'opsconsole:review' %}" class="{% if section == 'review' %}on{% endif %}"{% if section == 'review' %} aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg><span>Review</span>{% if review_count %}<b class="nav-n" aria-label="{{ review_count }} waiting">{{ review_count }}</b>{% endif %}</a>
     <a href="{% url 'opsconsole:jobs' %}" class="{% if section == 'jobs' %}on{% endif %}"{% if section == 'jobs' %} aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>Jobs</span></a>
     <a href="{% url 'opsconsole:runs' %}" class="{% if section == 'runs' %}on{% endif %}"{% if section == 'runs' %} aria-current="page"{% endif %}>

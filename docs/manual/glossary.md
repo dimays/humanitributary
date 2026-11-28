@@ -14,6 +14,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Alert | One email that the system sends when a job fails three runs in a row. Without the mail config vars, it is a log line. |
 | Approve | To change the status of an entry from `review` to `published`. The `approve` operation of an edit file does this under the publication rule. |
 | Archived job | A job that the console retired. No runner runs it. The console and `/healthz` do not show it, but its runs stay. Unarchive makes it a paused job again. |
+| Backlog | The items that you deferred on the Review page. They are not in a count or in the queue of an agent until you bring them back. |
 | Branch | A line on the timeline, for example a state, a people, a faith or an idea. A branch is a kind of entry. |
 | Bucket | A container for objects in S3. The system has two: `raw` and `releases`. |
 | Candidate | A possible event that a job made from one or more documents. It has a cluster and a priority. |
@@ -28,7 +29,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Content wave | A period of history in equal windows. The `gap_waves` job finds the gaps in the active wave and in the newer waves. |
 | Contested | A claim status: sources that conflict with the claim have enough weight against it. |
 | Dedupe key | A key that a job gives to a task. Only one open task can have a given kind and key. |
-| Deferred task | A queued task that an agent released. Agents do not get it before its time "not before". The console shows it on the tab Deferred. |
+| Deferred task | A queued task that an agent released. Agents do not get it before its time "not before". Agents never get it again if it has a need. The console shows it on the tab Deferred. |
 | Deploy | The step that puts new code on the Heroku app. Heroku deploys `main` after CI passes. |
 | Deterministic | A program is deterministic when the same input always gives the same output. All jobs are deterministic. |
 | Dismissed | The mark on a failed job run that an operator removed from "Needs attention" without a new run. The run stays in the history. |
@@ -77,6 +78,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Release phase | The step in which Heroku runs `manage.py migrate` before a new deploy goes live. |
 | Releases store | The `releases` bucket. It holds the release files and the pointer. |
 | Review | The status `review` of an entry. Also, the written result of a reviewer: a Markdown file in `var/reviews/`. |
+| Review page | The page `/ops/review/` of the console. It holds the claims, drafts and tasks that need a person to read a `browser_only` page. You approve, deny or defer each item there. |
 | Reviewer | A Claude session that did not write the drafts. It reads them and their sources and writes a review and an edit file. |
 | `revising()` | `revisions.revising(actor, reason, task)`, the only way to write a canonical row. It tells the trigger who writes and why. |
 | Revision | One changed canonical row: who, when, why, which task, and the row before and after. A trigger writes it. |

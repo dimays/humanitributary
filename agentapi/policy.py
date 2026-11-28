@@ -18,7 +18,7 @@ and were refused, most asked first: what to rate next (ADR 0045). No other answe
 | policy | may_fetch | browser_read | |
 |---|---|---|---|
 | `forbidden` | no | no | never read or cite (OpenStax) |
-| `citation_only`, `browser_only`, `never_fetch` | no | yes | a person's browser (or a local session's in-app browser) only |
+| `citation_only`, `browser_only`, `never_fetch` | no | yes | a person's own browser only (ADR 0046): no agent, with any tool |
 | `api_only` | under its `api_base` only (and a key, where it needs one) | yes | |
 | `ai_blocked`, `robots`, `blocked` | no | yes | the site shuts out AI crawlers, or refused our reader lately |
 | `unrated` | no | yes | nobody has read its terms and rated it |
@@ -49,7 +49,8 @@ from .auth import agent_view, error
 
 log = logging.getLogger("agentapi")
 
-BROWSER = "it needs a browser read: a person's browser, or a local session's in-app browser; never a script. A cloud agent has no browser"
+BROWSER = ("it needs a person's read in their own browser, never an agent's (no script, no in-app browser, no Claude in Chrome: ADR 0046); "
+           "release the task with needs: browser for the owner's Review queue")
 
 
 def _hosts(host: str) -> list[str]:

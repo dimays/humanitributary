@@ -180,12 +180,52 @@ ENTRY_TABLES = ("timeline_entry", "timeline_branch", "timeline_event")
 
 
 def held_drafts():
-    """Entries in review that a reviewer's edit file already touched and left there (HOLD): the slugs, oldest first."""
+    """Entries in review that a reviewer's edit file already touched and left there (HOLD): the slugs, oldest first.
+    Not the drafts that wait for the owner's own read (`owner_read_drafts`, ADR 0046): no agent sees those, so a
+    round never carries them over to its reviewers."""
     from revisions.models import Revision
     from timeline.models import Entry
 
     by_review = Revision.objects.filter(table_name__in=ENTRY_TABLES, row_pk=Cast(OuterRef("pk"), CharField()), reason__startswith="apply_edits")
-    return Entry.objects.filter(status="review").filter(Exists(by_review)).order_by("created_at", "id").values_list("slug", flat=True)
+    return (Entry.objects.filter(status="review").filter(Exists(by_review)).exclude(pk__in=owner_read_drafts().values("pk"))
+            .order_by("created_at", "id").values_list("slug", flat=True))
+
+
+# The publishers only a person reads (ADR 0046): no agent's script fetches them (AGENTS.md rule 6), so a draft that
+# rests on one of them, besides Wikipedia, waits for the owner to read it in their own browser.
+PERSON_READ = ("browser_only", "citation_only")
+
+
+def _has(container, slug):
+    """SQL: the JSON array `container` holds the string `slug` (jsonb_contains, NULL-safe in a filter)."""
+    from django.db.models import BooleanField, Func, JSONField
+
+    return Func(container, Func(slug, function="jsonb_build_array", output_field=JSONField()), function="jsonb_contains", output_field=BooleanField())
+
+
+def in_open_round(slug_ref):
+    """An Exists for "an open round's reviewers have this slug": its drafts, or the held drafts carried over to it.
+    In SQL, so the console's count stays one query."""
+    from django.db.models import F
+    from django.db.models.fields.json import KeyTransform
+
+    return Exists(Round.objects.filter(status__in=Round.OPEN).alias(d=_has(F("drafts"), slug_ref), c=_has(KeyTransform("carry_over", "plan"), slug_ref))
+                  .filter(Q(d=True) | Q(c=True)))
+
+
+def owner_read_drafts():
+    """Drafts in review held only for a person's read (ADR 0046): the record's support, besides Wikipedia, is only
+    `PERSON_READ` pages nobody has read in a browser as `human:` yet. Not the drafts an open round is still reviewing.
+    A queryset of entries (the backlog among them: the Review page tells them apart)."""
+    from evidence.models import Evidence
+    from timeline.models import Entry
+
+    record = Evidence.objects.filter(claim__entry=OuterRef("pk"), claim__field="as_written", claim__key="", claim__parent__isnull=True,
+                                     stance__in=("supports", "partial"))
+    wiki = Q(citation__publisher__domain="wikipedia.org") | Q(citation__publisher__domain__endswith=".wikipedia.org")
+    person = record.filter(citation__publisher__fetch_policy__in=PERSON_READ).exclude(checked_by__startswith="human:")
+    readable = record.exclude(wiki).filter(~Q(citation__publisher__fetch_policy__in=PERSON_READ) | Q(checked_by__startswith="human:"))
+    return Entry.objects.filter(status="review").filter(Exists(person)).filter(~Exists(readable)).filter(~in_open_round(OuterRef("slug")))
 
 
 # ── starting and recording rounds ─────────────────────────────────────────────────────────────────────────────────

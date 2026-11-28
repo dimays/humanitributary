@@ -292,7 +292,7 @@ class Nobel(Adapter):
                     slug = {"Economic Sciences": "economic-sciences"}.get(p["category"]["en"], p["category"]["en"].lower().replace(" ", "-"))
                     out.append(Hit(self.name, f"https://www.nobelprize.org/prizes/{slug}/{y}/summary/", f"{cat} {y}: {name}", self.publisher,
                                    p.get("dateAwarded", str(y)), f"{name}, {(l.get('motivation') or {}).get('en', '')}", self.kind,
-                                   {"api": (l.get("links") or [{}])[0].get("href", ""), "note": "nobelprize.org is browser_only: read it in a browser"}, 1.0))
+                                   {"api": (l.get("links") or [{}])[0].get("href", ""), "note": "nobelprize.org is browser_only: a person reads it in their own browser, never an agent (ADR 0046)"}, 1.0))
         return out
 
 

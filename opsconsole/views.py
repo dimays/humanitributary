@@ -122,8 +122,10 @@ def moved(name, *arg_names):
 
 
 def _render(request, template, ctx, *, section, status=200, refresh=None):
+    from . import review as RV
+
     base = {"section": section, "auto_refresh": refresh, "now": timezone.now(), "site_name": settings.SITE_NAME,
-            "can_act": can_act(request.user), "states": Q.STATES}
+            "can_act": can_act(request.user), "states": Q.STATES, "review_count": RV.count()}
     return render(request, f"opsconsole/{template}", base | ctx, status=status)
 
 
@@ -548,7 +550,7 @@ def _start(action: OpsAction):
 def act(request, kind):
     """Step 1: validate and show the confirmation page (or, for an action that writes nothing, queue it at once)."""
     spec = acts.ACTIONS.get(kind)
-    if spec is None:
+    if spec is None or kind in acts.REVIEW_KINDS:  # review decisions go through review_decide (ADR 0046)
         raise Http404("no such action")
     actor = actor_of(request.user)
     try:
@@ -657,3 +659,130 @@ def action_cancel(request, pk):
     if not n:
         get_object_or_404(OpsAction, pk=pk)
     return redirect("opsconsole:action", pk)
+
+
+# ── Review (ADR 0046) ─────────────────────────────────────────────────────────────────────────────────────────────
+
+def _wants_json(request) -> bool:
+    return "application/json" in request.headers.get("Accept", "") or request.headers.get("X-Requested-With") == "fetch"
+
+
+@console
+def review(request):
+    """The owner's review queue: one item at a time (`?item=`), a compact list to jump between them, oldest first;
+    the Backlog tab (`?tab=backlog`); the filter `?agents=1` adds the verify_claim tasks agents can still do, in the
+    agents' order. Reading writes nothing: an agent-workable item is leased to the owner by the page's script
+    (review_hold), not by this GET."""
+    from . import review as RV
+
+    now = timezone.now()
+    tab = "backlog" if request.GET.get("tab") == "backlog" else "review"
+    agents = tab == "review" and request.GET.get("agents") == "1"
+    rows = RV.items(now, backlog=tab == "backlog", agents=agents)
+    key = request.GET.get("item", "")
+    current = next((i for i in rows if i.key == key), None) or (RV.find(key, now) if key else None) or (rows[0] if rows else None)
+    pos = next((n for n, i in enumerate(rows) if current and i.key == current.key), None)
+    nxt = rows[pos + 1].key if pos is not None and pos + 1 < len(rows) else (rows[0].key if rows and current and rows[0].key != current.key else "")
+    done = OpsAction.objects.filter(pk=request.GET.get("done")).first() if (request.GET.get("done") or "").isdigit() else None
+    return _render(request, "review.html", {
+        "tab": tab, "agents": agents, "rows": rows, "item": current, "d": RV.detail(current) if current else None, "next_key": nxt,
+        "people": sum(1 for i in rows if i.kind != "agent"), "agent_rows": sum(1 for i in rows if i.kind == "agent"),
+        "backlog_count": RV.count(backlog=True),
+        "me": actor_of(request.user), "key": uuid.uuid4().hex, "done": done, "error": request.GET.get("error", "")[:300],
+        "lease_minutes": work_queue.HUMAN_LEASE_MINUTES, "excerpt_words": RV.EXCERPT_WORDS, "public_site": settings.PUBLIC_SITE_URL,
+    }, section="review")
+
+
+def _review_reply(request, *, ok: bool, message: str = "", action=None, item: str = "", tab: str = "", agents: str = "", status: int = 200):
+    if _wants_json(request):
+        from django.http import JsonResponse
+
+        return JsonResponse({"ok": ok, "message": message, "action": action.pk if action else None,
+                             "status": action.status if action else None}, status=status)
+    q = {k: v for k, v in (("tab", tab), ("agents", agents)) if v}
+    if ok:
+        q["done"] = action.pk
+    else:
+        q["item"], q["error"] = item, message[:300]
+    from urllib.parse import urlencode
+
+    r = redirect(reverse("opsconsole:review") + "?" + urlencode(q))
+    r.status_code = 303
+    return r
+
+
+@operator
+def review_decide(request):
+    """A decision on one item: approve, deny, defer or restore, with an optional note. One OpsAction, made and run in
+    this request (no confirmation page), under its own rate limit; the form's key makes a double submit act once."""
+    decision = request.POST.get("decision", "")
+    kind = next((k for k, d in acts.REVIEW_KINDS.items() if d == decision), None)
+    if kind is None:
+        raise Http404("no such decision")
+    actor = actor_of(request.user)
+    back = {"item": request.POST.get("item", ""), "tab": request.POST.get("tab", ""), "agents": request.POST.get("agents", "")}
+    key = (request.POST.get("key") or "")[:64]
+    if not key:
+        return _review_reply(request, ok=False, message="the form carries no key: reload the page", status=400, **back)
+    existing = OpsAction.objects.filter(idempotency_key=key).first()
+    if existing is not None:
+        return _review_reply(request, ok=existing.status == OpsAction.Status.DONE, message=existing.error, action=existing, **back)
+    if why := acts.review_rate_refusal(actor):
+        return _review_reply(request, ok=False, message=why, status=429, **back)
+    try:
+        plan = acts.ACTIONS[kind].prepare(request.POST, actor)
+    except acts.Refused as e:
+        return _review_reply(request, ok=False, message=str(e), status=409, **back)
+    reason = plan.params.get("note") or acts.REVIEW_DEFAULT_REASON[decision]
+    action, created = _create(kind, target=plan.target, params=plan.params, reason=reason, actor=actor, key=key, check_output=plan.check_output)
+    if created:
+        acts.run_now(action)
+    ok = action.status == OpsAction.Status.DONE
+    return _review_reply(request, ok=ok, message="" if ok else mask_secrets(action.error), action=action, status=200 if ok else 409, **back)
+
+
+def _task_id(request) -> int:
+    raw = request.POST.get("task") or ""
+    if not raw.isdigit():
+        raise Http404("no such task")
+    return int(raw)
+
+
+@operator
+def review_hold(request):
+    """Lease an agent-workable item to the owner while its page is open (queue.claim_for, as human:<username>), and
+    hand back any other such item they hold: one item at a time. The page's script calls it on load and every few
+    minutes; without the script, the page's Take it button does. → JSON {held, holder, until}"""
+    from django.http import JsonResponse
+
+    from . import review as RV
+
+    actor = actor_of(request.user)
+    tid = _task_id(request)
+    task = AgentTask.objects.filter(pk=tid, kind__in=RV.AGENT_KINDS).first()
+    if task is None or "needs" in (task.payload or {}):
+        raise Http404("not an item agents can do")
+    for other in AgentTask.objects.filter(status=AgentTask.Status.CLAIMED, claimed_by=actor, kind__in=RV.AGENT_KINDS).exclude(pk=tid).values_list("pk", flat=True):
+        work_queue.let_go(other, agent=actor)
+    try:
+        t = work_queue.claim_for(tid, agent=actor)
+        out = {"held": True, "holder": actor, "until": t.lease_until.isoformat(timespec="seconds")}
+    except work_queue.TaskError as e:
+        task.refresh_from_db()
+        out = {"held": False, "holder": task.claimed_by or None, "until": task.lease_until.isoformat(timespec="seconds") if task.lease_until else None,
+               "message": str(e)}
+    if _wants_json(request):
+        return JsonResponse(out)
+    return redirect(reverse("opsconsole:review") + f"?agents=1&item=task-{tid}")
+
+
+@operator
+def review_let_go(request):
+    """Hand back an agent-workable item the owner opened and left without deciding (the page's script, on leaving
+    it). Nothing happens if they no longer hold it. → JSON {released}"""
+    from django.http import JsonResponse
+
+    released = work_queue.let_go(_task_id(request), agent=actor_of(request.user))
+    if _wants_json(request) or request.POST.get("beacon"):
+        return JsonResponse({"released": released})
+    return redirect(reverse("opsconsole:review") + "?agents=1")

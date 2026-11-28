@@ -8,19 +8,22 @@ covers:
   - tests/test_opsconsole_actions.py
   - tests/test_opsconsole_cards.py
   - tests/test_opsconsole_new_events.py
+  - tests/test_review.py
   - tests/test_rounds.py
   - tests/test_round_progress.py
 ---
 
 The operations console is a handful of web pages for staff, at `/ops/` on the data host. Its shape is borrowed from
-an orchestrator's console (Prefect Cloud's, which the owner likes), cut down to one project: a left sidebar of seven
+an orchestrator's console (Prefect Cloud's, which the owner likes), cut down to one project: a left sidebar of eight
 pages, state badges in a few colors, a run graph, and a page per run with its log
 ([ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md), which redesigned the first console of
-[ADR 0028](../adr/0028-operations-console.md); [ADR 0033](../adr/0033-a-new-events-page-derived-from-existing-rows.md) added New events). Everything on it is read from the database, the releases store and
+[ADR 0028](../adr/0028-operations-console.md); [ADR 0033](../adr/0033-a-new-events-page-derived-from-existing-rows.md) added New events,
+[ADR 0046](../adr/0046-the-owners-review-queue.md) the owner's [Review](#review) queue). Everything on it is read from the database, the releases store and
 the repository's `docs/`, and reading changes nothing. Staff with the `ops_operator` permission also get a few
 buttons: run or retry a job, pause or resume one, release a stuck lease (or extend one), requeue or cancel tasks,
 advance the content wave, publish, roll back ([actions](#actions)). Each is confirmed on a page that shows what will
-happen, needs a reason, and leaves an `OpsAction` row.
+happen, needs a reason, and leaves an `OpsAction` row. The Review page's decisions (approve, deny, defer, bring back)
+are one click each, with an optional note, and leave an `OpsAction` row too ([review](#review)).
 
 ## Who can see it
 
@@ -55,7 +58,8 @@ ManyAges Operations"), from `base.html`'s `title` block; the admin's is "<page> 
 
 ## The pages
 
-The sidebar has seven items and nothing else. The pages they lead to link on to the rest: a job, a run, a task, a
+The sidebar has eight items and nothing else; Review carries a count badge (the items waiting for the owner,
+`review.count()`, read on every page by `views._render`). The pages they lead to link on to the rest: a job, a run, a task, a
 Revision, a release, an action and the action log, and, under Work, the agent rounds and a round
 ([ADR 0035](../adr/0035-automated-daily-rounds.md)).
 
@@ -70,8 +74,9 @@ Work queue card names the jobs that feed it ("fed by process"), from one map (`w
 | Page | URL | What it shows |
 |---|---|---|
 | Dashboard | `/ops/` | **One status line**: "All good", or "N problems" with one sentence each, worst first (a store that can't be reached; no worker running and no run for 30 minutes; a job failing runs in a row, red at the alert threshold; stuck leases; jobs overdue by 30 minutes; no live release), each linking to where to look. A paused job is never a problem, whatever its last runs did: it is listed under the problems apart, with an amber Paused badge, who paused it and why, and how many failed runs before the pause are not counted ("N paused" beside the count); resumed, its failures count again. **Runs, last 24 hours**: the run graph, one row per job that ran, a bar per run placed at its start and as wide as it took (at least a sliver), green Completed, amber completed with errors, red Failed, blue Running; each bar links to its run, and pointing at it
-(or focusing it, or tapping it once) shows its [run card](#run-cards). **Needs attention**: each job's (or feed's) last run that failed, with Retry and Dismiss; not a paused job's, and not a run an operator dismissed ([ADR 0039](../adr/0039-dismiss-a-failed-run.md)). A run being retried shows that instead of the buttons: **Retry queued** (amber, a console retry or run of it waiting for the worker) or **Retrying** (blue, the worker has taken it, or a run of the same job and feed is running), with links to the action and the run. A retry that completes takes the row off; one that fails replaces it with the new failure. With nothing left, the card says so, and how many failures were dismissed. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck. **Latest round**: the last agent round's number, state badge, age, trigger, drafts, ops applied and release, the ten-round strip, and when the next is due (or Rounds paused). Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
+(or focusing it, or tapping it once) shows its [run card](#run-cards). **Needs attention**: each job's (or feed's) last run that failed, with Retry and Dismiss; not a paused job's, and not a run an operator dismissed ([ADR 0039](../adr/0039-dismiss-a-failed-run.md)). A run being retried shows that instead of the buttons: **Retry queued** (amber, a console retry or run of it waiting for the worker) or **Retrying** (blue, the worker has taken it, or a run of the same job and feed is running), with links to the action and the run. A retry that completes takes the row off; one that fails replaces it with the new failure. With nothing left, the card says so, and how many failures were dismissed. **Up next**: console runs waiting for the worker (Pending), then each job's next due time, soonest first, paused jobs last. **Agent queues**: per task kind with any tasks, three numbers: waiting, in progress, stuck (the owner's review backlog is in none of them, and a person's lapsed lease from the Review page is not stuck), and a "Review: N waiting for you" link to the Review page. **Latest round**: the last agent round's number, state badge, age, trigger, drafts, ops applied and release, the ten-round strip, and when the next is due (or Rounds paused). Then three small cards: the live release, today's intake (documents, candidates, the daily caps), and the console's open or latest actions with a link to the action log. |
 | New events | `/ops/new/` | The content the platform makes, newest activity first: every current event (`write_event`), history-wave event (`fill_gap`) and branch addition (an edit file's `add_branch` or `add_event`), each with its five steps (Fetched, Queued, Drafted, Reviewed, Published) and their times, its branches, date, sources, agent and verdict, and its links; tabs, filters and a 14-day pulse above ([below](#new-events)). |
+| Review | `/ops/review/` | The owner's review queue ([below](#review)): the items that wait for a person's read, one at a time, with a compact list to jump between them, oldest first, each with its kind; Approve, Deny and Defer; a Backlog tab; and the filter "Also show items agents can do". |
 | Jobs | `/ops/jobs/` | One row per job, in run order: its name and one-sentence description (the docstring's first sentence), its tags, its schedule in words ("every 15 minutes", "every hour" with "per feed · 1 of 1 on" for a feed job), its last run's state and age, its last ten runs as squares (oldest left, each its state's color and a link to the run, with its [run card](#run-cards) on hover, focus or tap; empty slots when it has run fewer times), its next run (or Paused, or Pending), and Run now / Pause, or Resume. Chips across the top filter by tag (`?tag=`), with counts, and "Archived jobs" (with their count, when there are any) leads to the archived jobs. An archived job is not listed ([ADR 0041](../adr/0041-archive-a-job.md)). |
 | Archived jobs | `/ops/jobs/archived/` | Every archived job, most recently archived first (`queries.archived`): its name and description (or "no longer in `ingest/job_defs.py`"), when and by whom it was archived with a link to the action, the reason and whether the archive paused it, its runs kept (a link to the Runs page filtered by it), its last run, and Unarchive. |
 | A job | `/ops/jobs/<name>/` | The description and tags; the schedule, next run, last run, failures in a row, console runs waiting; the ten-run strip and whether it may be run again straight away (`not_idempotent`); for a feed job its feeds (schedule, last fetched, next, a Run button each); its run history, 25 a page. For an operator, **Archive…** beside the job's buttons opens the [archive dialog](#archiving-a-job). An archived job's page stays reachable: an Archived banner (who, when, the action, why), "never: archived" as its next run, its history, and only Unarchive. |
@@ -225,7 +230,7 @@ release, the branch list).
 
 All reading is in `opsconsole/queries.py`; the views only arrange it. It computes totals in Postgres and never loads
 rows to count them in Python, so each page makes the same number of queries whatever the table sizes (a test seeds
-ten times the rows and compares; the seven main pages make at most 25 queries, a detail page at most 15).
+ten times the rows and compares; the eight main pages make at most 26 queries and a detail page at most 16: one each is the sidebar's Review count).
 
 | Figure | Query |
 |---|---|
@@ -395,6 +400,71 @@ What the archive does to a running job is the runner's: `ingest.jobs.Context.che
 refuses Run now and Retry ("… is archived; unarchive it first"), `_pause_plan` refuses Pause and Resume, and a failed
 run's page offers neither Retry nor Dismiss and says the job is archived.
 
+## Review
+
+The owner's review queue, `/ops/review/` (`opsconsole/review.py`, [ADR 0046](../adr/0046-the-owners-review-queue.md)).
+A `browser_only` or `citation_only` page is read by a person, never by an agent; this page is where that read
+happens. Its items, each named by a key the page and the decisions share:
+
+| Kind | Key | What waits | Found by |
+|---|---|---|---|
+| Claim | `task-<id>` | a `verify_claim` task released with `needs` browser or owner | `review.person_tasks` (`PERSON_NEEDS`) |
+| Draft | `draft-<slug>` | a draft in review whose only support besides Wikipedia is a page only a person reads | `work.rounds.owner_read_drafts` |
+| Task | `task-<id>` | a `fill_gap` or `write_event` task released with `needs: browser` | `review.person_tasks` |
+| Agents can do | `task-<id>` | a `verify_claim` task agents may still claim (only with the filter on) | `review.agent_tasks` |
+
+**The page.** One item at a time (`?item=<key>`; the first when none is named), and on the left a compact list of
+them all with each one's kind and age. The queue is oldest first: a task by when it was released with its need, a
+draft by its newest edit-file Revision (or its creation). With **Also show items agents can do** (`?agents=1`, off
+by default) the `verify_claim` tasks agents could claim follow, in the agents' order (priority, then age: what is
+next for Claude), at most `AGENT_LIMIT` (50), with the ones an agent holds now marked. The item shows what the
+decision rests on: for a claim, its entry, the claim's text, its status and confidence, and the agent's release
+reason; for a draft, its title, date, branch and text and the reviewer's **hold note** (the newest edit-file
+Revision on the entry or its evidence, one that says HOLD first, its reason after the op); for a task, its context
+(the branch and window of a `fill_gap`, the story and its items of a `write_event`). Then **Read these in your
+browser**: the pages to read, each a prominent link (`target="_blank" rel="noopener"`) with its publisher, its
+policy (`agentapi.policy.decide`, what `GET policy` says) and why it is listed: the URLs in the agent's reason, the
+`PERSON_READ` citations (for an atomic claim, its record's too), the evidence pack's unreadable pages, a
+`write_event`'s `browser_only` sources; with none of those, every cited page. Every citation is behind a
+disclosure. Nothing is chosen for the owner: a claim's page is picked only when there is one.
+
+**Decisions** (each one click, with an optional note of at most 500 characters):
+
+| | Claim (and agents can do) | Draft | Task |
+|---|---|---|---|
+| Approve | evidence from the page read: `supports`, `human:<username>`, method `browser_read`, the URL and an optional excerpt (at most 25 words; checked verbatim when the page is stored), through the agent API's applier (`agentapi.apply.verify_claim`, so `record_evidence` recomputes the claim by the usual rules); the task completes with that result | the edit-file path (`timeline.edits.apply`, actor `human:<username>`, source `ops-review-<action>.edits.json`): an `add_evidence` op per person-read source (the owner's read, `browser_read`) and an `approve` op, so the publishing rule decides and the next release carries it | handed back to the agents (`queue.requeue`, which clears the need) with `payload["owner_read"]`: a page the owner names that `GET policy` lets an agent fetch (refused otherwise), or the owner's own summary (a lead, never a source); one of the two is required |
+| Deny | evidence that the page does not support it (`unrelated`), or with "contradicts" checked, that it conflicts (`conflicts`: the claim may become contested); the task completes | a `reject` op: retracted | cancelled (`queue.cancel`) with the note |
+| Defer | the backlog: `payload["needs"]["backlog"]` (an item agents could do gets a need of kind `owner` marked `from_defer`) | the backlog: the `owner_review` JobState row | as a claim |
+
+A deferred item leaves the count, the badge, `/healthz`'s queue counts and every agent's queue, and never comes
+back by itself. The **Backlog** tab lists the deferred items, oldest deferral first, each with who deferred it,
+when and why, and **Bring back** (`restore`), which returns it where it was: an item that needed a person to
+the To review tab, an item agents could do to the agents' queue.
+
+**No confirmation page, still audited.** A decision POSTs to `/ops/review/decide/` (`views.review_decide`, the
+`ops_operator` permission and CSRF as every action). The form carries a fresh idempotency key, so a double submit
+acts once. `actions.ACTIONS` has the four kinds (`review_approve`, `review_deny`, `review_defer`, `review_restore`,
+`direct`: no confirmation step): `prepare` checks the item against the database now (`review.check`: still
+waiting, not in the backlog unless restoring, not held by an agent, a page that is the item's, the excerpt's
+length, a readable source for a task), and the OpsAction is created and run in the request, in one transaction
+(`run_now`), with the note as its reason (or a default per decision) and the item, decision, note and page in its
+params. `actions.review_rate_refusal` limits them to `REVIEW_RATE_LIMIT` (120) per user in 10 minutes, apart from
+the other actions' limit, which doesn't count them. `/ops/act/review_*` is a 404. The reply is JSON for the page's
+script (`{ok, message, action}`), or a redirect back to the page (`?done=<action>`, or `?item=…&error=…`).
+
+**Undo.** Approve and Deny wait five seconds in the browser, with an Undo button, before they are sent: nothing is
+written until then, and leaving the page in those seconds sends the waiting decision at once (`sendBeacon`). Defer
+and Bring back are sent at once (the backlog is their undo). Without the script the form posts straight away.
+
+**The owner's lease on an agent-workable item.** The page itself writes nothing (a GET). Its script POSTs
+`/ops/review/hold/` (`views.review_hold`) on load and every five minutes: `queue.claim_for` leases the task to
+`human:<username>` for `HUMAN_LEASE_MINUTES`, so a round's agent can't take it mid-read, and any other such item
+the owner holds is handed back (one item at a time). On leaving without a decision it sends `/ops/review/let-go/`
+(`queue.let_go`). The decision buttons wait for the lease; if an agent holds the task, the page says so and they
+stay disabled, and a decision is refused. Without the script, **Take it** asks for the lease. A decision on an item
+nobody holds takes the lease itself in its transaction. The leases are not OpsActions: the task's `claimed_by`
+records them.
+
 ## Template helpers
 
 `opsconsole/templatetags/ops.py` holds the tags and filters the templates use: `badge` (a state badge), `task_state`
@@ -410,7 +480,7 @@ ages (`span`, `ago`), shares (`pct`), `masked` (secrets out of text shown), `wor
 `tests/test_opsconsole.py` holds the line:
 
 - anonymous and non-staff users are redirected, a POST to a page is refused, staff get `noindex` and `no-store` on
-  every page, another host gets a 404 when `OPS_HOSTS` is set, the sidebar has exactly the seven items, the admin
+  every page, another host gets a 404 when `OPS_HOSTS` is set, the sidebar has exactly the eight items, the admin
   links to the console, the old addresses redirect, and tabs are titled "<page> · <name> Operations" (the admin's
   "<page> · <name> administration") with the brand's icons;
 - every page and detail page renders against `seed()` (runs over the last day with their logs, most with the time
@@ -459,7 +529,32 @@ release, and one approval after it):
 - branch additions: the branch and its events, the op and the file, skipped Fetched and Queued, "Added as published";
 - every tab against its predicate, the state, branch and time filters, the order, bad input falling back; the pulse's
   14 days against the rows; the page rendering every tab; reading writes nothing; the query count the same after the
-  content grows several times over, at most 10.
+  content grows several times over, at most 11 (10, and the sidebar's Review count).
+
+`tests/test_review.py` holds the Review page to [its rules](#review), against the small fixture, a verify_claim task
+on an atomic date claim, drafts put in review, and tasks released with a need:
+
+- what it lists (the three kinds, oldest first, not a `write_event` that needs the owner), the count, the badge and
+  the Dashboard's link, the source links opening in a new tab, the claim and the agent's reason; a draft with a
+  readable source, or one a person already read, not listed; the filter off by default, and with it the agents' work
+  in the agents' order, out of the count;
+- each decision for each kind: a claim approved (a new evidence row, `human:op`, `browser_read`, the excerpt, the
+  claim recomputed from unverified to single source, the task done) or denied (unrelated, then contradicted:
+  contested); a page that isn't the claim's and a long excerpt refused, with no action written; a draft approved
+  through the edit-file path (published, its source stamped, every Revision `human:op` under the review's file
+  name) or rejected (retracted); a task handed back with a readable source (a `browser_only` one refused, and
+  nothing refused) or with a summary, and claimable again, or cancelled;
+- the audit row: kind, who, the item, the decision, the note as the reason, the page, done, in the request;
+- the backlog: out of the count, the badge, `/healthz`, the Work counts and the agents' queue (a month after
+  `not_before`), and out of `held_drafts`; no decision but Bring back; brought back to review, or, for an item
+  agents could do, to the agents' queue;
+- a need never offered to an agent a week later, and `GET queue`'s `owner_review`; a held draft that waits for the
+  owner not carried over, and its hold note shown;
+- the owner's lease: an agent's claim passing over it, opening another item handing it back, leaving handing it
+  back; a task an agent holds shown, its buttons disabled, a decision refused; a decision on an item nobody holds
+  taking and completing it;
+- permissions (no form without `ops_operator`, 403 on the three POSTs, the login for anyone else), one key acting
+  once, the plain form's redirects, and the review decisions' own rate limit and closed two-step door.
 
 `tests/test_opsconsole_actions.py` holds the actions to theirs:
 
@@ -517,7 +612,7 @@ it on a development database only.
 | Something new on a run card | A column in `RUN_CARDS_SQL` (never a second query per run), its key in `run_cards` (left out when empty), its line in `_run_cards.html`'s `render`, a test in `test_opsconsole_cards.py`; [ADR 0032](../adr/0032-run-cards-and-what-started-a-run.md) if it changes what is recorded |
 | A new figure | A function in `opsconsole/queries.py` that aggregates in SQL, its place on a page (a card, not a table, unless it is a list), a line in `test_opsconsole.py`'s page tests, and the query-count test still equal; this chapter |
 | A new step, state or tab on New events | `opsconsole/newevents.py`: the column in `ITEMS_CTE` (never a query per item), the state in `STATES` and its `CASE`, the tab in `TABS` and `_in_tab`; a test in `test_opsconsole_new_events.py` through the real paths; this chapter and [ADR 0033](../adr/0033-a-new-events-page-derived-from-existing-rows.md) if it reads a new row |
-| A new page | Think twice: the sidebar is seven items on purpose. A detail page linked from one of them, its test, the query-count test |
+| A new page | Think twice: the sidebar is eight items on purpose. A detail page linked from one of them, its test, the query-count test |
 | A new problem on the Dashboard | `views.problems()`: one sentence, a level (`bad` or `warn`) and where to look; a test |
 | A table the console reads changes shape | Its query here and the test; the chapter that owns the table |
 | An index for a slow page | A migration in the app that owns the table, and a note in [ADR 0031](../adr/0031-a-simpler-console-and-run-logs.md) |

@@ -78,6 +78,8 @@ queued ──claim──▶ claimed ──complete──▶ done
 
 queued ──a job withdraws it, or an operator cancels it──▶ cancelled
 failed, cancelled, deferred ──an operator requeues it (attempts reset, not_before and needs cleared)──▶ queued
+queued (needs a person) ──the owner decides on the Review page──▶ done, cancelled, or queued with owner_read
+queued ──a person opens it on the Review page (claim_for, human:<username>)──▶ claimed ──they leave (let_go)──▶ queued
 ```
 
 `cancelled` is set by jobs (branch governance cancels the queued task of a
@@ -90,7 +92,11 @@ filled) and by operators from the console (below). Agents never cancel.
 and leases it to the agent.
 
 1. **Available** means queued, or claimed with a lease that has run out
-   (`lease_until` in the past), and `not_before` empty or past.
+   (`lease_until` in the past), `not_before` empty or past, and no
+   `payload["needs"]`: a task that waits for a person is never offered to an
+   agent, however long ago its `not_before` passed, until the owner decides
+   on the console's Review page ([ADR 0046](../adr/0046-the-owners-review-queue.md);
+   `queue._available`, `queue.available_q` for the console).
 2. **Best** means highest `priority`, then oldest `created_at`, then lowest
    id. `kinds` narrows the choice.
 3. The row is read with `SELECT … FOR UPDATE SKIP LOCKED`. If another agent
@@ -117,6 +123,18 @@ attempt. From then on only the new holder may finish it.
 
 Without `claim=True`, `next_task` only shows the best task and changes
 nothing.
+
+**A person's lease.** `queue.claim_for(id, agent="human:<username>")` takes one
+named task for a person reading it on the Review page (ADR 0046): the same
+`claimed` state and lease as an agent's claim (`HUMAN_LEASE_MINUTES`, 10;
+the open page renews it every 5 minutes), so no agent is offered it while it
+is live. It refuses a task another holds under a live lease, or one that
+isn't available; the holder's own call renews it. It counts no attempt and
+keeps the task's round link: a person's read is not an agent's try.
+`queue.let_go(id, agent=…)` hands it back untouched (queued, no deferral, no
+note) when the person leaves without deciding, and returns False when they
+no longer hold it. A person's lease that runs out is taken over like any
+other, but the console doesn't count it as stuck.
 
 ## Finishing, handing back and extending
 
@@ -169,16 +187,24 @@ a release waits:
 - `needs` is `"browser"` (a page only a browser may read: the
   [policy endpoint](#the-fetch-policy-for-an-agents-own-reads) said
   `may_fetch: false`) or `"owner"` (a decision only the owner makes). It
-  defers `NEEDS_DEFER_MINUTES` (a week) unless `defer_minutes` says
-  otherwise, and records `payload["needs"] = {kind, by, at, reason}`. Over
-  the API a release with `needs` must say why (`reason`, typically
-  `"<url>: <why>"`).
+  sets `not_before` `NEEDS_DEFER_MINUTES` (a week) ahead unless
+  `defer_minutes` says otherwise, and records `payload["needs"] = {kind, by,
+  at, reason}`. Over the API a release with `needs` must say why (`reason`,
+  typically `"<url>: <why>"`). Since [ADR 0046](../adr/0046-the-owners-review-queue.md)
+  the need, not the week, decides: no agent is offered the task again until
+  a person decides it (the console's Review page for `verify_claim` with
+  either need and `fill_gap` and `write_event` with `browser`; Work → kind,
+  Deferred, for the rest).
 - `<agent>: released[, needs <kind>][: <reason>] (deferred until <time> UTC)`
   is appended to `error`.
 
 The jobs that refresh a queued task's payload (`process`, `gap_waves`,
-`branches review`) keep `queue.PAYLOAD_KEYS` (`needs`), as they keep the
-evidence pack's keys. The console's Work → kind page has a **Deferred** tab
+`branches review`) keep `queue.PAYLOAD_KEYS` (`needs`, and `owner_read`: what
+the owner handed back from the Review page, a readable source or their own
+summary, ADR 0046), as they keep the evidence pack's keys. The owner's
+**backlog** is `payload["needs"]["backlog"]` (`queue.backlog_q`): a task the
+owner deferred there is out of the Work counts and `/healthz`'s `queued`, and
+waits until they bring it back. The console's Work → kind page has a **Deferred** tab
 (the same `deferred_q`) that shows each task's "not before" time and its
 need, and offers Requeue and Cancel; the task's page shows both too.
 
@@ -387,7 +413,7 @@ only way to complete a kind without a result schema.
 | `tasks next [--kind K]… [--claim --agent A] [--lease M]` | The best available task, or `null`. `--kind` repeats. With `--claim`, leases it to the agent. |
 | `tasks complete <id> --result <file> --agent A` | Done, with the JSON in the file (`-` reads standard input). |
 | `tasks fail <id> --error "…" [--no-retry] --agent A` | Back to the queue while attempts remain, else failed. |
-| `tasks release <id> --agent A [--reason "…"] [--defer-minutes N] [--needs browser\|owner]` | Back to the queue untouched, deferred (60 minutes by default; a week with `--needs`). |
+| `tasks release <id> --agent A [--reason "…"] [--defer-minutes N] [--needs browser\|owner]` | Back to the queue untouched, deferred (60 minutes by default; with `--needs`, until a person decides: ADR 0046). |
 | `tasks extend <id> [--minutes M] --agent A` | A longer lease. |
 | `tasks list [--status S] [--kind K] [--limit N]` | Tasks in queue order, 50 by default. |
 | `tasks add <kind> --by WHO [--entry SLUG] [--ref R] [--payload JSON] [--priority P] [--dedupe KEY]` | Queue a task by hand. Only an entry target can be given. |
@@ -409,39 +435,45 @@ production URL.
 
 | Skill | Works | What it covers |
 |---|---|---|
-| `drain-write-events` | `write_event` | Claim over the API; read the payload (and `GET entries/<slug>`, `GET branches/<slug>`, `GET search`); decide (duplicate, rejected, or one event); fetch and read every source cited (`browser_only` publishers in a browser, marked `browser_read`; never openstax.org); aim for a non-Wikipedia source; complete with the event in `site/SCHEMA.md` style, which lands in review; the owner publishes it (`facts publish`), and the next release carries it. |
+| `drain-write-events` | `write_event` | Claim over the API; read the payload (and `GET entries/<slug>`, `GET branches/<slug>`, `GET search`); decide (duplicate, rejected, or one event); fetch and read every source cited (never a `browser_only` publisher, with any tool: it goes to the owner, ADR 0046; never openstax.org); aim for a non-Wikipedia source; complete with the event in `site/SCHEMA.md` style, which lands in review; the owner publishes it (`facts publish`), and the next release carries it. |
 | `verify-claims` | `verify_claim` | Claim; read each cited page; complete with a stance per page and part as `evidence` rows; what to do per reason (`no_second_source` on the atomic parts, `conflict` with a `proposed_text` for the owner, the recheck reasons). |
 | `verify-stale-claims` | `verify_claim` from ingestion | The dead-link and changed-page cases (archived copies, replacements, re-recording `supports` to stamp a new hash) and suggested second sources (read each, add it as evidence only if it explicitly supports the claim, list it in `suggestions.accepted` or `rejected`). |
 | `review-branch-proposals` | `review_branch_proposal` | What to ask of each rule; fill every `needs_agent` field; accept with the operations (for the owner's `branches apply`) or reject with a note. |
 | `fill-gaps` | `fill_gap` | Claim; read the window, the events around it and the pointers; check duplicates with `GET search`; write 1–3 events in SCHEMA style on the branch's id prefix (titles ≤ 60, verbatim excerpts, contested claims attributed, a non-Wikipedia source each), or complete `nothing_notable` with what was read. |
 | `map-branch-entities` | `map_branch_entities` | Claim; read the payload's variants and cited articles; look the candidates up on Wikidata with the honest User-Agent; keep only items the branch is about (the polity, faith, movement or organization; a group's member states as `member`), never a disambiguation page, a predecessor or a namesake place; complete with up to 20 items or an empty list and a note. |
-| `run-round` | a whole round | The daily routine's skill ([rounds](#rounds)): the settings first (stop when paused), `GET queue`, a plan by value (gaps, then `map_branch_entities`, `write_event`, `verify_claim`) and the round size, `POST rounds`, role agents with the four skills above, fresh reviewers in batches of at most 40 drafts who read every cited page and write the edit file, `edits/check` then `edits/apply`, `releases/check` then `releases/publish` when everything passes, the round recorded, a summary posted. It carries the review rounds' hard-won rules and the cloud constraint (no browser: `browser_only` sources are never fetched by script; a draft resting on one only is held). |
+| `run-round` | a whole round | The daily routine's skill ([rounds](#rounds)): the settings first (stop when paused), `GET queue`, a plan by value (gaps, then `map_branch_entities`, `write_event`, `verify_claim`) and the round size, `POST rounds`, role agents with the four skills above, fresh reviewers in batches of at most 40 drafts who read every cited page and write the edit file, `edits/check` then `edits/apply`, `releases/check` then `releases/publish` when everything passes, the round recorded, a summary posted. It carries the review rounds' hard-won rules and the browser-only rule (no agent reads a `browser_only` source with any tool, desktop or cloud; a draft resting on one only is held for the owner's Review page). |
 
 Every skill that records evidence (`drain-write-events`, `fill-gaps`, `verify-claims`, `verify-stale-claims`)
 carries the same section, "The evidence pack: read it first": read the passages and `GET documents/<doc_id>`, copy
-excerpts from the stored text (checked with `POST evidence/check-excerpt`), and open a browser only for an `unreadable`
-URL whose reason is `browser_only`. For a page not in the pack the old excerpt rule holds: copy the sentence from
-the page's own text (the in-app browser's page text, or the raw page where the site allows scripts), never from a
+excerpts from the stored text (checked with `POST evidence/check-excerpt`), and never read an `unreadable` URL whose
+reason is `browser_only`, `citation_only` or `ai_blocked`, with any tool: another source, or a release with `needs:
+browser` for the owner's Review page ([ADR 0046](../adr/0046-the-owners-review-queue.md)). For a page not in the
+pack the old excerpt rule holds: copy the sentence from the page's own text (the raw page where `GET policy` says
+`may_fetch`), never from a
 fetch tool's summary, whose "quotes" are often paraphrased; if only a summary is reachable, the cite goes in without
 an excerpt. `run-round` briefs its role agents and reviewers the same way: a reviewer reads a stored page with `GET
-documents?url=` and checks excerpts against it, and in a cloud round a draft only `browser_only` pages support is
+documents?url=` and checks excerpts against it, and in every round a draft only `browser_only` pages support is
 held.
 
 Every skill that may fetch a page (all but `run-round`'s own steps, which brief the agents the same way) starts its
 fetching rules with **ask the policy before every fetch** ([ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md)):
 `GET policy?url=` before any WebFetch or `curl` of a source page, and no fetch unless `may_fetch`; then another
-source (Wikipedia's references), a browser where there is one and `browser_read` allows it, never a cite of a page
-not read, and, when the task can't be done without the page, a release with `{"needs": "browser", "reason":
+source (Wikipedia's references), never a browser (the in-app one or Claude in Chrome, desktop or cloud: a page the
+policy refuses is read by a person, ADR 0046), never a cite of a page not read, and, when the task can't be done without the page, a release with `{"needs": "browser", "reason":
 "<url>: <why>"}`. An `unrated` page in the evidence pack is no longer "read it yourself": scripts never fetch it.
 Every task skill's API section says a release is deferred and asks for a reason; `run-round` asks its role agents
-to report every `needs` release and lists them on the summary's "Needs the owner" line.
+to report every `needs` release and lists them on the summary's "Needs the owner" line, with a "Review" line: how
+many items wait in the owner's review queue (`GET queue`'s `owner_review.waiting`) and its address. Since
+[ADR 0046](../adr/0046-the-owners-review-queue.md) `run-round` hands `browser_only` reads to that queue: its
+agents and reviewers never read such a page themselves, and a draft only such a page supports is held and waits
+there. The task skills say a `needs` release waits for the owner (the Review page), not a week.
 
 Every task skill also says to **extend a long lease** (`POST tasks/<id>/extend` when one task's work passes about
 20 minutes, and every 20 minutes after), and the skills that fetch pages (`drain-write-events`, `fill-gaps`,
 `verify-claims`, `verify-stale-claims`, `map-branch-entities`, `run-round`) carry three fetching rules: **never
 disguise the client** (every script fetch sends `INGEST_USER_AGENT`; no spoofed User-Agent, header tricks, proxies
-or mirrors), **one in-app browser tab per agent**, reused and always closed (leftover tabs fill the pane's cap and
-starve other agents), and **never force a paid or blocked wire** (Reuters 401, AFP, CNN 451): a `write_event`
+or mirrors), **no browser for source pages** (no in-app browser, no Claude in Chrome, in any session: ADR 0046),
+and **never force a paid or blocked wire** (Reuters 401, AFP, CNN 451): a `write_event`
 without two readable independent sources is rejected or failed with `retry: false`.
 
 ## From a task to the records
@@ -626,7 +658,7 @@ the console's single-publish lock covers both doors.
 
 | Endpoint | Scope | What |
 |---|---|---|
-| `GET queue` | any | Per kind: `waiting`, `in_progress`, `stuck`, `done_today`, `failed_today`, `done_7d`, `oldest_waiting_minutes`, `priorities` (max, median, min of the waiting), the `top` five, the daily `cap`, `fed_by` (its jobs) and `role`; the stuck leases; the drafts `in_review` and the `held` ones; the live and newest release and the Revisions since; the round settings with `next_round_takes` and the latest round. |
+| `GET queue` | any | Per kind: `waiting`, `in_progress`, `stuck`, `done_today`, `failed_today`, `done_7d`, `oldest_waiting_minutes`, `priorities` (max, median, min of the waiting), the `top` five, the daily `cap`, `fed_by` (its jobs) and `role`; the stuck leases; the drafts `in_review` and the `held` ones; `owner_review` (`waiting`: how many items wait in the owner's review queue, never which, and the console's `path`, `/ops/review/`; ADR 0046); the live and newest release and the Revisions since; the round settings with `next_round_takes` and the latest round. |
 | `POST edits/check` | `review` | `{"ops", "name", "round"}`: `timeline.edits.check()` plus the agent rules (below), then `apply(dry_run=True)`. 200 with `valid`, `counts`, `revisions` and each op's diff (25 lines); 422 with every problem. The row keeps the full diff. At most 500 ops (413). |
 | `POST edits/apply` | `review` | `{"ops", "name", "round", "check", "reason"}` and an `Idempotency-Key` header. Needs a passing check of the same ops (their sha256), at most 60 minutes old and not yet applied. One transaction as `agent:<name>`, the file named `round-<id>:<name>` in every Revision's reason; the answer has the counts, the Revisions and the `txid`. The round's `edit_ops` add up. |
 | `POST releases/check` | `publish` | `publish.release.preview()`: the gates and the change report, writing nothing. 200 with the hashes, `unchanged_since` and the summary; 422 with `problems` per gate. A passing check moves an open round to `release_ready`. |
@@ -663,7 +695,7 @@ The `prefetch_sources` job ([ingestion](ingestion.md#evidence-packs),
 | Key | What |
 |---|---|
 | `evidence_pack` | `[{url, title, publisher, tier, fetched_at, doc_id, words, passages: [{text, score, matches}]}]`: each stored page (non-Wikipedia first), with up to five ranked passages; at most 20,000 bytes. A page read through its official API adds `"via": "api", "api": "openalex"` (or `crossref`, `loc`, `smithsonian`, `europeana`): the record (abstract, metadata), not the page, and its `publisher` is the API's. A page purged by retention keeps its entry with no passages and `purged: true`. |
-| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it, and since ADR 0042 neither does an agent's script (`GET policy` says `may_fetch: false`); `api_<…>` that a catalog page's API failed or lacks its key; `api_only` that the publisher allows only its API and no route reaches it. `browser_only`, `citation_only` and `ai_blocked` (robots.txt shuts out AI crawlers by name, ADR 0037) are the reasons an agent opens a browser for; `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
+| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it, and since ADR 0042 neither does an agent's script (`GET policy` says `may_fetch: false`); `api_<…>` that a catalog page's API failed or lacks its key; `api_only` that the publisher allows only its API and no route reaches it. `browser_only`, `citation_only` and `ai_blocked` (robots.txt shuts out AI crawlers by name, ADR 0037) are a person's to read in their own browser, never an agent's with any tool (ADR 0046); `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
 | `evidence_ready` | A stored page that isn't Wikipedia: what the console's "evidence ready" share counts. |
 | `evidence_pack_at`, `evidence_urls` | When it was built, and from which URLs (a hash; `+deferred` when a cap cut it short). |
 
@@ -699,7 +731,7 @@ first of these that holds; `policy` names it, in the evidence pack's
 |---|---|---|---|
 | `forbidden` | false | false | The publisher's `fetch_policy` (OpenStax): never read or cite. |
 | `citation_only` | false | true | Cite the link; never fetch it. |
-| `browser_only` | false | true | `why` says it needs a person's browser (or a local session's in-app one). A cloud agent has none. |
+| `browser_only` | false | true | `why` says it needs a person's read in their own browser: no agent reads it, with any tool, desktop or cloud (ADR 0046). |
 | `never_fetch` | false | true | `ingest.policy.NEVER_FETCH` lists the host. |
 | `api_only` | only under its `api_base`, and only when a key it needs is set | true | `api_base` is returned; outside it `why` names the base to use. |
 | `unrated` | false | true | No row, or a row with no tier: nobody read its terms. (An `api_only` row counts as rated.) |
@@ -764,7 +796,13 @@ recorded: the routine stops cleanly); any round while another is open is a
 Otherwise the round starts, and `carry_over` moves into its plan (the drafts
 still in review) and clears. **Held drafts** (`rounds.held_drafts`) are
 entries in review with a Revision whose reason starts `apply_edits`: a
-reviewer's file touched them and left them there.
+reviewer's file touched them and left them there. Not the drafts that wait
+for the owner's own read (`rounds.owner_read_drafts`, ADR 0046): an entry in
+review whose record's support, besides Wikipedia, is only `PERSON_READ` pages
+(`browser_only`, `citation_only`) that nobody has read as `human:` yet, and
+that no open round is reviewing (`rounds.in_open_round`). Those go to the
+console's Review page, never back to a round's reviewers, so neither
+`carry_over` nor `GET queue`'s `held` lists them.
 
 `PATCH rounds/<id>` checks what it sets (`validate_patch`: known fields,
 counts that are non-negative integers, a status an agent may set, `finish`
@@ -815,4 +853,4 @@ the link have no linked tasks, so their counts show only what was planned.
 | A round setting, a limit on the round size, `DRAFTS_PER_REVIEWER` | `work/rounds.py`, the `run-round` skill and the Work page together; `tests/test_rounds.py`. A change to the auto-publish policy is a new ADR (it amends ADR 0035). |
 | Which tokens link their claims to a round, or what a round's progress counts | `rounds.ROUND_AGENT`, `round_for_claim` and `progress`, the Work page's strip (`opsconsole/queries.py` `live_round`) and `tests/test_round_progress.py` together; procedure 15 names the tokens. |
 | The heavy operations' limits | `AGENT_API_EDITS_CHECKS_PER_HOUR`, `AGENT_API_EDITS_APPLIES_PER_HOUR`, `AGENT_API_RELEASE_CHECKS_PER_HOUR`, `AGENT_API_PUBLISHES_PER_DAY` in the environment. |
-| Queue behavior | `tests/test_queue.py` covers ordering, peeking, ownership, takeover, release and fail, deferred releases and needs, max attempts, dedupe, `not_before` and SKIP LOCKED between two connections; `tests/test_agent_api.py` the release body and `GET policy`, one case per policy. Extend them. A change of contract (leases, ownership) belongs in ADR 0003. |
+| Queue behavior | `tests/test_queue.py` covers ordering, peeking, ownership, takeover, release and fail, deferred releases and needs, max attempts, dedupe, `not_before` and SKIP LOCKED between two connections; `tests/test_review.py` that a need is never offered to an agent, a person's lease (`claim_for`, `let_go`) and the backlog; `tests/test_agent_api.py` the release body and `GET policy`, one case per policy. Extend them. A change of contract (leases, ownership) belongs in ADR 0003. |

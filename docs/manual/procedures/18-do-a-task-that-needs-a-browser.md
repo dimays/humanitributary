@@ -8,13 +8,16 @@ agent asks the API: `GET /api/agent/policy?url=<url>`. For a `browser_only` or `
 or a site that blocks AI crawlers, the answer is `may_fetch: false`. A cloud agent has no browser. If the agent
 cannot do the task with a different source, it releases the task with `needs: browser`.
 
-Such a task stays in the queue, but agents do not get it for 7 days. The summary of the round lists it on the line
-"Needs the owner". The console shows it on the tab Deferred.
+Such a task stays in the queue, but no agent gets it again until you decide (ADR 0046). The summary of the round
+lists it on the line "Needs the owner". The console shows it on the tab Deferred.
+
+> **NOTE:** For a `verify_claim`, `fill_gap` or `write_event` task, do procedure
+> [19](19-review-the-items-that-need-a-person.md) on the Review page instead. This procedure is for the other kinds.
 
 ## Before you start
 
 - You have a staff user with the permission `ops_operator`.
-- You have a browser, or a local Claude Code session with the in-app browser.
+- You have a browser. You read the page in your own browser. No Claude session reads it for you.
 
 ## Procedure
 
@@ -28,18 +31,17 @@ Such a task stays in the queue, but agents do not get it for 7 days. The summary
    Make sure that the field Needs shows the same URL and the agent.
 5. Open the URL in your browser. Read the page.
    Make sure that the page supports the claim, or that it does not.
-6. If the task is necessary, click Requeue on the page of the task. Type a reason, for example "read in a browser".
+6. Find a page that agents can read and that says the same thing.
+   Make sure that `GET policy` gives `may_fetch: true` for that page.
+7. If the task is necessary, click Requeue on the page of the task. Type the URL of that page as the reason.
    Make sure that the confirmation page shows the task with its time "not before".
-7. Confirm the requeue.
+8. Confirm the requeue.
    Make sure that the task has the status `queued` and that the field Not before is empty.
-8. Start a local Claude Code session in the repository. Tell it to work the task kind with its skill and its in-app
-   browser, as procedure [01](01-run-a-round-by-hand.md) tells.
-   Make sure that the session uses one browser tab and marks the page `"method": "browser_read"`.
-9. Examine the page of the task again after the session.
+9. Examine the page of the task again after the next round.
    Make sure that the task has the status `done`.
 
-> **NOTE:** An agent claims the best task of its kind. Thus the local session can do other tasks before this task.
-> Also, a cloud agent can claim the task first. If it releases the task again, do this procedure again.
+> **NOTE:** The agent sees your reason in the notes of the task. If it releases the task again, do this procedure
+> again, or cancel the task.
 
 ## If the task is not necessary
 
@@ -48,7 +50,7 @@ Such a task stays in the queue, but agents do not get it for 7 days. The summary
 2. Confirm the cancel.
    Make sure that the task has the status `cancelled`.
 
-> **NOTE:** If you do nothing, an agent gets the task again after 7 days. A cloud agent usually releases it again.
+> **NOTE:** If you do nothing, the task stays on the tab Deferred. No agent gets it.
 
 > **NOTE:** A release with `needs: owner` tells you that the task needs your decision, not a browser. Read the
 > reason. Then requeue or cancel the task in the same way.

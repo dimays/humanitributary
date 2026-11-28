@@ -14,7 +14,7 @@ Hosts here are matched with their subdomains (`www.britannica.com`, `kids.britan
 from evidence.publishers import domain_of
 
 NEVER_FETCH = {
-    "britannica.com": "Terms forbid automated access; agents read it in a browser.",
+    "britannica.com": "Terms forbid automated access; a person reads it in their own browser, never an agent (ADR 0046).",
     "openstax.org": "Terms forbid use of its textbooks by AI systems: never read or cite.",
     # News publishers whose terms forbid automated use (terms check 2026-11-26, docs/adr/0013-source-policy.md).
     # Their URLs may still be stored as link metadata (from Wikipedia's portal), never fetched; agents read them in a browser.

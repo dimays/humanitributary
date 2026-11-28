@@ -41,7 +41,7 @@ from work.models import AgentTask
 from .fixtures import small
 from .runner import FreshStorage
 
-PAGES = ["dashboard", "new_events", "jobs", "runs", "work", "releases", "docs"]
+PAGES = ["dashboard", "new_events", "review", "jobs", "runs", "work", "releases", "docs"]
 
 
 def _log(run, lines):
@@ -224,11 +224,11 @@ class AccessTests(FreshStorage, TestCase):
         for name in PAGES:
             self.assertEqual(self.client.post(reverse(f"opsconsole:{name}")).status_code, 405, name)
 
-    def test_the_sidebar_has_seven_items(self):
+    def test_the_sidebar_has_eight_items(self):
         staff_login(self)
         r = self.client.get(reverse("opsconsole:dashboard"))
         nav = r.content.decode().split('<nav class="nav"', 1)[1].split("</nav>", 1)[0]
-        self.assertEqual([x.split("</span>")[0] for x in nav.split("<span>")[1:]], ["Dashboard", "New events", "Jobs", "Runs", "Work", "Releases", "Docs"])
+        self.assertEqual([x.split("</span>")[0] for x in nav.split("<span>")[1:]], ["Dashboard", "New events", "Review", "Jobs", "Runs", "Work", "Releases", "Docs"])
 
     @override_settings(OPS_HOSTS=["data.example.org"])
     def test_other_hosts_have_no_console(self):
@@ -685,11 +685,11 @@ class QueryCountTests(FreshStorage, TestCase):
         big_details = {k: self.count(v[0], *v[1:]) for k, v in self.details().items()}
         for n in PAGES:
             self.assertEqual(small_counts[n], big_counts[n], f"{n}: {small_counts[n]} queries, then {big_counts[n]} with more rows")
-            self.assertLessEqual(big_counts[n], 25, n)
+            self.assertLessEqual(big_counts[n], 26, n)  # 25, and the sidebar's Review count (one query, ADR 0046)
         for k in small_details:
             self.assertEqual(small_details[k], big_details[k], f"{k}: {small_details[k]} queries, then {big_details[k]}")
-            self.assertLessEqual(big_details[k], 15, k)
+            self.assertLessEqual(big_details[k], 16, k)  # 15, and the sidebar's Review count
         task = AgentTask.objects.order_by("id").first()
-        self.assertLessEqual(self.count("task", task.pk), 10)
+        self.assertLessEqual(self.count("task", task.pk), 11)
         rev = Revision.objects.order_by("-id").first()
         self.assertLessEqual(self.count("revision", rev.pk), 10)

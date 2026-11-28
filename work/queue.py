@@ -12,9 +12,16 @@ attempts reset) and `cancel` (queued tasks, or claimed ones whose lease ran out)
 
 Deferral (docs/adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md): an agent's `release` sets `not_before`
 (DEFAULT_DEFER_MINUTES from now unless it says otherwise), so the next claim doesn't hand the same task straight back;
-a release that `needs` a person (a browser read, the owner's decision) waits NEEDS_DEFER_MINUTES and records the need
-in `payload["needs"]`, where the console shows it. An operator's `requeue` also takes such a deferred task, and clears
-both.
+a release that `needs` a person (a browser read, the owner's decision) records the need in `payload["needs"]`, where the
+console shows it, and sets `not_before` NEEDS_DEFER_MINUTES ahead. An operator's `requeue` also takes such a deferred
+task, and clears both.
+
+The owner's review queue (docs/adr/0046-the-owners-review-queue.md): a task whose payload records a need is never
+offered to an agent, however far `not_before` has passed: it waits for a person (the console's Review page) until
+they decide. Deferring it there adds `payload["needs"]["backlog"]`: the noiseless backlog, out of the counts. A person
+may also take an agent-workable task for themselves with `claim_for` (a lease as `human:<username>`, the same lease
+an agent's claim makes, so no agent is offered it while they read; it counts no attempt) and hand it back untouched
+with `let_go`.
 """
 
 from datetime import timedelta
@@ -38,7 +45,8 @@ NEEDS_DEFER_MINUTES = 7 * 24 * 60     # a release that needs a person waits a we
 MAX_DEFER_MINUTES = 7 * 24 * 60
 NEEDS = ("browser", "owner")          # browser: a page only a browser may read; owner: a decision only the owner makes
 # Payload keys the queue owns: the jobs that refresh a queued task's payload (process, gap_waves, branches review) keep them.
-PAYLOAD_KEYS = ("needs",)
+PAYLOAD_KEYS = ("needs", "owner_read")  # owner_read: what the owner gave from the Review page (a readable source, a summary)
+HUMAN_LEASE_MINUTES = 10              # a person's lease from the Review page; the open page renews it
 
 
 def enqueue(kind: str, *, created_by: str, dedupe_key: str = "", priority: int = 0, payload: dict | None = None, **targets) -> tuple[AgentTask, bool]:
@@ -53,7 +61,22 @@ def enqueue(kind: str, *, created_by: str, dedupe_key: str = "", priority: int =
 
 
 def _available(now):
-    return (Q(status=S.QUEUED) | Q(status=S.CLAIMED, lease_until__lt=now)) & (Q(not_before__isnull=True) | Q(not_before__lte=now))
+    """What an agent may be offered: queued (or claimed with a lease that ran out), past `not_before`, and not waiting
+    for a person (`payload["needs"]`: ADR 0046)."""
+    return ((Q(status=S.QUEUED) | Q(status=S.CLAIMED, lease_until__lt=now)) & (Q(not_before__isnull=True) | Q(not_before__lte=now))
+            & ~Q(payload__has_key="needs"))
+
+
+def available_q(now) -> Q:
+    """`_available` for the console: what the agents' queue would offer now."""
+    return _available(now)
+
+
+def backlog_q() -> Q:
+    """Tasks the owner deferred to the backlog from the Review page (ADR 0046): out of every count but the backlog's.
+    The outer `has_key` keeps the negation exact: `payload -> 'needs'` is NULL on a task without a need, and NOT NULL
+    would drop the row."""
+    return Q(payload__has_key="needs") & Q(payload__needs__has_key="backlog")
 
 
 def next_task(*, agent: str, kinds: list[str] | None = None, claim: bool = False, lease_minutes: int | None = None, round=None) -> AgentTask | None:
@@ -120,7 +143,8 @@ def release(task_id: int, *, agent: str, reason: str = "", defer_minutes: int | 
     """Hand a claimed task back untouched (the attempt is not counted against it), deferred: it isn't offered again
     for `defer_minutes` (DEFAULT_DEFER_MINUTES; NEEDS_DEFER_MINUTES when it `needs` a person), so an agent that can't
     do a task doesn't claim it again at once, and nor does the next one. `needs` ("browser" or "owner") is recorded in
-    `payload["needs"]` ({kind, by, at, reason}) for the console; the reason and the deferral go in `error`'s notes."""
+    `payload["needs"]` ({kind, by, at, reason}) for the console, and then no agent is offered it again until a person
+    decides (ADR 0046); the reason and the deferral go in `error`'s notes."""
     if needs and needs not in NEEDS:
         raise TaskError(f"needs is one of {', '.join(NEEDS)}")
     if defer_minutes is None:
@@ -142,6 +166,40 @@ def release(task_id: int, *, agent: str, reason: str = "", defer_minutes: int | 
         _note(task, agent, "released" + (f", needs {needs}" if needs else "") + (f": {reason}" if reason else "") + f" ({when})")
         task.save(update_fields=fields)
         return task
+
+
+def claim_for(task_id: int, *, agent: str, lease_minutes: int = HUMAN_LEASE_MINUTES) -> AgentTask:
+    """A person takes one task for themselves (the console's Review page, ADR 0046): the same lease an agent's claim
+    makes, so `next_task` offers it to no agent while it is live. Refused when someone else holds a live lease or the
+    task isn't available (done, cancelled, deferred, waiting for a person). The holder's own claim renews the lease.
+    No attempt is counted and the round link is kept: a person's read is not an agent's try."""
+    now = timezone.now()
+    with transaction.atomic():
+        task = AgentTask.objects.select_for_update().filter(pk=task_id).first()
+        if task is None:
+            raise TaskError(f"no task #{task_id}")
+        mine = task.status == S.CLAIMED and task.claimed_by == agent
+        if not mine:
+            if task.status == S.CLAIMED and task.lease_until and task.lease_until >= now:
+                raise TaskError(f"task #{task_id} is claimed by {task.claimed_by} until {task.lease_until:%H:%M} UTC")
+            if not AgentTask.objects.filter(_available(now), pk=task_id).exists():
+                raise TaskError(f"task #{task_id} is {task.status}" + (", deferred" if is_deferred(task, now) else "") + ": not available to claim")
+            task.status, task.claimed_by, task.claimed_at = S.CLAIMED, agent, now
+        task.lease_until = now + timedelta(minutes=lease_minutes)
+        task.save(update_fields=["status", "claimed_by", "claimed_at", "lease_until"])
+        return task
+
+
+def let_go(task_id: int, *, agent: str) -> bool:
+    """A person hands back a task they took with `claim_for` and didn't decide: queued again at once, untouched (no
+    deferral, no note). → False when they no longer hold it (decided, or taken over after the lease ran out)."""
+    with transaction.atomic():
+        task = AgentTask.objects.select_for_update().filter(pk=task_id).first()
+        if task is None or task.status != S.CLAIMED or task.claimed_by != agent:
+            return False
+        task.status, task.claimed_by, task.lease_until = S.QUEUED, "", None
+        task.save(update_fields=["status", "claimed_by", "lease_until"])
+        return True
 
 
 def extend(task_id: int, *, agent: str, minutes: int | None = None) -> AgentTask:

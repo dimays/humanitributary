@@ -42,7 +42,7 @@ language edition is one publisher, `wikipedia.org`).
 |---|---|
 | `domain`, `name` | Unique domain, display name. |
 | `tier` | 1 primary, official or peer-reviewed; 2 scholarly or institutional reference; 3 general reference (Wikipedia); 4 weak; empty = not rated. A check constraint keeps it 1–4. |
-| `fetch_policy` | `allowed`, `api_only` (jobs only through `api_base`, with a key where one is needed), `browser_only` (read in a browser by an agent, never by a job), `citation_only` (cited, never fetched by a job) or `forbidden` (never fetched or cited). |
+| `fetch_policy` | `allowed`, `api_only` (jobs only through `api_base`, with a key where one is needed), `browser_only` (read by a person in their own browser, never by a job or an agent: ADR 0046), `citation_only` (cited, never fetched by a job or an agent's tool) or `forbidden` (never fetched or cited). |
 | `api_base`, `api_needs_key`, `api_key_setting` | For `api_only`: the URLs a job may request, and the key it needs ([sources and terms](sources-and-terms.md#what-the-fetcher-checks-before-a-request)). |
 | `license`, `access_notes` | What we may do with it, and why. |
 
@@ -72,7 +72,7 @@ claim), and the computed `status`, `confidence` (0–1),
 | `stance` | `supports`, `partial`, `conflicts` or `unrelated`. |
 | `excerpt` | The passage that bears on the claim, at most 25 words (a check constraint). |
 | `checked_at`, `checked_by` | When the page was last read against the claim, and by whom (`agent:`, `human:` or `job:`, a check constraint). Empty for legacy evidence never re-read here. |
-| `method` | `legacy` (cited by the static site's author), `fetch_match` (a job found it in a fetched page), `agent_read`, `browser_read`, `human`. |
+| `method` | `legacy` (cited by the static site's author), `fetch_match` (a job found it in a fetched page), `agent_read`, `browser_read`, `human`. The owner's read from the console's Review page is `browser_read` with `checked_by` `human:<username>` ([ADR 0046](../adr/0046-the-owners-review-queue.md)): it goes through `record_evidence` like an agent's, so the claim is recomputed by the same rules. |
 | `found_value` | What the source itself says when it differs, e.g. `{"y": 1951.3, "when": "April 1951"}`. |
 | `content_hash` | The citation's hash when this evidence was checked: a later change means re-read. |
 | `position`, `cited_title`, `cited_kind` | The order and wording of the entry's `cites`, kept per use so a snapshot reproduces them exactly. |

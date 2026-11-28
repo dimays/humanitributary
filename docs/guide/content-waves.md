@@ -102,7 +102,7 @@ A gap is skipped when:
 
 | Reason | Counted as | What |
 |---|---|---|
-| An open task | `<wave>.open` | A queued or claimed `fill_gap` with the same key. A queued one gets its payload and priority refreshed (keeping `pointers`, the evidence-pack keys, `ingest.prefetch.PAYLOAD_KEYS`, and a release's recorded `needs`, `work.queue.PAYLOAD_KEYS`: ADR 0042). |
+| An open task | `<wave>.open` | A queued or claimed `fill_gap` with the same key. A queued one gets its payload and priority refreshed (keeping `pointers`, the evidence-pack keys, `ingest.prefetch.PAYLOAD_KEYS`, and a release's recorded `needs` and the owner's `owner_read`, `work.queue.PAYLOAD_KEYS`: ADR 0042, ADR 0046). |
 | Recently attempted | `<wave>.recent_<outcome>` | The window's last task ended less than `retry_after_days` ago: 180 days after `nothing_notable`, 60 after events were written (they wait in review, and the window counts as a gap until one is published), 30 after a failure, none after a cancellation. |
 | The branch is busy | `<wave>.held_branch` | The branch already has `max_open_per_branch` (2; env `FILL_GAP_MAX_OPEN_PER_BRANCH`) open `fill_gap` task. One at a time lets each agent see the last one's events, and spreads the day's tasks across branches. |
 | The daily cap | `<wave>.held_cap` | `settings.FILL_GAP_TASKS_PER_DAY` (40, env `FILL_GAP_TASKS_PER_DAY`; `--opt per_day=` for one run) new tasks a local day, counted like `write_event`'s cap. |
@@ -178,7 +178,8 @@ Every request goes through `ingest.http.Fetcher` and the source policy
 
 The `fill-gaps` skill (`.claude/skills/fill-gaps/SKILL.md`) claims a task,
 reads (asking `GET policy?url=` before every scripted fetch and fetching only
-when `may_fetch`, with the project's honest User-Agent, one browser tab at most, a lease
+when `may_fetch`, with the project's honest User-Agent, never a `browser_only` page with any tool: a person
+reads those, ADR 0046; a lease
 extended when a task passes about 20 minutes), and completes it over the agent API with one of
 ([the schema](work-queue-and-agents.md#results-validated-then-applied)):
 
@@ -192,9 +193,12 @@ extended when a task passes about 20 minutes), and completes it over the agent A
   that keeps the job off that window for `retry_after_days`.
 
 A gap that can't be filled without a page only a browser may read is
-released with `{"needs": "browser", "reason": "<url>: <why>"}`: it waits a
-week in the console's Deferred tab for the owner instead of coming back to
-the next filler ([deferred releases](work-queue-and-agents.md#deferred-releases)).
+released with `{"needs": "browser", "reason": "<url>: <why>"}`: it waits in
+the console's Review page for the owner, and no filler is offered it again
+until the owner decides ([deferred releases](work-queue-and-agents.md#deferred-releases),
+[ADR 0046](../adr/0046-the-owners-review-queue.md)). Approve hands it back with
+`payload["owner_read"]`: a page a filler may fetch that the owner named, or the
+owner's summary of the unreadable one (a lead, never a source); Deny cancels it.
 
 ## The owner's command and the digest
 

@@ -266,7 +266,8 @@ class FetchPolicyApiTests(TestCase):
         v = self.verdict("https://www.un.org/en/about-us")
         self.assertEqual((v["policy"], v["may_fetch"], v["browser_read"]), ("browser_only", False, True))
         self.assertIn("browser", v["why"])
-        self.assertIn("never a script", v["why"])
+        self.assertIn("no script, no in-app browser, no Claude in Chrome", v["why"], "a person's read only (ADR 0046)")
+        self.assertIn("needs: browser", v["why"])
         self.assertEqual(self.verdict("https://news.un.org/en/story/1")["policy"], "browser_only", "a subdomain is its parent's")
 
     def test_citation_only(self):

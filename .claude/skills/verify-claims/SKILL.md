@@ -42,7 +42,7 @@ lost. If you can't finish, `release` the task (untouched) or `fail` it with the 
 A release is deferred (ADR 0042): the task isn't offered again for an hour, so neither you nor the next agent claims it
 straight back. Say why, `-d '{"reason": "…"}'` (`"defer_minutes"`: 0 to 10080 for another wait). When only a person
 can unblock it, add `"needs": "browser"` (a page only a browser may read) or `"needs": "owner"` (the owner's call): it
-waits a week, and the round's summary lists it for the owner. Never release and re-claim the same task in a loop.
+waits for the owner (the console's Review page: no agent is offered it again), and the round's summary lists it. Never release and re-claim the same task in a loop.
 
 ## Fetching: honest, one tab, never forced
 
@@ -60,21 +60,21 @@ waits a week, and the round's summary lists it for the owner. Never release and 
   its `api_base` are never read by script. `why` says which (for `api_only`, the API base to use instead). Then:
   1. **Use another source.** Wikipedia's article on the subject cites several; its references often lead to a
      readable one (ask the policy for each). Wikipedia and Wikidata themselves are `allowed`.
-  2. **Read it in a browser** only if you have one (a local session's in-app browser) and `browser_read` is true;
-     mark the cite `"method": "browser_read"`. A cloud session has no browser.
+  2. **Never read it with another tool.** A page the policy refuses is read by a person in their own browser, never by an agent with any tool: not
+     the in-app browser, not Claude in Chrome, in a desktop session or a cloud one (ADR 0046). `browser_read: true`
+     means a person's browser.
   3. **Don't cite it unread.** No task skill allows a citation-only cite: a page you could not read is no source.
   4. **Release the task** when it can't be done without that page, so a person can read it:
      `api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
-     It waits a week for the owner instead of coming straight back to you or the next agent.
+     It waits for the owner (the console's Review page) instead of coming straight back to you or the next agent.
 - **Never disguise the client.** Every page you fetch by script sends the project's honest User-Agent:
   `curl -sS -A "$INGEST_USER_AGENT" <url>` (the same value as the app's `INGEST_USER_AGENT`). No spoofed browser
   User-Agent, no header tricks, no proxies, mirrors or caches to get round a site that refuses automated reads.
   The safety checks block such attempts, and they break the source policy (ADR 0013). If a site refuses, use
   another reputable source, or hold or reject the work.
-- **Exactly one in-app browser tab per agent.** Open one tab, reuse it for every page you read, and close it when
-  you finish, also when you stop early, fail or release a task. Leftover tabs fill the pane's cap (about eight)
-  and starve the other agents. A cloud session has no in-app browser: there a `browser_only` page can't be read
-  at all (see the `run-round` skill).
+- **No browser for source pages.** Never open the in-app browser or Claude in Chrome to read a source, in a desktop
+  session or a cloud one: a page only a browser may read is the owner's, on the console's Review page (ADR 0046).
+  You read what `GET policy` lets a script fetch, and the evidence pack's stored pages.
 - **Paid and blocked wires are common in news.** Reuters (401), AFP (access denied) and CNN (451) often refuse.
   Don't force them. Find another readable, independent, reputable source; record only pages you read (a page you could not read is no evidence either way).
 
@@ -86,8 +86,8 @@ publishers whose policy lets a job read them, and put them in the payload:
 - `evidence_pack`: one entry per stored page: `url`, `title`, `publisher`, `tier`, `fetched_at`, `doc_id`, `words`
   and `passages` (the page's sentences that name the task's dates, years, numbers, entities or title words, best
   first, each with its `score` and `matches`, such as `"date:June 6"`, `"entity:Normandy (Q8205)"`).
-- `unreadable`: the URLs it did not read, each with a `reason`: `browser_only` or `citation_only` (read it in a
-  browser), `ai_blocked` (its robots.txt shuts out AI crawlers by name: a browser read only, never a script), `api_only`
+- `unreadable`: the URLs it did not read, each with a `reason`: `browser_only` or `citation_only` (a person reads it in
+  their own browser, never you), `ai_blocked` (its robots.txt shuts out AI crawlers by name: a person's read only), `api_only`
   (the publisher allows only its API),
   `unrated` (nobody has rated the publisher yet: never fetched by script, the job's or yours),
   `forbidden` (never), `never_fetch`, `robots`, `blocked`, `tdm_reserved` (the page opts out of text and data mining: read it by hand), `http_404`, `error`, `unsupported` (a PDF, say), `empty`,
@@ -108,10 +108,10 @@ How to use it:
    drop the excerpt. Case, quote marks, dashes and footnote markers ("[12]") all count.
 3. **Cite the page's URL** (the entry's `url`), with `"method": "agent_read"`. The stored text is private: never
    paste more than the excerpt anywhere.
-4. **Open a browser only for `unreadable` URLs whose reason is `browser_only`, `citation_only` or `ai_blocked`** (one tab, closed at the end), and
-   mark those cites `"method": "browser_read"`. Other unreadable pages: fetch one yourself only when `GET policy` says
-   `may_fetch` (below), with the honest User-Agent; never one that `robots` or `blocked` refused. In a cloud round there is no browser: a
-   draft that only `browser_only` pages support is held (the `run-round` skill).
+4. **Never read an `unreadable` URL whose reason is `browser_only`, `citation_only` or `ai_blocked`**, with any tool
+   (ADR 0046): use another source, or, when the task can't be done without it, release the task with `{"needs":
+   "browser", "reason": "<url>: <why>"}` for the owner's Review queue. Other unreadable pages: fetch one yourself only
+   when `GET policy` says `may_fetch` (below), with the honest User-Agent; never one that `robots` or `blocked` refused.
 5. **No pack yet** (no `evidence_pack` key, or a `deferred` reason): read the pages yourself as below.
 
 ```bash
@@ -134,13 +134,12 @@ whether the page changed), `parts` (its atomic claims: date, location, numbers, 
 
 - **Copy excerpts from the evidence pack's stored text when the page is in it** (above); otherwise **from the page itself, never from a fetch tool's summary.** Tools such as WebFetch hand back a
   model-written summary of the page, and the "quotes" in it are often paraphrased, shortened or straightened. For
-  every excerpt (and every stance you record), read the page's own text: the in-app browser's `get_page_text`, or
-  `javascript_tool` returning the matching sentence from `document.body.innerText`, or the raw page via `curl` where `GET policy` says `may_fetch` and
+  every excerpt (and every stance you record), read the page's own text: the stored text (`GET documents/<doc_id>`), or the raw page via `curl` where `GET policy` says `may_fetch` and
   the site allows scripts. Then copy the sentence character for character. If only a summary is reachable, cite the
   page without an excerpt and say so in your note. Every review round so far has had to re-copy summarized excerpts.
 
-Fetch and read each cited page (a `browser_only` publisher such as britannica.com in a browser, never by script;
-never openstax.org). For a dead link, try `archive_url` or the Wayback Machine. Decide, per page and per part:
+Fetch and read each cited page (only those `GET policy` lets you fetch: a `browser_only` publisher such as britannica.com is read
+by a person, never by an agent with any tool, ADR 0046; never openstax.org). For a dead link, try `archive_url` or the Wayback Machine. Decide, per page and per part:
 
 - **supports**: the page explicitly says it; copy an excerpt of at most 25 words.
 - **partial**: it says part of it (say which in the excerpt).

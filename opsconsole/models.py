@@ -39,6 +39,11 @@ class OpsAction(models.Model):
         DISMISS_RUN = "dismiss_run", "dismiss a failed run from Needs attention"
         ARCHIVE_JOB = "archive_job", "archive a job"
         UNARCHIVE_JOB = "unarchive_job", "unarchive a job"
+        # The owner's review queue (ADR 0046): one row per decision, made without a confirmation page.
+        REVIEW_APPROVE = "review_approve", "approve an item in review"
+        REVIEW_DENY = "review_deny", "deny an item in review"
+        REVIEW_DEFER = "review_defer", "defer an item to the review backlog"
+        REVIEW_RESTORE = "review_restore", "bring an item back from the review backlog"
 
     class Status(models.TextChoices):
         PENDING = "pending"      # waiting for the worker

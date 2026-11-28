@@ -1,6 +1,6 @@
 """/ops/: the operations console (staff only; actions need ops_operator; ADR 0028, redesigned by ADR 0031).
 
-Seven pages in the sidebar (Dashboard, New events, Jobs, Runs, Work, Releases, Docs; ADR 0033 added New events) and the pages they link to: a job (and the archived jobs), a run, a
+Eight pages in the sidebar (Dashboard, New events, Review, Jobs, Runs, Work, Releases, Docs; ADR 0033 added New events, ADR 0046 Review) and the pages they link to: a job (and the archived jobs), a run, a
 task, a Revision, a release, an action and the action log; under Work, the agent rounds and a round (ADR 0035). The old addresses redirect to their new places.
 """
 
@@ -18,6 +18,10 @@ urlpatterns = [
     path("jobs/<str:name>/", views.job_detail, name="job"),
     path("runs/", views.runs, name="runs"),
     path("runs/<int:pk>/", views.run_detail, name="run"),
+    path("review/", views.review, name="review"),
+    path("review/decide/", views.review_decide, name="review_decide"),
+    path("review/hold/", views.review_hold, name="review_hold"),
+    path("review/let-go/", views.review_let_go, name="review_let_go"),
     path("work/", views.work, name="work"),
     path("work/rounds/", views.rounds, name="rounds"),
     path("work/rounds/<int:pk>/", views.round_detail, name="round"),
