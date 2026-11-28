@@ -311,6 +311,30 @@ class HealthTests(FreshStorage, TestCase):
         body = self.client.get("/healthz").json()
         self.assertEqual((body["jobs"]["gazette"]["state"], body["failing_jobs"], body["paused_jobs"]), ("failing", ["gazette"], []))
 
+    def test_each_feeds_last_run_counts_and_a_dismissal_is_not_failing(self):
+        """As the console's Needs attention reads them (ADR 0039): a feed job whose newest run completed is still
+        failing while another feed's last run failed; dismissed, it is `dismissed` with its count kept."""
+        from evidence.models import Publisher
+        from ingest.models import Feed
+
+        with revising("human:test", reason="a test publisher"):  # a canonical table: the trigger needs revising()
+            pub = Publisher.objects.create(domain="example.org", name="Example")
+        a, b = (Feed.objects.create(name=n, url=f"https://example.org/{n}.xml", kind="rss", publisher=pub, config={"job": "gazette"}) for n in ("a", "b"))
+        t0 = timezone.now()
+        bad = FetchRun.objects.create(job="gazette", feed=a, started_at=t0 - timedelta(hours=2), status="failed", error="down")
+        FetchRun.objects.create(job="gazette", feed=b, started_at=t0 - timedelta(hours=1), status="ok")
+        body = self.client.get("/healthz").json()
+        self.assertEqual((body["jobs"]["gazette"]["state"], body["jobs"]["gazette"]["consecutive_failures"], body["jobs"]["gazette"]["last_status"]), ("failing", 1, "ok"))
+        self.assertIn("gazette", body["failing_jobs"])
+        FetchRun.objects.filter(pk=bad.pk).update(dismissed_at=t0, dismissed_by="human:owner", dismiss_action=1)
+        body = self.client.get("/healthz").json()
+        g = body["jobs"]["gazette"]
+        self.assertEqual((g["state"], g["consecutive_failures"], g["dismissed"]["run"], g["dismissed"]["by"]), ("dismissed", 1, bad.pk, "human:owner"))
+        self.assertEqual((body["failing_jobs"], body["dismissed_jobs"]), ([], ["gazette"]))
+        FetchRun.objects.create(job="gazette", feed=a, started_at=t0, status="failed", error="down again")
+        body = self.client.get("/healthz").json()
+        self.assertEqual((body["jobs"]["gazette"]["state"], body["jobs"]["gazette"]["consecutive_failures"], body["dismissed_jobs"]), ("failing", 2, []))
+
     def test_unreachable_storage_is_a_503(self):
         with mock.patch.object(storage, "reachable", return_value=(False, "ConnectionError: refused")):
             r = self.client.get("/healthz")

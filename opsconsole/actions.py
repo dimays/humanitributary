@@ -9,7 +9,7 @@ Each action is an `Action` with:
   more tasks than the cap …), and returns the exact parameters, a one-line summary and the dry run, check or preview
   the confirmation page shows (stored on the OpsAction as `check_output`).
 - `execute(action, log)` → a result dict: it runs the existing code (`ingest.jobs.run_named`, `work.queue`,
-  `governance.waves.set_active`, `publish.release`), re-checking what may have changed since the confirmation, and
+  `governance.waves.set_active`, `publish.release`; a dismissal stamps the failed FetchRun, ADR 0039), re-checking what may have changed since the confirmation, and
   raises `Refused` (the action fails with that error) if it no longer holds.
 
 Quick actions (`runs_in="request"`) execute in the confirming request, in one transaction; the others are queued for
@@ -193,6 +193,62 @@ def prepare_retry_run(data, actor):
     if later:
         raise Refused(f"a later run of {run.job} succeeded (#{later.pk}, {later.status} at {later.started_at:%Y-%m-%d %H:%M} UTC): nothing to retry")
     return _job_plan(A.RETRY_RUN, run.job, [run.feed_id] if run.feed_id else None, run=run)
+
+
+# ── dismiss a failed run from Needs attention (ADR 0039) ─────────────────────────────────────────────────────────
+
+def dismiss_refusal(run: FetchRun | None) -> str:
+    """Why this run may not be dismissed now ("" when it may): only the failed run Needs attention shows for its job
+    and feed (its last finished run), not one already dismissed, and not while a retry or a new run of it is under way
+    (its result decides)."""
+    from . import queries as Q
+
+    if run is None:
+        return "no such run"
+    if run.status != FetchRun.Status.FAILED:
+        return f"run #{run.pk} is {run.status}, not failed: only a failed run can be dismissed"
+    if run.dismissed_at:
+        return f"run #{run.pk} was already dismissed by {run.dismissed_by} at {run.dismissed_at:%Y-%m-%d %H:%M} UTC (action #{run.dismiss_action})"
+    later = (FetchRun.objects.filter(job=run.job, feed=run.feed_id, started_at__gt=run.started_at).exclude(status=FetchRun.Status.RUNNING)
+             .order_by("-started_at", "-id").first())
+    if later:
+        return (f"a later run of {run.job} finished (#{later.pk}, {later.status} at {later.started_at:%Y-%m-%d %H:%M} UTC): "
+                f"run #{run.pk} is no longer the one in Needs attention")
+    rec = Q.recoveries([run]).get(run.pk)
+    if rec:
+        what = f"run #{rec['run']}" if rec["run"] else f"action #{rec['action']}"
+        return f"run #{run.pk} is being retried ({rec['label'].lower()}: {what}): wait for its result, or withdraw the retry first"
+    return ""
+
+
+def prepare_dismiss_run(data, actor):
+    from infra.alerts import consecutive_failures
+
+    run = FetchRun.objects.filter(pk=_int(data.get("run"), "run")).select_related("feed").first()
+    if why := dismiss_refusal(run):
+        raise Refused(why)
+    n = consecutive_failures(run.job, run.feed_id)
+    name = run.job + (f" ({run.feed.name})" if run.feed_id else "")
+    rows = [("Failed run", f"#{run.pk} at {run.started_at:%Y-%m-%d %H:%M} UTC: {mask_secrets(run.error).splitlines()[0][:300] if run.error else '(no error text)'}"),
+            ("Job", name), ("Failed in a row", str(n)),
+            ("Then", ("the run leaves Needs attention and the problems line, and /healthz no longer counts it as failing. It stays in the "
+                      "run history and on the Runs page, marked Dismissed. The job keeps its schedule: its next run that fails is shown again "
+                      "(and counted with the earlier ones for the alert)."))]
+    warnings = []
+    if n >= 2:
+        warnings.append(f"{name} has failed {n} runs in a row: dismissing does not fix it. If it will keep failing, pause it instead (procedure 06)")
+    return Plan(A.DISMISS_RUN, f"run:{run.pk}", {"run": run.pk, "job": run.job, "feed": run.feed_id}, f"Dismiss failed run #{run.pk} of {name}",
+                check_output="\n".join(f"{k}: {v}" for k, v in rows), rows=rows, warnings=warnings)
+
+
+def execute_dismiss_run(action, log):
+    run = FetchRun.objects.select_for_update().filter(pk=action.params["run"]).first()
+    if why := dismiss_refusal(run):
+        raise Refused(why)
+    run.dismissed_at, run.dismissed_by, run.dismiss_action = timezone.now(), action.requested_by, action.pk
+    run.save(update_fields=["dismissed_at", "dismissed_by", "dismiss_action"])
+    log(f"run #{run.pk} of {run.job} dismissed from Needs attention")
+    return {"run": run.pk, "job": run.job, "feed": run.feed_id, "dismissed_at": run.dismissed_at.isoformat(timespec="seconds")}
 
 
 def execute_job(action: OpsAction, log) -> dict:
@@ -721,6 +777,7 @@ ACTIONS = {a.kind: a for a in [
     Action(A.SKIP_ROUND, R, prepare_skip_round, execute_skip_round),
     Action(A.ROUND_SIZE, R, prepare_round_size, execute_round_size),
     Action(A.REVIEW_HELD, R, prepare_review_held, execute_review_held),
+    Action(A.DISMISS_RUN, R, prepare_dismiss_run, execute_dismiss_run),
 ]}
 
 

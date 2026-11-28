@@ -29,6 +29,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Dedupe key | A key that a job gives to a task. Only one open task can have a given kind and key. |
 | Deploy | The step that puts new code on the Heroku app. Heroku deploys `main` after CI passes. |
 | Deterministic | A program is deterministic when the same input always gives the same output. All jobs are deterministic. |
+| Dismissed | The mark on a failed job run that an operator removed from "Needs attention" without a new run. The run stays in the history. |
 | Document | A fetched page or record, with its extracted text. Its raw bytes are in the `raw` bucket. |
 | Dyno | A Heroku container that runs one process: `web`, `worker`, the release phase or a one-off command. |
 | Edit file | A JSON list of operations from a reviewer, in `var/reviews/`. `manage.py apply_edits` applies it in one transaction. |

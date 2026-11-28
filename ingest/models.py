@@ -75,6 +75,11 @@ class FetchRun(models.Model):
     retry_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="retries", help_text="The failed run this one retries.")
     attempt = models.PositiveSmallIntegerField(default=1, help_text="1, or one more than the run it retries.")
     scheduled_for = models.DateTimeField(null=True, blank=True, help_text="When the scheduler found it due (a plain job: its last start plus its interval; a feed job: the feed's next_run_at). Empty for a console or shell run, a first run, and runs before November 2026.")
+    # A failed run an operator took out of the console's "Needs attention" without retrying it (ADR 0039). The run,
+    # its error and its place in the failure count stay; the reason is on the OpsAction.
+    dismissed_at = models.DateTimeField(null=True, blank=True, help_text="When an operator dismissed this failed run from Needs attention (ADR 0039).")
+    dismissed_by = models.CharField(max_length=200, blank=True, help_text='Who dismissed it: "human:<username>".')
+    dismiss_action = models.PositiveIntegerField(null=True, blank=True, help_text="The console's dismiss_run OpsAction #id, which holds the reason (no foreign key: ingest does not depend on the console).")
 
     class Meta:
         ordering = ["-started_at"]

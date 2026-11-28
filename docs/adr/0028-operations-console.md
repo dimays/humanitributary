@@ -1,6 +1,6 @@
 # 0028 — An operations console for staff: read-only pages now, audited interventions planned
 
-**Status:** accepted (November 2026). Phase 1, the read-only console, is built; phase 2, the interventions below, was accepted by the owner and is built as the plan says, with the changes listed under "Phase 2 as built" at the end; amended by [0031](0031-a-simpler-console-and-run-logs.md) (the pages redesigned, run logs, an index, a little JavaScript and two dependencies); amended by [0035](0035-automated-daily-rounds.md) (agents' operations recorded too; the round controls)
+**Status:** accepted (November 2026). Phase 1, the read-only console, is built; phase 2, the interventions below, was accepted by the owner and is built as the plan says, with the changes listed under "Phase 2 as built" at the end; amended by [0031](0031-a-simpler-console-and-run-logs.md) (the pages redesigned, run logs, an index, a little JavaScript and two dependencies); amended by [0035](0035-automated-daily-rounds.md) (agents' operations recorded too; the round controls); amended by [0039](0039-dismiss-a-failed-run.md) (a failed run follows its retry in Needs attention; the `dismiss_run` action)
 
 ## Context
 
