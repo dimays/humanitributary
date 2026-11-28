@@ -343,7 +343,7 @@ def run_detail(request, pk):
     # An archived job's failed run is neither retried nor dismissed from here (ADR 0041): its job is retired.
     job_archived = run.job in Q.archived_names()
     recovery = Q.recoveries([run]).get(run.pk) if run.status == "failed" and not run.dismissed_at else None
-    dismissable = run.status == "failed" and not recovery and not job_archived and not acts.dismiss_refusal(run)
+    dismissable = run.status == "failed" and not recovery and not job_archived and not acts.dismiss_refusal(run, recovery=recovery)
     return _render(request, "run_detail.html", {
         "recovery": recovery, "dismissable": dismissable, "job_archived": job_archived,
         "r": run, "state": Q.run_state(run.status), "duration": _duration(run), "log": log, "lines": shown, "level": level if level in LOG_LEVELS else "",

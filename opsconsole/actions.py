@@ -203,10 +203,14 @@ def prepare_retry_run(data, actor):
 
 # ── dismiss a failed run from Needs attention (ADR 0039) ─────────────────────────────────────────────────────────
 
-def dismiss_refusal(run: FetchRun | None) -> str:
+_UNKNOWN = object()
+
+
+def dismiss_refusal(run: FetchRun | None, *, recovery=_UNKNOWN) -> str:
     """Why this run may not be dismissed now ("" when it may): only the failed run Needs attention shows for its job
     and feed (its last finished run), not one already dismissed, and not while a retry or a new run of it is under way
-    (its result decides)."""
+    (its result decides). `recovery`, when the caller has `queries.recoveries()`'s answer for this run already (a
+    run's page), saves reading it twice."""
     from . import queries as Q
 
     if run is None:
@@ -220,7 +224,7 @@ def dismiss_refusal(run: FetchRun | None) -> str:
     if later:
         return (f"a later run of {run.job} finished (#{later.pk}, {later.status} at {later.started_at:%Y-%m-%d %H:%M} UTC): "
                 f"run #{run.pk} is no longer the one in Needs attention")
-    rec = Q.recoveries([run]).get(run.pk)
+    rec = Q.recoveries([run]).get(run.pk) if recovery is _UNKNOWN else recovery
     if rec:
         what = f"run #{rec['run']}" if rec["run"] else f"action #{rec['action']}"
         return f"run #{run.pk} is being retried ({rec['label'].lower()}: {what}): wait for its result, or withdraw the retry first"
