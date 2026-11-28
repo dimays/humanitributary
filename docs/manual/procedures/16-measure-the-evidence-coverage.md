@@ -50,6 +50,9 @@ on a site that did not refuse the job.
 
 > **NOTE:** The report makes no requests. It reads only the queue and the `PrefetchedPage` rows.
 
+> **NOTE:** The job `seed_sources` applied the source verdicts of November 28, 2026 (ADR 0037). A verdict with low
+> confidence did not change the publisher. Give such a publisher a tier only after you read its terms.
+
 > **CAUTION:** Do not give a publisher a tier before you read its terms. The tier lets the job keep its text.
 
 > **CAUTION:** Do not change a `browser_only` publisher to `allowed` to increase the share. Change the fetch policy

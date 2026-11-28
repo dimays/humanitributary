@@ -63,7 +63,9 @@ publishers whose policy lets a job read them, and put them in the payload:
 - `evidence_pack`: one entry per stored page: `url`, `title`, `publisher`, `tier`, `fetched_at`, `doc_id`, `words`
   and `passages` (the page's sentences that name the task's dates, years, numbers, entities or title words, best
   first, each with its `score` and `matches`, such as `"date:June 6"`, `"entity:Normandy (Q8205)"`).
-- `unreadable`: the URLs it did not read, each with a `reason`: `browser_only` (read it in a browser),
+- `unreadable`: the URLs it did not read, each with a `reason`: `browser_only` or `citation_only` (read it in a
+  browser), `ai_blocked` (its robots.txt shuts out AI crawlers by name: a browser read only, never a script), `api_only`
+  (the publisher allows only its API),
   `unrated` (nobody has rated the publisher yet, so the job doesn't fetch it: read it yourself, honestly),
   `forbidden` (never), `never_fetch`, `robots`, `blocked`, `tdm_reserved` (the page opts out of text and data mining: read it by hand), `http_404`, `error`, `unsupported` (a PDF, say), `empty`,
   `deferred` (not yet: the next run reads it).
@@ -83,7 +85,7 @@ How to use it:
    drop the excerpt. Case, quote marks, dashes and footnote markers ("[12]") all count.
 3. **Cite the page's URL** (the entry's `url`), with `"method": "agent_read"`. The stored text is private: never
    paste more than the excerpt anywhere.
-4. **Open a browser only for `unreadable` URLs whose reason is `browser_only`** (one tab, closed at the end), and
+4. **Open a browser only for `unreadable` URLs whose reason is `browser_only`, `citation_only` or `ai_blocked`** (one tab, closed at the end), and
    mark those cites `"method": "browser_read"`. Other unreadable pages: fetch one yourself only with the honest
    User-Agent (below), and never one that `robots` or `blocked` refused. In a cloud round there is no browser: a
    draft that only `browser_only` pages support is held (the `run-round` skill).

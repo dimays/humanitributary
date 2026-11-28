@@ -449,3 +449,94 @@ class ConsoleTests(FreshStorage, TestCase):
         self.assertContains(r, "browser_only")
         r = self.client.get(reverse("opsconsole:work"))
         self.assertContains(r, "evidence ready 50.0% (1 of 2)")
+
+
+class RatingsTests(FreshStorage, TestCase):
+    """The 2026-11-28 ratings (ADR 0037): what becomes policy, and what the job and the Fetcher then do."""
+
+    def test_decisions_are_conservative(self):
+        from ingest import ratings
+
+        by = {d.name: d for d in ratings.decisions()}
+        self.assertEqual(len(by), 104)
+        # Low confidence (not re-verified, bot wall, robots only, terms unread …): permissive ratings are not applied.
+        for name in ("OpenAlex API", "Pleiades gazetteer", "Wikisource", "Avalon Project (Yale Law)", "Smithsonian Open Access API", "World Health Organization"):
+            self.assertFalse(by[name].apply_policy, name)
+        for name in ("Semantic Scholar API", "Library of Congress JSON API", "Stanford Encyclopedia of Philosophy", "NASA", "USGS"):
+            self.assertTrue(by[name].apply_policy and by[name].confident, name)
+        # Restrictive ones always apply; the round's "forbidden" is recorded as citation_only (forbidden also bars citing).
+        self.assertTrue(by["CNN"].apply_policy)
+        m = ratings.merged()
+        self.assertEqual(m["aljazeera.com"]["policy"], "citation_only")
+        self.assertEqual(m["loc.gov"]["api_base"], ["https://www.loc.gov/ ?fo=json", "https://www.loc.gov/collections/chronicling-america/ ?fo=json"])
+        self.assertNotIn("github.com", m)
+        self.assertEqual({x["name"] for x in ratings.follow_ups()} >= {"Perseus / First1KGreek TEI corpora on GitHub", "CBETA / DILA Buddhist canon API",
+                                                                     "Papyri.info / Trismegistos-style papyrology", "Congress.gov / Congress API"}, True)
+
+    def test_apply_once_through_the_services(self):
+        from ingest import ratings
+        from ingest.models import JobState
+        from revisions.models import Revision
+
+        import_content(small())
+        counts = ratings.apply()
+        self.assertGreater(counts["updated"], 100)
+        p = Publisher.objects.get(domain="plato.stanford.edu")
+        self.assertEqual((p.fetch_policy, p.tier), ("allowed", 2))
+        self.assertIn("Rated 2026-11-28", p.access_notes)
+        self.assertIn("Terms: https://plato.stanford.edu", p.access_notes)
+        loc = Publisher.objects.get(domain="loc.gov")
+        self.assertEqual(loc.fetch_policy, "api_only")
+        nara = Publisher.objects.get(domain="archives.gov")
+        self.assertTrue(nara.api_needs_key and not nara.api_key_setting, "a keyed API with no key stays off")
+        self.assertIsNone(Publisher.objects.get(domain="pleiades.stoa.org").tier, "low confidence: still unrated")
+        self.assertEqual(Publisher.objects.get(domain="cnn.com").fetch_policy, "citation_only")
+        self.assertTrue(Revision.objects.filter(table_name="evidence_publisher", actor="job:seed_sources").exists())
+        self.assertTrue(JobState.objects.get(name="ratings_2026_11_28").state["applied"])
+        self.assertEqual(ratings.apply(), Counter(), "once per database")
+
+    def test_fetcher_api_only_citation_only_and_ai_blocks(self):
+        with revising("human:test", reason="test publishers"):
+            Publisher.objects.create(domain="loc.gov", name="LoC", tier=1, fetch_policy="api_only", api_base="https://www.loc.gov/ ?fo=json")
+            Publisher.objects.create(domain="keyed.example", name="Keyed", tier=1, fetch_policy="api_only", api_base="https://api.keyed.example/",
+                                     api_needs_key=True, api_key_setting="NO_SUCH_KEY_SETTING")
+            Publisher.objects.create(domain="cnn.com", name="CNN", tier=3, fetch_policy="citation_only")
+            Publisher.objects.create(domain="aiblock.example", name="AI block", tier=2)
+        routes = {"www.loc.gov/item/123": (200, "application/json", "{}"),
+                  "aiblock.example/robots.txt": (200, "text/plain", "User-agent: ClaudeBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n"),
+                  "slow.example/robots.txt": (200, "text/plain", "User-agent: *\nCrawl-delay: 5\nDisallow: /w/\n"),
+                  "slow.example/wiki/A": (200, "text/html", "<p>x</p>"), "slow.example/wiki/B": (200, "text/html", "<p>y</p>")}
+        slept = []
+        f = Fetcher(transport=httpx.MockTransport(Mock(routes)), sleep=slept.append)
+        self.assertIn("api_only", f.refusal("https://www.loc.gov/item/123/"))
+        self.assertEqual(f.refusal("https://www.loc.gov/item/123/", full_url="https://www.loc.gov/item/123/?fo=json"), "")
+        self.assertEqual(f.get("https://www.loc.gov/item/123", params={"fo": "json"}).status, 200, "the query parameters count")
+        self.assertIn("needs a key", f.refusal("https://api.keyed.example/v1/x"))
+        self.assertIn("citation_only", f.refusal("https://www.cnn.com/2026/story"))
+        self.assertIn("ClaudeBot", f.ai_blocked("https://aiblock.example/page"))
+        self.assertEqual(f.refusal("https://aiblock.example/page"), "", "our own token isn't named: only the job's AI check refuses it")
+        # Path limits and Crawl-delay: /w/ refused, /wiki/ read, 5 s between requests.
+        self.assertIn("robots.txt", f.refusal("https://slow.example/w/api.php"))
+        f.get("https://slow.example/wiki/A")
+        f.get("https://slow.example/wiki/B")
+        self.assertTrue(any(s >= 4.9 for s in slept), slept)
+
+    def test_the_job_skips_ai_blocked_sites_and_reads_api_only_through_the_api(self):
+        import_content(small())
+        with revising("human:test", reason="test publishers"):
+            Publisher.objects.create(domain="aiblock.example", name="AI block", tier=2)
+            Publisher.objects.create(domain="loc.gov", name="LoC", tier=1, fetch_policy="api_only", api_base="https://www.loc.gov/ ?fo=json")
+        routes = {"aiblock.example/robots.txt": (200, "text/plain", "User-agent: anthropic-ai\nDisallow: /\n"),
+                  "www.loc.gov/item/2001234567/": (200, "application/json", json.dumps(
+                      {"item": {"title": "Treaty map", "date": "1783", "summary": ["A map of the boundaries agreed in the Treaty of Paris, 1783."]}}))}
+        t, _ = queue.enqueue("write_event", created_by="job:process", payload={**PAYLOAD, "story_article": None, "sources": [
+            {"url": "https://aiblock.example/story"}, {"url": "https://www.loc.gov/item/2001234567/"}]})
+        mock = Mock(routes)
+        prefetch.run(Ctx(Fetcher(transport=httpx.MockTransport(mock), sleep=lambda s: None)))
+        t.refresh_from_db()
+        self.assertEqual({u["url"]: u["reason"] for u in t.payload["unreadable"]}["https://aiblock.example/story"], "ai_blocked")
+        self.assertNotIn("aiblock.example/story", mock.seen)
+        self.assertEqual([e["api"] for e in t.payload["evidence_pack"]], ["loc"], (t.payload["unreadable"], mock.seen))
+        counts = Counter()
+        prefetch.purge(timezone.now(), counts)
+        self.assertEqual(counts["pages_unrated_purged"], 0, "an api_only publisher's API records are kept")

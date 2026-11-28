@@ -1,6 +1,6 @@
 # 0036 — Evidence packs: a job pre-fetches the allowed pages a task needs, stores their text privately for a limited time, and the API checks every excerpt against it
 
-**Status:** proposed (November 2026; revised before merge: rated publishers only, official APIs for catalog pages); amends [0013](0013-source-policy.md) (full text of `allowed` pages kept privately, with a retention limit; task payloads carry ranked passages; a verdict for sec.gov), [0016](0016-object-storage.md) (a second, deletable prefix in the `raw` store) and [0017](0017-agent-api.md) (stored pages over the API, and excerpts checked on `complete` and on edit files)
+**Status:** proposed (November 2026; revised before merge: rated publishers only, official APIs for catalog pages); amends [0013](0013-source-policy.md) (full text of `allowed` pages kept privately, with a retention limit; task payloads carry ranked passages; a verdict for sec.gov), [0016](0016-object-storage.md) (a second, deletable prefix in the `raw` store) and [0017](0017-agent-api.md) (stored pages over the API, and excerpts checked on `complete` and on edit files); amended by [0037](0037-source-ratings-2026-11-28.md) (API bases, keys and AI-crawler blocks)
 
 ## Context
 
@@ -130,12 +130,14 @@ with the tasks and URLs that name it and an example, for the round that rates th
 - We hold full text of third-party pages, privately, for up to six months (a year for openly licensed ones). The
   retention purge, the `allowed`-only rule and the 403 on documents are what keep that within the terms we read;
   a publisher whose policy changes to `browser_only` is no longer fetched, and its stored pages age out.
-- **The first measurement** (a scratch database loaded with the archive and filled by the real jobs, November 28,
-  2026: 20 `write_event`, 40 `fill_gap`, 248 `verify_claim`): 55% of `write_event` tasks were ready (news outlets
-  that allow scripts), but 0% of `fill_gap` and `verify_claim`. Their non-Wikipedia candidates are the lookup
-  adapters' catalog pages (siris-libraries.si.edu and loc.gov items behind bot walls; europeana.eu, doi.org,
-  n2t.net and openalex.org refused by robots.txt), and 200 of the 248 claims cite Wikipedia alone. Evidence packs
-  help most once the lookups point at readable full text: the next source-discovery round's job.
+- **The measurements** (a scratch database loaded with the archive and filled by the real jobs, November 28, 2026:
+  20 `write_event`, 40 `fill_gap`, 248 `verify_claim`). With unrated domains fetched by default, 55% of
+  `write_event` tasks were ready (news pages) and 0% of the others: their candidates were catalog pages that refuse
+  scripts, and 200 of the 248 claims cite Wikipedia alone. With only rated publishers, the official APIs and the
+  November 28 ratings (ADR 0037): `write_event` 60%, `fill_gap` 100%, `verify_claim` 19% ready, all of it through
+  API records (Smithsonian 151, OpenAlex 59, Europeana 56, LoC 15 entries in packs); no non-Wikipedia page itself
+  is stored, because the stories' news outlets are unrated or `citation_only`. By era, 500–1500 (8%) and 1500–1800
+  (0%) are thinnest. The coverage report in `var/` lists what is left.
 - **Unrated means not fetched.** The Fetcher's default for a domain nobody rated is `allowed`
   (`evidence.publishers.defaults_for`), and a first version of this job followed it: it stored news pages from
   publishers whose terms nobody had read (ft.com, time.com, nbcnews.com among them). Now the job needs a rating,

@@ -60,7 +60,7 @@ def _fetchable(fetcher, c) -> bool:
     why = prefetch.policy_reason(fetcher, c.url)[0]
     if not why:
         return True
-    return why == "unrated" and isinstance(prefetch_api.route(c.url, c.hit), prefetch_api.Route)
+    return why in ("unrated", "api_only") and isinstance(prefetch_api.route(c.url, c.hit), prefetch_api.Route)
 
 
 def unrated(tasks=None, fetcher=None) -> list[dict]:
@@ -75,8 +75,8 @@ def unrated(tasks=None, fetcher=None) -> list[dict]:
     for t in tasks:
         seen = set()
         for c in prefetch.candidates(t, prefetch.DEFAULTS["urls"]):
-            if prefetch.policy_reason(fetcher, c.url)[0] != "unrated":
-                continue
+            if prefetch.policy_reason(fetcher, c.url)[0] != "unrated" or _fetchable(fetcher, c):
+                continue  # rated, or read through its official API
             d = domain_of(c.url)
             n_urls[d] += 1
             example.setdefault(d, c.url)
@@ -141,6 +141,9 @@ def report(fetcher=None) -> dict:
     out["no_allowed_source"] = [{"kind": k, "region": r, "era": e, "tasks": n} for (k, r, e), n in missing.most_common(40)]
     out["host_health"] = prefetch.health()[:40]
     out["unrated_domains"] = unrated(tasks, fetcher)
+    from . import ratings
+
+    out["follow_ups"] = ratings.follow_ups()
     out["via_api"] = Counter(e.get("api") for t in tasks for e in (t.payload or {}).get("evidence_pack", []) if e.get("via")).most_common()
     return out
 
@@ -166,6 +169,8 @@ def markdown(r: dict) -> str:
     lines += ["## Stored through an official API", "", "| API | Pages in packs |", "|---|---:|"] + [f"| {k} | {n} |" for k, n in r["via_api"]] + [""]
     lines += ["## Unrated domains the tasks point at (rate them, terms first)", "", "| Domain | Tasks | URLs | Row | Example |", "|---|---:|---:|---|---|"]
     lines += [f"| {x['domain']} | {x['tasks']} | {x['urls']} | {x['row']} | {x['example'][:90]} |" for x in r["unrated_domains"][:60]] + [""]
+    lines += ["## Rated sources not reached yet (ADR 0037 follow-ups)", "", "| Source | Why | Where |", "|---|---|---|"]
+    lines += [f"| {x['name']} | {x['why']} | {x['where'] or ''} |" for x in r.get("follow_ups", [])] + [""]
     lines += ["## Host health (last 30 days of prefetch requests)", "", "| Host | Outcomes |", "|---|---|"]
     lines += [f"| {x['host']} | {', '.join(f'{k} {v}' for k, v in x.items() if k != 'host')} |" for x in r["host_health"]] + [""]
     return "\n".join(lines)

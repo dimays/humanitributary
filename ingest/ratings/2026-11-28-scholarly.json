@@ -1,0 +1,842 @@
+[
+  {
+    "name": "OpenAlex API",
+    "domains": [
+      "api.openalex.org",
+      "openalex.org"
+    ],
+    "api_base": "https://api.openalex.org",
+    "verdict": "api_only",
+    "needs_key": "optional (free key lifts keyless budget 10x; key required for cursor paging)",
+    "license": "CC0 (per OpenAlex; not re-verified)",
+    "robots": "Allow: / (fetched)",
+    "terms_url": "https://help.openalex.org/how-to-use-the-api/rate-limits-and-authentication",
+    "clause": "\"Basic queries work without a key\" (paraphrase of page)",
+    "rate_limit": "keyless 10 req/s per IP; free key 30 req/s; per_page max 100",
+    "eras": "scholarship about any era; metadata only, 1000 BCE-present",
+    "regions": "all",
+    "notes": "Best for finding and DOI-resolving secondary literature, not primary text. Abstracts are inverted-index. Do not request a key; use keyless."
+  },
+  {
+    "name": "Crossref REST API",
+    "domains": [
+      "api.crossref.org"
+    ],
+    "api_base": "https://api.crossref.org/works",
+    "verdict": "api_only",
+    "needs_key": "no (mailto 'polite' pool recommended)",
+    "license": "Metadata free to reuse (not re-verified)",
+    "robots": "robots.txt 404 (none)",
+    "terms_url": "https://www.crossref.org/documentation/retrieve-metadata/rest-api/access-and-authentication/",
+    "clause": "\"Anyone can access the REST API, no signup or registration is required.\"",
+    "rate_limit": "public: 5/s DOI lookups, 1/s queries; polite: 10/s, 3/s",
+    "eras": "metadata for scholarship of any era",
+    "regions": "all",
+    "notes": "Verify that a cited book/article exists, DOIs, years. No full text. Always send mailto."
+  },
+  {
+    "name": "Semantic Scholar API",
+    "domains": [
+      "api.semanticscholar.org"
+    ],
+    "api_base": "https://api.semanticscholar.org/graph/v1",
+    "verdict": "api_only",
+    "needs_key": "optional (shared pool keyless; key for dedicated rate)",
+    "license": "Data under CC BY-NC / ODC-BY per dataset",
+    "robots": "robots.txt 404 (none)",
+    "terms_url": "https://www.semanticscholar.org/product/api/license",
+    "clause": "\"attempt to exceed or circumvent limitations on access\" is prohibited",
+    "rate_limit": "not numeric on page; keyless shared pool is throttled",
+    "eras": "scholarship metadata, mostly 1950+ but cites older work",
+    "regions": "all",
+    "notes": "Non-commercial project fits CC BY-NC. License page has no AI/storage ban. Abstracts and TLDRs useful for claim checks."
+  },
+  {
+    "name": "CORE API",
+    "domains": [
+      "core.ac.uk",
+      "api.core.ac.uk"
+    ],
+    "api_base": "https://api.core.ac.uk/v3",
+    "verdict": "api_only",
+    "needs_key": "yes (registration)",
+    "license": "Per-record repository licenses; CORE metadata CC0-style (unverified)",
+    "robots": "Disallow: /search only; content-signals reservation under EU DSM Art. 4 (no signal set yes/no)",
+    "terms_url": "https://core.ac.uk/services/api",
+    "clause": "terms page returned 403 (bot wall); not read",
+    "rate_limit": "not verified",
+    "eras": "OA full texts of academic papers; history/archaeology theses and articles",
+    "regions": "all",
+    "notes": "Needs key so cannot be used without signup. Robots reserves TDM rights without granting signals: treat as ask-first."
+  },
+  {
+    "name": "PubMed Central Open Access subset",
+    "domains": [
+      "pmc.ncbi.nlm.nih.gov",
+      "eutils.ncbi.nlm.nih.gov"
+    ],
+    "api_base": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/",
+    "verdict": "api_only",
+    "needs_key": "no (key raises limit)",
+    "license": "Per-article CC licenses; some NC only",
+    "robots": "not fetched (NCBI standard)",
+    "terms_url": "https://pmc.ncbi.nlm.nih.gov/tools/textmining/",
+    "clause": "\"bulk retrieval of articles through any other automated process is prohibited\"",
+    "rate_limit": "E-utilities 3/s keyless (unverified)",
+    "eras": "history of medicine / paleopathology; 1000 BCE-present",
+    "regions": "all",
+    "notes": "Only for medical-history claim checks. Use OA subset licensed CC0/BY/BY-SA for stored text."
+  },
+  {
+    "name": "arXiv API",
+    "domains": [
+      "export.arxiv.org",
+      "arxiv.org"
+    ],
+    "api_base": "http://export.arxiv.org/api/query",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "Metadata CC0; papers per-author license",
+    "robots": "arxiv.org robots: default allows abs/pdf/html, Crawl-delay 15, Disallow /api and /e-print on arxiv.org (API host is export.arxiv.org)",
+    "terms_url": "https://info.arxiv.org/help/api/tou.html",
+    "clause": "ToU URL variants 404; not read",
+    "rate_limit": "3 s between calls (not verified)",
+    "eras": "modern physics/CS/math; negligible for history",
+    "regions": "all",
+    "notes": "Low value for this project except history-of-science and archaeoastronomy. Terms not verified."
+  },
+  {
+    "name": "DOAJ API",
+    "domains": [
+      "doaj.org"
+    ],
+    "api_base": "https://doaj.org/api/v4",
+    "verdict": "api_only",
+    "needs_key": "no for search",
+    "license": "Metadata CC BY-SA (unverified)",
+    "robots": "Allows site; disallows /search and account/admin; Content-signal permits search, AI input, reference; notes load limits",
+    "terms_url": "https://doaj.org/docs/api/",
+    "clause": "not read",
+    "rate_limit": "not stated",
+    "eras": "OA journal index; finds history journals only",
+    "regions": "all",
+    "notes": "Use to locate OA history articles, then fetch via publisher. Robots comment says openness may change if load is a problem."
+  },
+  {
+    "name": "Internet Archive (archive.org APIs)",
+    "domains": [
+      "archive.org"
+    ],
+    "api_base": "https://archive.org/advancedsearch.php ; https://archive.org/metadata/{id} ; https://archive.org/download/{id}",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "Mixed: public-domain scans plus rights-held items; per item",
+    "robots": "Disallow /control/ and /report/ only; sitemap listed",
+    "terms_url": "https://archive.org/about/terms.php",
+    "clause": "terms page returned no content; not read",
+    "rate_limit": "no published limit; be gentle (unverified)",
+    "eras": "scans of printed books 1500-1923: 500-1800 CE strongest; also earlier editions of classics",
+    "regions": "all, esp. Europe, Americas, South Asia (mirrors of DLI)",
+    "notes": "Full OCR text via /download/{id}/{id}_djvu.txt. Check item rights before storing. Best single source of public-domain period texts."
+  },
+  {
+    "name": "scholar.archive.org / fatcat",
+    "domains": [
+      "scholar.archive.org",
+      "api.fatcat.wiki"
+    ],
+    "api_base": "https://api.fatcat.wiki/v0",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "Metadata CC0; fulltext per paper",
+    "robots": "archive.org robots; scholar subdomain not separately fetched",
+    "terms_url": "https://guide.fatcat.wiki/",
+    "clause": "not read",
+    "rate_limit": "not stated",
+    "eras": "preserved scholarly PDFs",
+    "regions": "all",
+    "notes": "Same operator as IA; fatcat has open REST. Metadata mostly. Unverified details."
+  },
+  {
+    "name": "HathiTrust (Bib API, Data API)",
+    "domains": [
+      "babel.hathitrust.org",
+      "catalog.hathitrust.org"
+    ],
+    "api_base": "https://catalog.hathitrust.org/api/volumes/brief/{type}/{id}.json",
+    "verdict": "browser_only",
+    "needs_key": "Data API: yes; Bib API: no",
+    "license": "Public-domain volumes in US; rest search-only",
+    "robots": "robots.txt 403 (bot wall)",
+    "terms_url": "https://www.hathitrust.org/the-collection/terms-conditions/",
+    "clause": "terms page 403 (bot wall); not read",
+    "rate_limit": "not verified",
+    "eras": "print books 1500-1928 public domain",
+    "regions": "all",
+    "notes": "Bot wall on first request; not retried. Bib API (catalog only) likely fine but unverified. Full-text search and page views are human-only by HathiTrust policy (unverified)."
+  },
+  {
+    "name": "Wikisource",
+    "domains": [
+      "en.wikisource.org",
+      "wikisource.org"
+    ],
+    "api_base": "https://en.wikisource.org/w/api.php (Action API); pages under /wiki/",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "CC BY-SA 4.0 for wiki text; source texts usually public domain",
+    "robots": "/wiki/ allowed except Special: and admin pages; /w/ (incl. api.php) disallowed; SemrushBot delay 5",
+    "terms_url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+    "clause": "terms not fetched; Wikimedia User-Agent policy applies",
+    "rate_limit": "keep serial, descriptive UA, honor 429/Retry-After",
+    "eras": "transcribed primary texts: classical to 1900; strongest 1500-1900 English",
+    "regions": "all, Anglophone-heavy",
+    "notes": "Allowed via /wiki/ article fetches or ?action=raw via index.php (note robots). Using api.php is bot-intended by Wikimedia but robots disallows /w/: pick /wiki/ paths. Quality varies (proofread level)."
+  },
+  {
+    "name": "Perseus Digital Library (hopper) / Scaife",
+    "domains": [
+      "www.perseus.tufts.edu",
+      "scaife.perseus.org"
+    ],
+    "api_base": "https://www.perseus.tufts.edu/hopper/",
+    "verdict": "browser_only",
+    "needs_key": "no",
+    "license": "Texts CC BY-SA 4.0 (in canonical-greekLit/Latin repos; not re-verified)",
+    "robots": "User-agent *: Disallow all except 5 /hopper/ paths (grants, research, about, collections, index); AI bots mostly blocked",
+    "terms_url": "https://www.perseus.tufts.edu/hopper/about",
+    "clause": "\"The code for the digital library system and many of the collections\" (about page; no automated-access terms)",
+    "rate_limit": "Crawl-Delay not specified",
+    "eras": "Greek and Latin classics, 800 BCE-500 CE; some Renaissance/19th C.",
+    "regions": "Mediterranean, Europe, Middle East (Greek/Roman)",
+    "notes": "Hopper text pages are outside robots-permitted paths. Use the GitHub corpora (PerseusDL/canonical-greekLit, canonical-latinLit; OpenGreekAndLatin/First1KGreek) via git instead: see next entry. Scaife robots not fetched."
+  },
+  {
+    "name": "Perseus / First1KGreek TEI corpora on GitHub",
+    "domains": [
+      "github.com/PerseusDL",
+      "github.com/OpenGreekAndLatin",
+      "raw.githubusercontent.com"
+    ],
+    "api_base": "git clone / raw.githubusercontent.com",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "CC BY-SA 4.0 (repo licenses; verify per repo)",
+    "robots": "GitHub raw content not tested",
+    "terms_url": "https://github.com/PerseusDL/canonical-greekLit",
+    "clause": "not read this run",
+    "rate_limit": "GitHub standard raw limits",
+    "eras": "Greek/Latin literature, history, 800 BCE-700 CE",
+    "regions": "Mediterranean, Middle East",
+    "notes": "Preferred route for classical primary text: TEI-XML, stable URN citations. Verify repo LICENSE before storing. Not fetched this run."
+  },
+  {
+    "name": "Avalon Project (Yale Law)",
+    "domains": [
+      "avalon.law.yale.edu"
+    ],
+    "api_base": "https://avalon.law.yale.edu/",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "Mostly public-domain documents; site (c) Lillian Goldman Law Library",
+    "robots": "robots.txt 404 (none)",
+    "terms_url": "https://avalon.law.yale.edu/",
+    "clause": "footer: \"(c) 2008 Lillian Goldman Law Library\"; no ToU page found",
+    "rate_limit": "not stated",
+    "eras": "legal/diplomatic documents: 4th c. BCE-21st c.; strongest 1500-2000",
+    "regions": "Europe, Americas, Middle East",
+    "notes": "Low confidence: no robots and no ToU found, so default allowed with polite pacing. Good for treaties, charters, declarations."
+  },
+  {
+    "name": "Fordham Internet History Sourcebooks",
+    "domains": [
+      "sourcebooks.fordham.edu"
+    ],
+    "api_base": "https://sourcebooks.fordham.edu/",
+    "verdict": "browser_only",
+    "needs_key": "no",
+    "license": "\"copy-permitted, although not necessarily copyright-free\"",
+    "robots": "robots.txt returned HTTP 500 (not read)",
+    "terms_url": "https://sourcebooks.fordham.edu/",
+    "clause": "\"copy-permitted, although not necessarily copyright-free\"",
+    "rate_limit": "not stated",
+    "eras": "Ancient, Medieval, Modern, plus Africa, East Asia, India, Islam, Jewish, Women, LGBT sourcebooks",
+    "regions": "global, strong Mediterranean/Europe/Islamic",
+    "notes": "Robots unreadable (500), so cannot confirm: browser read OK. Many texts are modernised translations of uncertain rights; do not store."
+  },
+  {
+    "name": "Founders Online (NARA/NHPRC)",
+    "domains": [
+      "founders.archives.gov"
+    ],
+    "api_base": "https://founders.archives.gov/ ; data on https://github.com/usnationalarchives",
+    "verdict": "browser_only",
+    "needs_key": "no",
+    "license": "Public-domain letters; editorial notes (c) University presses",
+    "robots": "robots.txt returned empty page (not determinable)",
+    "terms_url": "https://founders.archives.gov/about",
+    "clause": "not read",
+    "rate_limit": "not stated",
+    "eras": "1706-1836, US founding era",
+    "regions": "Americas (US)",
+    "notes": "Narrow era window. A JSON API exists (?q=&format=json) but not verified. Check GitHub data dumps instead."
+  },
+  {
+    "name": "Library of Congress JSON API",
+    "domains": [
+      "www.loc.gov"
+    ],
+    "api_base": "https://www.loc.gov/{collection|item|search}/?fo=json",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "Per item rights statement; many PD; metadata free",
+    "robots": "User-agent *: Disallow /search /cgi-bin etc; Crawl-Delay: 5; Baiduspider blocked",
+    "terms_url": "https://www.loc.gov/apis/json-and-yaml/",
+    "clause": "\"The API is accessible to the public with no API key or authentication required.\"",
+    "rate_limit": "Crawl-Delay 5 s; blocked when rate exceeded; paging cap 100,000",
+    "eras": "1500-present: maps, manuscripts, newspapers, photos; Americas strongest",
+    "regions": "Americas, Europe, Africa/Asia maps",
+    "notes": "/search is robots-disallowed: use /collections/{slug}/ and /item/{id}/ ?fo=json instead. Follow 5 s delay."
+  },
+  {
+    "name": "Chronicling America (via loc.gov)",
+    "domains": [
+      "chroniclingamerica.loc.gov",
+      "www.loc.gov"
+    ],
+    "api_base": "https://www.loc.gov/collections/chronicling-america/?fo=json",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "Public domain newspaper pages (pre-1964)",
+    "robots": "chroniclingamerica.loc.gov/robots.txt 302 -> loc.gov (loc.gov rules apply)",
+    "terms_url": "https://www.loc.gov/apis/json-and-yaml/",
+    "clause": "same as LoC JSON API",
+    "rate_limit": "Crawl-Delay 5 s",
+    "eras": "US newspapers 1736-1963; OCR text",
+    "regions": "Americas (US)",
+    "notes": "Legacy chroniclingamerica API redirects to loc.gov. OCR is noisy: corroborate before citing."
+  },
+  {
+    "name": "Smithsonian Open Access API",
+    "domains": [
+      "api.si.edu",
+      "www.si.edu"
+    ],
+    "api_base": "https://api.si.edu/openaccess/api/v1.0/",
+    "verdict": "api_only",
+    "needs_key": "yes (free api.data.gov key)",
+    "license": "CC0 for open-access records",
+    "robots": "api.si.edu/robots.txt 404 (none)",
+    "terms_url": "https://www.si.edu/openaccess/devtools",
+    "clause": "docs page 403 (bot wall); not read",
+    "rate_limit": "api.data.gov default 1,000/hr per key (unverified)",
+    "eras": "object records, all eras",
+    "regions": "all",
+    "notes": "Needs signup key: not usable without one. Metadata mostly. Bulk data on GitHub (smithsonian/OpenAccess) is a keyless alternative (unverified)."
+  },
+  {
+    "name": "Europeana API",
+    "domains": [
+      "api.europeana.eu",
+      "pro.europeana.eu"
+    ],
+    "api_base": "https://api.europeana.eu/record/v2/search.json",
+    "verdict": "api_only",
+    "needs_key": "yes (free key)",
+    "license": "Metadata CC0; item rights per record (RightsStatements)",
+    "robots": "api host robots redirected to /en landing; not determinable",
+    "terms_url": "https://pro.europeana.eu/page/apis",
+    "clause": "docs page 403 (bot wall); not read",
+    "rate_limit": "not verified",
+    "eras": "European cultural heritage: manuscripts, maps, newspapers 500-1900",
+    "regions": "Europe (+ colonial holdings)",
+    "notes": "Key needed. Full text in Europeana Newspapers via API (unverified)."
+  },
+  {
+    "name": "DPLA API",
+    "domains": [
+      "api.dp.la",
+      "dp.la"
+    ],
+    "api_base": "https://api.dp.la/v2/items",
+    "verdict": "api_only",
+    "needs_key": "yes (key by email)",
+    "license": "Metadata CC0",
+    "robots": "api.dp.la/robots.txt 404 (none)",
+    "terms_url": "https://pro.dp.la/developers/policies",
+    "clause": "policies page 403 (bot wall); not read",
+    "rate_limit": "not verified",
+    "eras": "US libraries and archives; 1500-present",
+    "regions": "Americas (US)",
+    "notes": "Key needed. Metadata with links; limited full text."
+  },
+  {
+    "name": "Gallica (BnF)",
+    "domains": [
+      "gallica.bnf.fr"
+    ],
+    "api_base": "https://gallica.bnf.fr/services/ ; SRU https://gallica.bnf.fr/SRU",
+    "verdict": "browser_only",
+    "needs_key": "no",
+    "license": "Reuse conditions per BnF (free for non-commercial; unverified)",
+    "robots": "robots.txt 403 (bot wall)",
+    "terms_url": "https://gallica.bnf.fr/conditions-dutilisation",
+    "clause": "not read",
+    "rate_limit": "not verified",
+    "eras": "French and francophone print/manuscripts, 800-1950",
+    "regions": "Europe, Africa/Asia colonial-era",
+    "notes": "Bot wall on first request; not retried. APIs exist but cannot be confirmed."
+  },
+  {
+    "name": "Trove (NLA)",
+    "domains": [
+      "trove.nla.gov.au",
+      "api.trove.nla.gov.au"
+    ],
+    "api_base": "https://api.trove.nla.gov.au/v3/",
+    "verdict": "browser_only",
+    "needs_key": "yes (key)",
+    "license": "Newspaper text: public domain pre-1955; metadata per contributor",
+    "robots": "robots.txt 403; pages return Anubis bot wall",
+    "terms_url": "https://trove.nla.gov.au/about/create-something/using-api",
+    "clause": "Anubis \"Access Denied\" page",
+    "rate_limit": "not verified",
+    "eras": "Australian newspapers 1803-1955",
+    "regions": "Oceania",
+    "notes": "Bot wall. Key required anyway. Alternative: Papers Past for NZ."
+  },
+  {
+    "name": "Papers Past (NZ)",
+    "domains": [
+      "paperspast.natlib.govt.nz"
+    ],
+    "api_base": "https://paperspast.natlib.govt.nz/newspapers?query=",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "Text CC BY-NC-SA 3.0 NZ (known; not re-verified)",
+    "robots": "Disallows /imageserver/newspapers/pdf/ only; PetalBot blocked",
+    "terms_url": "https://natlib.govt.nz/about-this-site/terms-of-use",
+    "clause": "terms page not fetched",
+    "rate_limit": "not stated; DigitalNZ API (key) is the sanctioned bulk route",
+    "eras": "NZ newspapers 1839-1950",
+    "regions": "Oceania (NZ, Pacific)",
+    "notes": "Robots allow article pages. Terms unread: low confidence, use polite pacing. DigitalNZ API requires key."
+  },
+  {
+    "name": "Delpher (KB Netherlands)",
+    "domains": [
+      "www.delpher.nl"
+    ],
+    "api_base": "https://www.delpher.nl/",
+    "verdict": "browser_only",
+    "needs_key": "no",
+    "license": "Public domain items; KB terms",
+    "robots": "robots.txt 403 (bot wall)",
+    "terms_url": "https://www.delpher.nl/over-delpher/gebruiksvoorwaarden",
+    "clause": "not read",
+    "rate_limit": "not verified",
+    "eras": "Dutch books, newspapers 1618-1995",
+    "regions": "Europe (NL), colonial Indonesia/Suriname",
+    "notes": "Bot wall; not retried."
+  },
+  {
+    "name": "Pleiades gazetteer",
+    "domains": [
+      "pleiades.stoa.org"
+    ],
+    "api_base": "https://pleiades.stoa.org/places/{id}/json ; dumps https://atlantides.org/downloads/pleiades/",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "CC BY 3.0 (known; not re-verified)",
+    "robots": "Crawl-delay 3; Disallow /collections/ /features/ /names/ etc.; named AI bots (GPTBot, ClaudeBot, anthropic-ai) blocked entirely",
+    "terms_url": "https://pleiades.stoa.org/",
+    "clause": "terms page 404; not read",
+    "rate_limit": "Crawl-delay 3 s",
+    "eras": "ancient places 1000 BCE-640 CE (to 500 CE)",
+    "regions": "Mediterranean, Near East, Europe",
+    "notes": "Prefer bulk dump download. Per-place JSON pages are not disallowed, but if the job UA identifies as an AI bot it is blocked. Place names and coordinates only."
+  },
+  {
+    "name": "Stanford Encyclopedia of Philosophy",
+    "domains": [
+      "plato.stanford.edu"
+    ],
+    "api_base": "https://plato.stanford.edu/entries/{slug}/",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "(c) Metaphysics Research Lab / authors; non-commercial reading",
+    "robots": "Crawl-delay 5; Disallow /search/ /archives/ /cgi-bin/ etc; ia_archiver blocked",
+    "terms_url": "https://plato.stanford.edu/info.html",
+    "clause": "\"read, download, copy, print, search, and link to entries, for non-commercial purposes\"",
+    "rate_limit": "1 request per 5 s",
+    "eras": "intellectual history, all eras; ancient/medieval strong",
+    "regions": "all, Greek/Islamic/Indian/Chinese philosophy",
+    "notes": "Info page also: \"Crawling entries for indexing is permitted\". Quote only briefly, cite. Private storage for non-commercial fact-check fits."
+  },
+  {
+    "name": "World History Encyclopedia",
+    "domains": [
+      "www.worldhistory.org"
+    ],
+    "api_base": "https://www.worldhistory.org/article/{id}/",
+    "verdict": "browser_only",
+    "needs_key": "no",
+    "license": "CC BY-NC-SA 4.0 on most articles (known; not re-verified)",
+    "robots": "Allows /article/ etc; Disallows /search/ /related/; no AI-specific rules",
+    "terms_url": "https://www.worldhistory.org/terms/",
+    "clause": "terms page 403 (bot wall); not read",
+    "rate_limit": "not stated",
+    "eras": "ancient to modern, strong pre-1000 CE",
+    "regions": "global",
+    "notes": "Robots permit it but the terms page bot-walled the fetch, so no explicit automated-access consent found. Revisit if terms can be read by a human."
+  },
+  {
+    "name": "British History Online",
+    "domains": [
+      "www.british-history.ac.uk"
+    ],
+    "api_base": "https://www.british-history.ac.uk/",
+    "verdict": "allowed",
+    "needs_key": "no (premium volumes need subscription)",
+    "license": "Content provider, not owner: rights vary per volume",
+    "robots": "Blocks /core/ /profiles/ admin pages; rest open",
+    "terms_url": "https://www.british-history.ac.uk/about",
+    "clause": "\"content provider rather than a content owner\" (paraphrased from About page)",
+    "rate_limit": "not stated",
+    "eras": "British/Irish records 1000-1900: VCH, state papers, parish and city records",
+    "regions": "Europe (British Isles)",
+    "notes": "Use free volumes only. No ToU page located: low confidence."
+  },
+  {
+    "name": "Metropolitan Museum Open Access API",
+    "domains": [
+      "collectionapi.metmuseum.org",
+      "metmuseum.github.io"
+    ],
+    "api_base": "https://collectionapi.metmuseum.org/public/collection/v1/",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "CC0 for open-access objects",
+    "robots": "www.metmuseum.org/robots.txt returned 429 (not read)",
+    "terms_url": "https://metmuseum.github.io/",
+    "clause": "\"do not require API users to register or obtain an API key\"",
+    "rate_limit": "80 requests/second max",
+    "eras": "art and artifacts 3000 BCE-present",
+    "regions": "global: Egypt, Near East, Asia, Americas, Africa, Europe",
+    "notes": "Object dates, cultures, provenance; metadata only. Strong for pre-1000 BCE artifacts. Check isPublicDomain for images."
+  },
+  {
+    "name": "Rijksmuseum data services",
+    "domains": [
+      "data.rijksmuseum.nl",
+      "www.rijksmuseum.nl"
+    ],
+    "api_base": "https://data.rijksmuseum.nl/",
+    "verdict": "api_only",
+    "needs_key": "no (new Search API/OAI-PMH; legacy API needed key)",
+    "license": "Rights per object, mostly CC0/PD (not re-verified)",
+    "robots": "Site robots: allow except search results with queries, newsletters, login",
+    "terms_url": "https://data.rijksmuseum.nl/docs/",
+    "clause": "docs page lists access routes but not terms",
+    "rate_limit": "not stated",
+    "eras": "Dutch art and history 1500-1900; Asian and colonial objects",
+    "regions": "Europe, Indonesia, Asia",
+    "notes": "Prefer data dumps/OAI-PMH over search. Terms not read."
+  },
+  {
+    "name": "Cambridge Digital Library",
+    "domains": [
+      "cudl.lib.cam.ac.uk"
+    ],
+    "api_base": "https://cudl.lib.cam.ac.uk/ (IIIF manifests)",
+    "verdict": "browser_only",
+    "needs_key": "no",
+    "license": "CC BY-NC on many images; varies",
+    "robots": "robots.txt 403 (bot wall)",
+    "terms_url": "https://cudl.lib.cam.ac.uk/",
+    "clause": "not read",
+    "rate_limit": "not verified",
+    "eras": "manuscripts: Genizah, Newton, Sanskrit, Islamic, Chinese; 500-1800 strong",
+    "regions": "Middle East, South Asia, East Asia, Europe",
+    "notes": "Bot wall; not retried."
+  },
+  {
+    "name": "Sefaria",
+    "domains": [
+      "www.sefaria.org",
+      "api.sefaria.org"
+    ],
+    "api_base": "https://www.sefaria.org/api/texts/{ref}",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "Per text: public domain, CC0, CC BY, CC BY-SA, CC BY-NC (check each)",
+    "robots": "Disallow /activity/ and login/register next URLs only",
+    "terms_url": "https://developers.sefaria.org/",
+    "clause": "terms page returned only nav; not read",
+    "rate_limit": "not stated",
+    "eras": "Hebrew Bible, Talmud, Midrash, law, 1000 BCE-1800 CE",
+    "regions": "Middle East, Europe (Jewish), religions",
+    "notes": "Per-text license in API metadata (versionTitle/license). Full text also at github.com/Sefaria/Sefaria-Export (CC licenses per text). Official API is the intended route."
+  },
+  {
+    "name": "National Diet Library Search (Japan)",
+    "domains": [
+      "ndlsearch.ndl.go.jp",
+      "dl.ndl.go.jp"
+    ],
+    "api_base": "https://ndlsearch.ndl.go.jp/api/opensearch ; /api/sru ; /api/oaipmh",
+    "verdict": "api_only",
+    "needs_key": "no for non-commercial",
+    "license": "Metadata per provider; many CC BY / PDM",
+    "robots": "Disallows /api for crawlers; account/ILL pages",
+    "terms_url": "https://ndlsearch.ndl.go.jp/en/help/api",
+    "clause": "\"Individuals and non-profits need no application if they make no profit from the metadata.\" (paraphrase)",
+    "rate_limit": "concurrent access capped; sustained load from one IP may be blocked",
+    "eras": "Japanese books/manuscripts 700-1950",
+    "regions": "East Asia (Japan)",
+    "notes": "Robots disallows /api for crawlers yet NDL publishes it for programmatic use: treat as sanctioned API, not crawl. Key not needed for non-profits. Metadata only; NDL Digital Collections have images."
+  },
+  {
+    "name": "CBETA / DILA Buddhist canon API",
+    "domains": [
+      "cbdata.dila.edu.tw",
+      "cbetaonline.dila.edu.tw",
+      "github.com/cbeta-org"
+    ],
+    "api_base": "https://cbdata.dila.edu.tw/ ; https://github.com/cbeta-org/xml-p5",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "CBETA copyright notice (CC BY-NC-SA 3.0 Taiwan, known; not re-verified)",
+    "robots": "cbetaonline robots not determinable (SPA); cbdata not fetched",
+    "terms_url": "https://cbdata.dila.edu.tw/",
+    "clause": "API page lists no automated-access rules; links to cbeta.org/copyright.php",
+    "rate_limit": "not stated",
+    "eras": "Buddhist canon, 100-1900 CE (translations from Indic)",
+    "regions": "East Asia, South Asia, Central Asia",
+    "notes": "Downloadable TEI on GitHub is the safer route. Check copyright page before storing text."
+  },
+  {
+    "name": "Encyclopaedia Iranica",
+    "domains": [
+      "iranicaonline.org"
+    ],
+    "api_base": "https://iranicaonline.org/articles/",
+    "verdict": "citation_only",
+    "needs_key": "no",
+    "license": "(c) Encyclopaedia Iranica Foundation",
+    "robots": "robots.txt 403 (bot wall)",
+    "terms_url": "https://iranicaonline.org/pages/about/",
+    "clause": "about page 403 (bot wall)",
+    "rate_limit": "not verified",
+    "eras": "Iranian world, ancient to modern",
+    "regions": "Middle East, Central Asia, South Asia",
+    "notes": "Bot wall; not retried. Cite only."
+  },
+  {
+    "name": "Digital Library of India",
+    "domains": [
+      "dli.ernet.in",
+      "archive.org (dli mirrors)"
+    ],
+    "api_base": "via archive.org collections",
+    "verdict": "citation_only",
+    "needs_key": "no",
+    "license": "Mixed; many out-of-copyright scans",
+    "robots": "not fetched; original site largely offline",
+    "terms_url": "n/a",
+    "clause": "not read",
+    "rate_limit": "n/a",
+    "eras": "South Asian books 1800-1950s",
+    "regions": "South Asia",
+    "notes": "Not tested. Mirrors on Internet Archive follow IA API entry. Cite only."
+  },
+  {
+    "name": "Project Gutenberg",
+    "domains": [
+      "www.gutenberg.org"
+    ],
+    "api_base": "https://www.gutenberg.org/ ; feeds/catalog; mirror rsync",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "Public domain in US; trademark license for PG name",
+    "robots": "robots.txt 503 Retry-After 21600 (unavailable; not read)",
+    "terms_url": "https://www.gutenberg.org/policy/robot_access.html",
+    "clause": "not fetched; PG publicly asks bulk users to use mirrors/rsync, not crawling (unverified)",
+    "rate_limit": "not stated",
+    "eras": "printed texts 700 BCE-1920s",
+    "regions": "all, English-heavy",
+    "notes": "Use mirror/Gutendex-style catalog (unverified), not crawling. Status 503 this run: retry later."
+  },
+  {
+    "name": "Open Library",
+    "domains": [
+      "openlibrary.org"
+    ],
+    "api_base": "https://openlibrary.org/api/books ; /search.json",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "Metadata CC0",
+    "robots": "Disallows /api, /search, borrow; delay 10 s for AI-named bots (anthropic-ai, ClaudeBot)",
+    "terms_url": "https://openlibrary.org/developers/api",
+    "clause": "not read",
+    "rate_limit": "10 s crawl-delay applies to AI crawlers; bulk dumps preferred",
+    "eras": "book metadata, all eras",
+    "regions": "all",
+    "notes": "Robots disallow /api for crawlers; use monthly dumps (openlibrary.org/developers/dumps) instead. Metadata only."
+  },
+  {
+    "name": "Art Institute of Chicago API",
+    "domains": [
+      "api.artic.edu"
+    ],
+    "api_base": "https://api.artic.edu/api/v1/artworks",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "CC0 for data",
+    "robots": "docs page 403 (bot wall)",
+    "terms_url": "https://api.artic.edu/docs/",
+    "clause": "docs 403; not read",
+    "rate_limit": "not verified",
+    "eras": "art 3000 BCE-present",
+    "regions": "global",
+    "notes": "Docs bot-walled in this fetch; known public API but unverified: not usable until read by a human."
+  },
+  {
+    "name": "Cleveland Museum of Art Open Access API",
+    "domains": [
+      "openaccess-api.clevelandart.org"
+    ],
+    "api_base": "https://openaccess-api.clevelandart.org/api/artworks/",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "CC0",
+    "robots": "not fetched",
+    "terms_url": "https://openaccess-api.clevelandart.org/",
+    "clause": "\"has waived all copyright and related or neighboring rights\"",
+    "rate_limit": "not stated",
+    "eras": "art 3000 BCE-present",
+    "regions": "global: Egypt, Asia, Africa, Americas",
+    "notes": "No key, no stated rate limit; polite pacing."
+  },
+  {
+    "name": "Getty Vocabularies (AAT, TGN, ULAN)",
+    "domains": [
+      "vocab.getty.edu",
+      "www.getty.edu"
+    ],
+    "api_base": "http://vocab.getty.edu/sparql",
+    "verdict": "api_only",
+    "needs_key": "no",
+    "license": "ODC-By 1.0 (known; not re-verified)",
+    "robots": "not fetched",
+    "terms_url": "http://www.getty.edu/research-conservation/tools-databases/vocabularies/data-services/",
+    "clause": "page truncated; not read",
+    "rate_limit": "not stated",
+    "eras": "place names, artists, art terms",
+    "regions": "global",
+    "notes": "Authority data only, no narrative. Unverified."
+  },
+  {
+    "name": "Papyri.info / Trismegistos-style papyrology",
+    "domains": [
+      "papyri.info"
+    ],
+    "api_base": "https://papyri.info/ ; data https://github.com/papyri/idp.data",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "CC BY 3.0 (known; not re-verified)",
+    "robots": "Disallow /editor/ only",
+    "terms_url": "https://papyri.info/",
+    "clause": "not read",
+    "rate_limit": "not stated",
+    "eras": "papyri 300 BCE-800 CE",
+    "regions": "Egypt, Mediterranean",
+    "notes": "Documentary papyri with dates. Prefer GitHub data repo. Narrow but strong for Egypt in the empty 1000 BCE-500 CE window."
+  },
+  {
+    "name": "ORACC (Cuneiform corpora)",
+    "domains": [
+      "oracc.org"
+    ],
+    "api_base": "https://oracc.org/ (JSON per project)",
+    "verdict": "browser_only",
+    "needs_key": "no",
+    "license": "Mostly CC BY-SA 3.0 (known; not re-verified)",
+    "robots": "connection refused when fetching robots.txt",
+    "terms_url": "https://oracc.org/doc/",
+    "clause": "not read",
+    "rate_limit": "n/a",
+    "eras": "cuneiform 3400-100 BCE",
+    "regions": "Mesopotamia, Near East",
+    "notes": "Host unreachable during run; not verified. Key for before-1000 BCE if accessible."
+  },
+  {
+    "name": "Wikidata",
+    "domains": [
+      "www.wikidata.org",
+      "query.wikidata.org"
+    ],
+    "api_base": "https://www.wikidata.org/wiki/Special:EntityData/{Q}.json",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "CC0",
+    "robots": "Special pages blocked except Special:EntityData with file extensions; /w/ and /api/ disallowed",
+    "terms_url": "https://www.wikidata.org/wiki/Wikidata:Licensing",
+    "clause": "\"Special:EntityData URLs with file extensions\" allowed (robots)",
+    "rate_limit": "Wikimedia UA policy; serial requests",
+    "eras": "structured data on people, dates, places, all eras",
+    "regions": "all",
+    "notes": "Non-Wikipedia, CC0. Use EntityData JSON: robots-permitted. Dates need cross-checking."
+  },
+  {
+    "name": "Sacred-Texts",
+    "domains": [
+      "sacred-texts.com"
+    ],
+    "api_base": "https://sacred-texts.com/",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "Mostly public-domain older translations; some (c)",
+    "robots": "Allows everything except /signup /login; two bots blocked",
+    "terms_url": "https://sacred-texts.com/",
+    "clause": "not read",
+    "rate_limit": "not stated",
+    "eras": "religious and mythic texts, 2000 BCE-1920",
+    "regions": "religions, global",
+    "notes": "Old translations (Victorian); quality caveat. Terms not read."
+  },
+  {
+    "name": "CCEL (Christian Classics Ethereal Library)",
+    "domains": [
+      "www.ccel.org"
+    ],
+    "api_base": "https://www.ccel.org/",
+    "verdict": "allowed",
+    "needs_key": "no",
+    "license": "Public domain / permissive per work",
+    "robots": "Crawl-delay 10; Meta bot blocked",
+    "terms_url": "https://www.ccel.org/",
+    "clause": "not read",
+    "rate_limit": "1 request per 10 s",
+    "eras": "Church fathers, Reformation 100-1900",
+    "regions": "Europe, Middle East, religions",
+    "notes": "Terms not read; pace at 10 s."
+  },
+  {
+    "name": "Zenodo",
+    "domains": [
+      "zenodo.org"
+    ],
+    "api_base": "https://zenodo.org/api/records",
+    "verdict": "api_only",
+    "needs_key": "no for open records",
+    "license": "Per record",
+    "robots": "Disallows /search, /api except /api/records/*/files; Crawl-delay 10",
+    "terms_url": "https://about.zenodo.org/terms/",
+    "clause": "not read",
+    "rate_limit": "unauthenticated 60 req/min (known; unverified)",
+    "eras": "datasets and papers; occasional historical corpora",
+    "regions": "all",
+    "notes": "Robots blocks most /api paths: unclear if a job may use REST. Treat as ask-first."
+  }
+]

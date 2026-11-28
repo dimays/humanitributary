@@ -1,6 +1,6 @@
 # 0013 — Source policy: what jobs fetch, what they never do, and why
 
-**Status:** accepted (November 2026; terms checked 2026-11-26); amended by [0020](0020-heroku-hosting.md); amended by [0036](0036-evidence-packs.md) (full text of `allowed` pages kept privately for a limited time, payload passages, and the sec.gov row below)
+**Status:** accepted (November 2026; terms checked 2026-11-26); amended by [0020](0020-heroku-hosting.md); amended by [0036](0036-evidence-packs.md) (full text of `allowed` pages kept privately for a limited time, payload passages, and the sec.gov row below); amended by [0037](0037-source-ratings-2026-11-28.md) (`api_only` and `citation_only`, and 104 sources rated on November 28)
 
 ## Context
 

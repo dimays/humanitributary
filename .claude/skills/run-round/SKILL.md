@@ -118,7 +118,7 @@ Start the role agents as subagents, in parallel, one per agent in the plan. Brie
 - the cloud constraint (no `browser_only` pages; see below);
 - **the evidence pack first** (each task skill's "The evidence pack: read it first"): passages and `GET
   documents/<doc_id>`, excerpts copied from the stored text (`complete` refuses one that isn't on a stored page),
-  a browser only for `unreadable` URLs whose reason is `browser_only`;
+  a browser only for `unreadable` URLs whose reason is `browser_only`, `citation_only` or `ai_blocked`;
 - to finish by releasing (`POST tasks/<id>/release`) any task it holds and can't finish, and to report:
   task ids claimed, completed, failed and released per kind; every slug it drafted (`result.entry`,
   `result.entries`); and the sources that refused it.
@@ -242,7 +242,7 @@ AP, Al Jazeera, un.org, nobelprize.org …, the payload's `fetch_policy`) can't 
   museums, peer-reviewed papers, reputable outlets that allow automated reads.
 - **Hold a draft whose only support is a `browser_only` source** (a reviewer can't check it either). Name it in
   the summary so the owner can review it by hand in a browser (procedure 01). A task's `unreadable` list names
-  those sources (reason `browser_only`); its `evidence_pack` holds the ones a cloud round can read and check.
+  those sources (reasons `browser_only`, `citation_only`, `ai_blocked`); its `evidence_pack` holds the ones a cloud round can read and check.
 - **Use the evidence packs.** In a cloud round they are most of what can be read: the stored pages, their
   passages, `GET documents/<doc_id>` and `evidence/check-excerpt`.
 

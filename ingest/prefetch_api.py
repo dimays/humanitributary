@@ -11,7 +11,7 @@ the record, not the page, so `complete` doesn't refuse an excerpt that isn't in 
 |---|---|---|---|
 | api.openalex.org | openalex.org works; DOIs (doi.org) first | title, venue, year, authors, the abstract, the open-access link | "ALLOW: CC0 metadata, keyless …; descriptive User-Agent" |
 | api.crossref.org | DOIs OpenAlex doesn't have | title, venue, date, publisher, type (no abstract) | "ALLOW: public pool, 1 request a second …; titles as snippets (not abstracts)" |
-| www.loc.gov `?fo=json` | loc.gov item and resource pages | title, date, contributors, summary, description, notes, subjects | "ALLOW: loc.gov/legal, no more than 10 requests a minute …; uses … ?fo=json" |
+| www.loc.gov `?fo=json` | loc.gov item, resource and collection pages | title, date, contributors, summary, description, notes, subjects | "ALLOW: loc.gov/legal, no more than 10 requests a minute …; uses … ?fo=json" |
 | api.si.edu (key) | Smithsonian records (the hit's EDAN id) | title, the record's free-text fields (notes, dates, names, physical description) | "ALLOW: Open Access API (api.data.gov key …), CC0 metadata; store metadata only" |
 | api.europeana.eu (key) | Europeana items | title, description, date, creator, provider | "ALLOW: … key in the X-Api-Key header …; metadata CC0, media per edm:rights" |
 
@@ -33,7 +33,7 @@ CLAUSES = {
 }
 DOI_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)(10\.\d{4,9}/\S+)$", re.I)
 OPENALEX_RE = re.compile(r"^https?://(?:api\.)?openalex\.org/(?:works/)?(W\d+)", re.I)
-LOC_RE = re.compile(r"^https?://(?:www\.)?loc\.gov/(item|resource)/[^?#]+", re.I)
+LOC_RE = re.compile(r"^https?://(?:www\.)?loc\.gov/(item|resource|collections)/[^?#]+", re.I)
 EUROPEANA_RE = re.compile(r"^https?://(?:www\.)?europeana\.eu/(?:[a-z]{2}/)?item(/\d+/[^?#/]+)", re.I)
 
 
@@ -67,8 +67,8 @@ def route(url: str, hit: dict | None = None) -> Route | None | str:
     if doi:
         q = quote(doi, safe="/:.()-_;")
         return Route("openalex", f"https://api.openalex.org/works/doi:{q}", fallback=Route("crossref", f"https://api.crossref.org/works/{q}"))
-    if LOC_RE.match(url):
-        return Route("loc", LOC_RE.match(url).group(0).replace("http://", "https://") + "?fo=json")
+    if LOC_RE.match(url):  # loc.gov's item URLs end in a slash (canonical URLs here drop it)
+        return Route("loc", LOC_RE.match(url).group(0).replace("http://", "https://").rstrip("/") + "/?fo=json")
     host = (urlsplit(url).hostname or "").lower()
     if adapter == "smithsonian" or host.endswith("si.edu") or host == "n2t.net":
         if not ids.get("si"):
@@ -133,6 +133,10 @@ def render(name: str, data: dict) -> tuple[str, str]:
         return title, _lines(title, rows, [])
     if name == "loc":
         it = data.get("item") or {}
+        if not it:  # a collection page's JSON has no "item"
+            c = data.get("collection") if isinstance(data.get("collection"), dict) else {}
+            title = _s(c.get("title") or data.get("title"))
+            return title, _lines(title, [], [_s(c.get("description") or data.get("description")), _s(data.get("about") or c.get("about"))])
         title = _s(it.get("title"))
         rows = [("Date", _s(it.get("date"))), ("Contributors", _s(it.get("contributor_names"))), ("Subjects", _s(it.get("subject_headings")))]
         return title, _lines(title, rows, [_s(it.get("summary")), _s(it.get("description")), _s(it.get("notes"))])

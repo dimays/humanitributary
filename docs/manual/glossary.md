@@ -37,7 +37,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Evidence | One citation for one claim, with a stance and an excerpt of 25 words or fewer. Only evidence that supports its claim goes into a release. |
 | Feed | A source that a job reads on a schedule, with an interval and an on or off value. |
 | Feed job | A job that runs one time for each `Feed` row that names it. |
-| `fetch_policy` | How jobs can read a publisher: `allowed`, `browser_only` or `forbidden`. |
+| `fetch_policy` | How jobs can read a publisher: `allowed`, `api_only`, `browser_only`, `citation_only` or `forbidden`. With `api_only`, jobs use only its API. With `citation_only`, agents cite it and read it in a browser. |
 | Fetcher | `ingest.http.Fetcher`, the one HTTP client of all jobs. It refuses a request that the source policy does not permit. |
 | Gap | A window of a content wave in which a branch has no published event, or far fewer events than its peers. |
 | Gate | `make check-pr`: the checks and the tests that a pull request must pass. CI runs the same command. |

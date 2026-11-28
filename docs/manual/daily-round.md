@@ -100,7 +100,7 @@ you can examine it in a browser with procedure [01](procedures/01-run-a-round-by
 The job `prefetch_sources` reads the `allowed` pages of each task before the round (ADR 0036). The agents and the
 reviewers read the stored text of these pages through the agent API, and copy their excerpts from it. The API
 refuses an excerpt that is not on a stored page. The list `unreadable` in each task tells the agents which pages
-need a browser.
+need a browser: the reasons `browser_only`, `citation_only` and `ai_blocked`.
 
 ## What the owner controls
 

@@ -647,21 +647,25 @@ disallows it) and no crawling ([sources and terms](sources-and-terms.md#the-verd
    job (the Fetcher's own default for other jobs is unchanged). No request is made.
 2. **An official API** (`ingest/prefetch_api.py` `route`): a catalog page that has one is read through it, and
    never as a page (below), even when its own domain is unrated (n2t.net). Reused like a page.
-3. **Reuse**: a page stored less than `REFRESH_DAYS` (7) ago, with its text in the store, is used as is; a page
+3. **AI-crawler blocks** (`Fetcher.ai_blocked`, ADR 0037): a site whose robots.txt names an AI crawler
+   (`ingest/policy.py` `AI_AGENTS`: ClaudeBot, anthropic-ai, GPTBot …) and disallows it the URL is `ai_blocked`,
+   whatever our own token is allowed; a stored copy of it is purged. Checked before the page and before an API.
+   An `api_only` publisher's pages are read only through a route whose request is under its `api_base`.
+4. **Reuse**: a page stored less than `REFRESH_DAYS` (7) ago, with its text in the store, is used as is; a page
    found unreadable less than `RETRY_DAYS` (3) ago keeps its reason.
-4. **Host health** (`host_refusal`): a host with an unreadable page whose reason is `blocked` or `robots` in the last
+5. **Host health** (`host_refusal`): a host with an unreadable page whose reason is `blocked` or `robots` in the last
    `HOST_COOLDOWN_DAYS` (14) isn't asked (not the Wikimedia API hosts). The page rows are the host's record;
    `health()` sums them by host and outcome for the console and the coverage report.
-5. **Caps**: `per_run` (60) requests a run, `per_host` (8) a host (three times that for `API_HOSTS`); past a cap the
+6. **Caps**: `per_run` (60) requests a run, `per_host` (8) a host (three times that for `API_HOSTS`); past a cap the
    page is `deferred`, its task's `evidence_urls` ends in `+deferred`, and the next run packs it again.
-6. **Fetch** through the Fetcher (robots.txt, bot walls, delays, backoff, the honest User-Agent), with the stored
+7. **Fetch** through the Fetcher (robots.txt, bot walls, delays, backoff, the honest User-Agent), with the stored
    page's `etag` / `last_modified` for a conditional GET (a 304 moves `fetched_at` and `retain_until` on). English
    Wikipedia goes through the MediaWiki API (`prop=extracts|info`, plain text, `etag` `rev:<lastrevid>`). Other
    pages: a page that reserves text and data mining (the W3C TDMRep `tdm-reservation: 1` header or meta tag,
    `TDM_META_RE`) is `tdm_reserved` and never stored; HTML through `extract_html`, `text/plain` as is; anything
    else (a PDF) is `unsupported`, more than
    `MAX_BYTES` (5 MB) `too_large`, fewer than `MIN_TEXT_WORDS` (40) of main text `empty`.
-7. **Outcomes**: a 401, 403, 429, 451 or a bot wall is `blocked`; another 4xx or 5xx `http_<status>`; a refusal by
+8. **Outcomes**: a 401, 403, 429, 451 or a bot wall is `blocked`; another 4xx or 5xx `http_<status>`; a refusal by
    robots.txt `robots`; a network error `error`. A stored page whose refresh fails keeps its stored copy.
 
 **Official APIs** (`ingest/prefetch_api.py`). The lookup adapters' hits are catalog pages that refuse scripts (the
@@ -675,7 +679,7 @@ answer into the stored text:
 |---|---|---|---|
 | `openalex` | `openalex.org/W…`, an OpenAlex hit; a DOI first | `api.openalex.org/works/W…` or `/works/doi:<doi>` | title, venue and year, authors, DOI, open-access link, the abstract rebuilt from `abstract_inverted_index` (`abstract`) |
 | `crossref` | a DOI OpenAlex answers 404 for | `api.crossref.org/works/<doi>` | title, venue, date, publisher, type, DOI; never the abstract (the Crossref verdict) |
-| `loc` | `loc.gov/item/…`, `/resource/…` | the same URL `?fo=json` | title, date, contributors, subjects, summary, description, notes |
+| `loc` | `loc.gov/item/…`, `/resource/…`, `/collections/…` | the same URL `?fo=json` | title, date, contributors, subjects, summary, description, notes |
 | `smithsonian` | a Smithsonian hit, any `*.si.edu` or `n2t.net` URL with an EDAN id | `api.si.edu/openaccess/api/v1.0/content/<id>`, `X-Api-Key` | title, the `freetext` dates, names, place, publisher, physical description and notes |
 | `europeana` | `europeana.eu/item/…`, a Europeana hit | `api.europeana.eu/record/v2/<id>.json`, `X-Api-Key` | title, description, date, creator, provider |
 
@@ -736,7 +740,7 @@ groups with no such URL, the unreadable reasons and hosts, the hosts the policy 
 `unrated()` alone: each unrated domain the queued and claimed tasks point at, with the tasks and URLs naming it,
 whether it has a row, and an example URL, most tasks first.
 
-**Repacking.** `evidence_urls` hashes the candidate keys with `PACK_VERSION` (2): a change to what a pack holds bumps
+**Repacking.** `evidence_urls` hashes the candidate keys with `PACK_VERSION` (3): a change to what a pack holds bumps
 it, and every queued task is packed again on the next runs.
 
 ## Link health

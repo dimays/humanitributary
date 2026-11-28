@@ -99,7 +99,10 @@ def policy_reason(fetcher, url: str) -> tuple[str, str]:
     if urlsplit(url).scheme not in ("http", "https"):
         return "unsupported", "not an http(s) URL"
     pol = fetcher._publisher_policy(domain_of(url))
-    if pol and pol != "allowed":
+    if pol == "api_only":
+        if why := fetcher.api_refusal(url):
+            return "api_only", why
+    elif pol and pol != "allowed":
         return pol, f"publisher {domain_of(url)} is {pol}"
     if why := policy.never_fetch_reason(url):
         return "never_fetch", why[:300]
@@ -437,6 +440,15 @@ def _fetch_page(fetcher, url: str, page, now):
                 last_modified=r.headers.get("last-modified", ""), final_url=page_key(r.final_url)), None
 
 
+def _ai_blocked(fetcher, url: str) -> str:
+    """robots.txt names an AI crawler and disallows it the URL (ADR 0037); a robots.txt we can't read is left to
+    the Fetcher's own check, which refuses then."""
+    try:
+        return fetcher.ai_blocked(url)
+    except (FetchError, Refused):
+        return ""
+
+
 def _caps(host: str, budget: list, per_host: Counter, host_cap: int, counts: Counter) -> bool:
     if budget[0] <= 0 or per_host[host] >= host_cap * (3 if host in policy.API_HOSTS else 1):
         counts["deferred"] += 1
@@ -459,9 +471,13 @@ def read(fetcher, url: str, now, counts: Counter, budget: list, per_host: Counte
     fetch_url = fetch_url or url
     page = PrefetchedPage.objects.filter(url=url).select_related("publisher").first()
     reason, detail = policy_reason(fetcher, fetch_url)
-    if reason and reason != "unrated":
+    if reason and reason not in ("unrated", "api_only"):  # those two may still be read through an official API
         return None, reason, detail
     if page and page.status == "stored" and page.checked_at >= now - timedelta(days=REFRESH_DAYS) and read_text(page) is not None:
+        if not page.via and (why := _ai_blocked(fetcher, fetch_url)):  # the site has since shut AI crawlers out
+            page.retain_until = now
+            page.save(update_fields=["retain_until"])
+            return None, "ai_blocked", why
         counts["pages_reused"] += 1
         return page, "", ""
     route = prefetch_api.route(url if is_wikipedia(url) else fetch_url, hit)
@@ -469,13 +485,20 @@ def read(fetcher, url: str, now, counts: Counter, budget: list, per_host: Counte
     host = (urlsplit(fetch_url).hostname or "").lower()
     if isinstance(route, prefetch_api.Route) and not (recent and page.reason.startswith("api_")):
         return read_api(fetcher, url, route, page, now, counts, budget, per_host, host_cap)
-    if reason:  # unrated, with no API
+    if reason:  # unrated or api_only, with no API route
         return None, reason, detail if route != "api_key_missing" else f"{detail}; its API needs a key that isn't set"
     if recent:
         counts["unreadable_reused"] += 1
         return None, page.reason, page.detail
     if host not in policy.API_HOSTS and (why := host_refusal(host, now)):
         return None, why, f"{host} refused automated readers within {HOST_COOLDOWN_DAYS} days"
+    if why := _ai_blocked(fetcher, fetch_url):
+        counts["refused_ai_blocked"] += 1
+        if page is not None and page.status == "stored":  # the site now names AI crawlers: its copy goes at once
+            page.retain_until = now
+            page.save(update_fields=["retain_until"])
+        _unreadable(page, url, "ai_blocked", why, now, fetch_url=fetch_url)
+        return None, "ai_blocked", why
     if not _caps(host, budget, per_host, host_cap, counts):
         return None, "deferred", "this run's request cap was reached: tried again next run"
     try:
@@ -519,6 +542,8 @@ def read_api(fetcher, url: str, route, page, now, counts: Counter, budget: list,
 
     while route is not None:
         why, detail = policy_reason(fetcher, route.api_url)
+        if not why and (blocked := _ai_blocked(fetcher, route.api_url)):
+            why, detail = "ai_blocked", blocked
         if why:
             return None, f"api_{why}", detail
         host = (urlsplit(route.api_url).hostname or "").lower()
@@ -527,6 +552,9 @@ def read_api(fetcher, url: str, route, page, now, counts: Counter, budget: list,
         try:
             r = fetcher.get(route.api_url, headers=route.headers)
         except Refused as e:
+            if "earlier in this run" in str(e):  # another page of the host showed a bot wall this run: not the API's answer
+                counts["deferred"] += 1
+                return None, "deferred", "the host showed a bot wall earlier in this run: tried again next run"
             reason = "api_robots" if "robots.txt" in str(e) else "api_blocked"
             p = _unreadable(page, url, reason, str(e), now, fetch_url=route.api_url)
             return (p, "", "") if p.status == "stored" else (None, reason, str(e)[:300])
@@ -588,7 +616,7 @@ def _order(e: dict) -> tuple:
 
 
 # Bumped when what a pack holds changes (the rules, the APIs), so every queued task is packed again.
-PACK_VERSION = 2
+PACK_VERSION = 5
 
 
 def urls_sha(urls: list[str]) -> str:
@@ -658,7 +686,8 @@ def purge(now, counts: Counter | None = None, *, limit: int = 500) -> int:
     n = 0
     # Past retention, and pages whose publisher is no longer rated and allowed (a policy change, or stored before
     # the rule): neither keeps its text.
-    unfit = Q(publisher__isnull=True) | Q(publisher__tier__isnull=True) | ~Q(publisher__fetch_policy="allowed")
+    # (an api_only publisher's records came through its API base: they stay)
+    unfit = Q(publisher__isnull=True) | Q(publisher__tier__isnull=True) | ~Q(publisher__fetch_policy__in=["allowed", "api_only"])
     expired = list(PrefetchedPage.objects.filter(status="stored", retain_until__lt=now).order_by("retain_until", "id")[:limit])
     gone = list(PrefetchedPage.objects.filter(unfit, status="stored").exclude(pk__in=[p.pk for p in expired]).order_by("id")[: max(0, limit - len(expired))])
     counts["pages_unrated_purged"] += len(gone)

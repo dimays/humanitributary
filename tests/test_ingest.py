@@ -580,7 +580,9 @@ class LinkHealthTests(SeededTestCase):
         super().setUp()
         b = branch("england", "England", 927, region_slug="europe")
         with revising("job:test"):
-            ag = Publisher.objects.create(domain="archives.gov", name="US National Archives", tier=1)
+            # The 2026-11-28 ratings (seeded) make archives.gov api_only with a key it lacks; these tests need a page publisher.
+            ag, _ = Publisher.objects.update_or_create(domain="archives.gov", defaults={"name": "US National Archives", "tier": 1, "fetch_policy": "allowed",
+                                                                                         "api_base": "", "api_needs_key": False})
             wp = Publisher.objects.get(domain="wikipedia.org")
             self.claim = Claim.objects.create(entry=b, field="as_written", value={"text": "x"})
             urls = [("https://en.wikipedia.org/wiki/Battle_of_Hastings", wp), ("https://www.archives.gov/founding-docs/declaration", ag),
@@ -763,7 +765,9 @@ class SeedAndDigestTests(TestCase):
         self.assertGreater(first["feeds_created"], 10)
         self.assertFalse(Feed.objects.filter(url__contains="guardianapis").exists())
         self.assertFalse(Feed.objects.filter(url__contains="bbci").exists())
-        self.assertEqual(Publisher.objects.get(domain="theguardian.com").fetch_policy, "browser_only")
+        # browser_only by the 2026-11-26 verdict, then citation_only by the 2026-11-28 ratings (ADR 0037)
+        self.assertEqual(Publisher.objects.get(domain="theguardian.com").fetch_policy, "citation_only")
+        self.assertIn("Rated 2026-11-28", Publisher.objects.get(domain="theguardian.com").access_notes)
         self.assertIn("6(g)", Publisher.objects.get(domain="theguardian.com").access_notes)
         with revising("human:owner"):
             services.apply_changes(Publisher.objects.get(domain="who.int"), {"access_notes": "owner's note"})

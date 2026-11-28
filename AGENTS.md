@@ -40,7 +40,7 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 | `ops/` | The local schedule: `run-jobs.sh` (start Docker/Postgres and MinIO or skip, then `run_jobs`), `launchd/run-jobs.plist` (template), `schedule.sh` (install / uninstall / status). |
 | `docs/manual/` | The Maintainer's Manual (ADR 0030): the system overview, the architecture diagrams (context, components, data flow, deployment, the sequences of an agent round, a publish and a rollback), every scheduled job, the main tables, the numbered procedures (`procedures/`), troubleshooting and a glossary. Written in ASD-STE100 Simplified Technical English; `make check-manual` (`scripts/check_ste.py`) holds it to the rules its README states. |
 | `docs/guide/` | The technical guide: a chapter per part of the platform, each stamped against the code it `covers` (`stamps.json`); `README.md` lists the chapters and says how to write one. `docs/architecture.md` points into it. |
-| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015, object storage: 0016, the agent API: 0017, the single-source marker: 0018, processes and release gates: 0019, Heroku hosting: 0020, the cutover: 0021, ingestion tuning: 0022, edit files: 0023, the app serves the page: 0024, edit files' add ops and junk actor claims: 0025, content waves: 0026, caps after round 3: 0027, the operations console: 0028, a release's identity includes the page: 0029, the Maintainer's Manual: 0030, a simpler console and run logs: 0031, run cards: 0032, the New events page: 0033, brand assets: 0034, automated daily rounds and auto-publish: 0035, evidence packs: 0036); the data model with an ER sketch; how claims are checked; the branch rules. |
+| `docs/adr/`, `docs/data-model.md`, `docs/fact-checking.md`, `docs/branch-rules.md` | Decisions, with their index and template in `docs/adr/README.md` (ingestion: 0012, source policy: 0013, the guide: 0014, the gate: 0015, object storage: 0016, the agent API: 0017, the single-source marker: 0018, processes and release gates: 0019, Heroku hosting: 0020, the cutover: 0021, ingestion tuning: 0022, edit files: 0023, the app serves the page: 0024, edit files' add ops and junk actor claims: 0025, content waves: 0026, caps after round 3: 0027, the operations console: 0028, a release's identity includes the page: 0029, the Maintainer's Manual: 0030, a simpler console and run logs: 0031, run cards: 0032, the New events page: 0033, brand assets: 0034, automated daily rounds and auto-publish: 0035, evidence packs: 0036, the November 28 source ratings: 0037); the data model with an ER sketch; how claims are checked; the branch rules. |
 | `guide/` | The guide's tools behind `manage.py guide check / stamp / status / covers / index`: `chapters.py`, `coverage.py` (what a chapter covers, its hash), `checks.py`. No models. |
 | `scripts/` | `make_env.py` (writes `.env`, or adds the keys it lacks, printing no values); `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_ste.py` (`make check-manual`: the manual's STE rules); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
 | `.claude/settings.json`, `.claude/hooks/` | Hooks only: before `git commit`, the guide must be fresh; before `gh pr create`, the gate must have passed on the committed code; at the end of a turn, a reminder. |
@@ -103,8 +103,12 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 6. **Never cite or fetch openstax.org.** Its terms forbid use of its
    textbooks by AI systems. The database refuses such a citation; its
    publisher is `forbidden`. Respect every publisher's `fetch_policy`: a
-   `browser_only` site (Britannica, un.org, nobelprize.org …) is read in a
-   browser by an agent, never by a job.
+   `browser_only` or `citation_only` site (Britannica, un.org,
+   nobelprize.org, most news …) is read in a browser by an agent, never by
+   a job; an `api_only` one only through its `api_base`, with a key where
+   one is needed; a site whose robots.txt shuts out AI crawlers by name is
+   never fetched by the evidence-pack job (ADR 0037). The 2026-11-28
+   ratings (`ingest/ratings.py`) are applied once by `seed_sources`.
 7. **Review state belongs to review.** The loader (`import_legacy`) never
    overwrites an entry's status, a publisher's rating or notes, a citation's
    check results, or evidence stance and excerpts. Keep it that way in any new
