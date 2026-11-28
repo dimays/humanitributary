@@ -519,8 +519,35 @@ skipped left-over version and each gate (an export that isn't deterministic,
 
 It refuses to build or dump while there are errors (an unknown id, a missing
 citation, a non-https URL, a bad region, an image that isn't public domain or
-CC0 …); warnings (a long text or title, an event outside its branch's dates)
-don't stop it.
+CC0 …); warnings (a long text or title, an event outside its branch's dates,
+entries without a usable location) don't stop it.
+
+### The panel's globe
+
+Every entry's panel opens with a globe for its date (the surfaces are listed at
+the top of the `Globe` module in `site/template.html`). An entry with no usable
+location still gets one: the same date's globe, spinning with no marker, and
+the caption "Location data not found" (in the figcaption and in the canvas's
+`aria-label`). "No usable location" means no `geo`, or a `place`/`region` whose
+`lat`/`lon` are missing, not numbers or out of range; a scope the page doesn't
+know draws as a place, and a missing radius draws as a pin. A branch's markers
+(its start, end, and the points between events) use the branch's `geo`.
+
+If planning or drawing the globe throws, the panel shows the plain present-day
+globe instead, captioned "Location could not be shown", and logs a
+`console.warn`; if that throws too, the figure is removed. Either way the rest
+of the panel renders, since `renderPanel` also guards both calls.
+
+The build counts these entries: one warning with the number of events that have
+no `geo`, and one per entry whose `geo` the page can't use (the export's
+checks, `timeline/edits.py` and the `Location` table, should make that one
+never appear). Why an entry can lack one, and how it gets one, is in Content
+model, "Places and pictures".
+
+`site/test-globe.mjs` runs the `Globe` module from the template in a VM with a
+stub DOM: located, unlocated and malformed entries, branch markers, the scale
+diagram, and planning and drawing that throw. `tests/test_site.py` runs it, so
+`make check-pr` does, and checks the build's warnings.
 
 The build puts the canonical content and the `built` date, as compact JSON,
 into `site/template.html` in place of `/*__DATA__*/null`, and the contents of

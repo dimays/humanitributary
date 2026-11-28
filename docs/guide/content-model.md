@@ -149,6 +149,13 @@ latitude and longitude ranges, `radius_km` in (0, 6000], and `scale` only for
 `cosmic`. `src` is a page whose own coordinates are the place meant.
 `radius_km` is the snapshot's `r`.
 
+A `Location` is optional. `add_event` and `add_branch` in an edit file carry
+one only when the op has a `geo`, and no edit-file op adds one to an entry that
+already exists (`edit` changes text, dates, branch, links and importance). The
+page still gives an entry without one a globe for its date, with no marker and
+the caption "Location data not found", and the build counts those entries
+(Publishing, "The panel's globe").
+
 `PaleoPin` records where a present-day coordinate lay at one of the PaleoDEM
 slices (`slice_ma`, millions of years ago), from the PALEOMAP plate model via
 the GPlates Web Service. The import reads them from

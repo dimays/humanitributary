@@ -121,6 +121,8 @@ TL.geo("solar-system", { scope: "cosmic", scale: "solar-system" });   // or "gal
 - `src` is a Wikipedia page whose own coordinates are the place meant (the place, or a battle or site page that has coordinates). `node verify-geo.mjs --apply` re-reads those
   coordinates from the Wikipedia API and corrects `lat`/`lon`; run it after adding locations.
 - Choose the place the text names; with none, use the branch's country or region. Don't guess beyond the text.
+- Give every event a location. One without (or with `lat`/`lon` the page can't use) still gets a globe for its date, but
+  with no marker and the caption "Location data not found", and the build warns.
 
 ## Image
 

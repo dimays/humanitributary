@@ -193,6 +193,18 @@ for (const e of events) {
   }
   checkCites(e);
 }
+// Locations the panel's globe cannot use. Not errors: the page shows the entry's globe with no marker and the caption
+// "Location data not found" (template.html, Globe.plan). The same rules as the template's usable().
+{
+  const usable = (g) => g && (["global", "cosmic"].includes(g.scope) ||
+    (Number.isFinite(g.lat) && Number.isFinite(g.lon) && Math.abs(g.lat) <= 90 && Math.abs(g.lon) <= 180));
+  let none = 0;
+  for (const x of [...branches, ...events]) {
+    if (!x.geo) { if (x.branch !== undefined) none++; else report(warnings, x, "branch has no geo: its markers' globes say \"Location data not found\""); }
+    else if (!usable(x.geo)) report(warnings, x, `geo is not usable (scope ${x.geo.scope}, lat ${x.geo.lat}, lon ${x.geo.lon}): its globe says "Location data not found"`);
+  }
+  if (none) warnings.push(`${none} of ${events.length} events have no geo: their globes say "Location data not found"`);
+}
 
 const perFile = {};
 for (const x of branches) (perFile[x._file] ||= { branches: 0, events: 0, cites: 0 }).branches++;
