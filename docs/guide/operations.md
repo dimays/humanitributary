@@ -209,7 +209,7 @@ database; the bare domain is reserved for the public page.
 
 | | Staging |
 |---|---|
-| App | `humanitributary-staging` (region us, stack heroku-24), at https://data.manyages.com (Heroku-managed certificate) and https://humanitributary-staging-aeb697fb63be.herokuapp.com. Agents use `https://data.manyages.com/api/agent` as `HUMANITRIBUTARY_API` |
+| App | `humanitributary-staging` (region us, stack heroku-24), at https://data.manyages.com (Heroku-managed certificate) and https://humanitributary-staging-aeb697fb63be.herokuapp.com. Agents use `https://data.manyages.com/api/agent` as `MANYAGES_API` (the old `HUMANITRIBUTARY_API` until the owner deletes it: ADR 0047) |
 | Build | Two buildpacks, in order: `heroku/nodejs` (Node 24.x from `package.json`, which has no dependencies; it runs `site/build.mjs` for the publish gates) and `heroku/python` (Python from `.python-version`, packages from `uv.lock`, then `collectstatic`). `heroku buildpacks -a humanitributary-staging` lists them. |
 | Processes | From the `Procfile`: `release` runs `migrate` before each release goes live (a failed migration stops the deploy); `web` 1 × Basic; `worker` 1 × Basic (`run_jobs --loop`): the only place jobs run |
 | Object storage | AWS S3, us-east-1: `humanitributary-staging-raw` and `humanitributary-staging-releases`, private (public access blocked, SSE-S3). The IAM user `humanitributary-staging` has no console login and may only list those two buckets and read, write and delete their objects |

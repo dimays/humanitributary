@@ -468,9 +468,9 @@ class PreflightSkillTests(TestCase):
         from django.conf import settings
 
         text = (settings.BASE_DIR / ".claude/skills/run-round/SKILL.md").read_text()
-        first = text.index('"$HUMANITRIBUTARY_API/rounds/settings"')
-        self.assertLess(first, text.index('"$HUMANITRIBUTARY_API/queue"'), "the settings before the queue")
-        self.assertLess(first, text.index('-X POST "$HUMANITRIBUTARY_API/rounds"'), "the settings before a round is recorded")
+        first = text.index('"${MANYAGES_API:-$HUMANITRIBUTARY_API}/rounds/settings"')
+        self.assertLess(first, text.index('"${MANYAGES_API:-$HUMANITRIBUTARY_API}/queue"'), "the settings before the queue")
+        self.assertLess(first, text.index('-X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/rounds"'), "the settings before a round is recorded")
         self.assertLess(first, text.index("## 4. Role agents"), "the settings before any agent starts")
         self.assertIn("**`paused` is set**", text[first:first + 600])
         for skill in ("drain-write-events", "fill-gaps", "verify-claims", "verify-stale-claims", "map-branch-entities", "review-branch-proposals"):

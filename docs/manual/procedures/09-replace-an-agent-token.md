@@ -39,7 +39,7 @@ when you make it.
 6. Ask the API who you are with the new token:
 
    ```bash
-   curl -sS -H "Authorization: Bearer $HUMANITRIBUTARY_API_TOKEN" "$HUMANITRIBUTARY_API/"
+   curl -sS -H "Authorization: Bearer ${MANYAGES_API_TOKEN:-$HUMANITRIBUTARY_API_TOKEN}" "${MANYAGES_API:-$HUMANITRIBUTARY_API}/"
    ```
 
    Make sure that the answer names `agent:writer-2` and the correct scopes.

@@ -1,6 +1,6 @@
 # 0043 — The site is ManyAges at manyages.com; humanitributary.com redirects until it expires
 
-**Status:** proposed (November 2026); amends [0024](0024-the-app-serves-the-page.md) (the bare domain is manyages.com); amends [0034](0034-brand-assets.md) (the brand files carry the new name)
+**Status:** proposed (November 2026); amends [0024](0024-the-app-serves-the-page.md) (the bare domain is manyages.com); amends [0034](0034-brand-assets.md) (the brand files carry the new name); amended by [0047](0047-manyages-variable-names.md) (the environment variables are renamed, with a fallback)
 
 ## Context
 

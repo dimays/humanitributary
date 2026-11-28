@@ -172,7 +172,7 @@ flowchart TB
     reader -. "old links" .-> dnsold
     dnsold -. "301" .-> dnsroot
     agent --> dnsdata
-    agent -. "old HUMANITRIBUTARY_API" .-> dnsolddata
+    agent -. "old API URL" .-> dnsolddata
     ownerb --> dnsdata
     dnsroot & dnswww & dnsdata & dnsolddata --> router
     router --> web

@@ -15,13 +15,15 @@ How the waves and gaps are computed is in `docs/guide/content-waves.md`; the dec
 ## The API
 
 Work through the agent API, never the database (ADR 0017). Two variables come from your environment:
-`HUMANITRIBUTARY_API` (the base URL: `http://127.0.0.1:8000/api/agent` with `make up`, the hosted URL otherwise) and
-`HUMANITRIBUTARY_API_TOKEN` (made by the owner with `manage.py agent_token create <name> --scope fill_gap`; never
+`MANYAGES_API` (the base URL: `http://127.0.0.1:8000/api/agent` with `make up`, the hosted URL otherwise) and
+`MANYAGES_API_TOKEN` (made by the owner with `manage.py agent_token create <name> --scope fill_gap`; never
 print or log it).
+Until the owner deletes the old names (ADR 0047), `HUMANITRIBUTARY_API` and `HUMANITRIBUTARY_API_TOKEN` stand in
+for them: every call below falls back to them.
 
 ```bash
-api() { curl -sS -H "Authorization: Bearer $HUMANITRIBUTARY_API_TOKEN" -H "Content-Type: application/json" "$@"; }
-api "$HUMANITRIBUTARY_API/schemas/fill_gap"         # the result shape `complete` accepts
+api() { curl -sS -H "Authorization: Bearer ${MANYAGES_API_TOKEN:-$HUMANITRIBUTARY_API_TOKEN}" -H "Content-Type: application/json" "$@"; }
+api "${MANYAGES_API:-$HUMANITRIBUTARY_API}/schemas/fill_gap"         # the result shape `complete` accepts
 ```
 
 A claim is a lease (30 minutes by default): `POST tasks/<id>/extend` for more, `POST tasks/<id>/release` to hand it
@@ -35,7 +37,7 @@ minutes (a slow site, a long read, a second source to find), extend it before it
 minutes while you still work on it:
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/extend" -d '{"minutes": 30}'
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/extend" -d '{"minutes": 30}'
 ```
 
 A lease that runs out may be taken over by another agent; then your `complete` is refused (409) and the work is
@@ -51,7 +53,7 @@ waits for the owner (the console's Review page: no agent is offered it again), a
   itself), ask the API whether your script may read it (ADR 0042):
 
   ```bash
-  api -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"
+  api -G "${MANYAGES_API:-$HUMANITRIBUTARY_API}/policy" --data-urlencode "url=<the page>"
   # {"policy": "allowed", "may_fetch": true, "browser_read": true, "why": "…", "crawl_delay": 1.0, "publisher": {…}}
   ```
 
@@ -66,7 +68,7 @@ waits for the owner (the console's Review page: no agent is offered it again), a
      means a person's browser.
   3. **Don't cite it unread.** No task skill allows a citation-only cite: a page you could not read is no source.
   4. **Release the task** when it can't be done without that page, so a person can read it:
-     `api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
+     `api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
      It waits for the owner (the console's Review page) instead of coming straight back to you or the next agent.
 - **Never disguise the client.** Every page you fetch by script sends the project's honest User-Agent:
   `curl -sS -A "$INGEST_USER_AGENT" <url>` (the same value as the app's `INGEST_USER_AGENT`). No spoofed browser
@@ -116,14 +118,14 @@ How to use it:
 5. **No pack yet** (no `evidence_pack` key, or a `deferred` reason): read the pages yourself as below.
 
 ```bash
-api "$HUMANITRIBUTARY_API/documents/<doc_id>"                       # the stored text (a task you hold)
-api -X POST "$HUMANITRIBUTARY_API/evidence/check-excerpt" -d '{"doc_id": 42, "excerpt": "…"}'
+api "${MANYAGES_API:-$HUMANITRIBUTARY_API}/documents/<doc_id>"                       # the stored text (a task you hold)
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/evidence/check-excerpt" -d '{"doc_id": 42, "excerpt": "…"}'
 ```
 
 ## 1. Claim and read the payload
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/claim" -d '{"kinds": ["fill_gap"]}'    # {"task": {...}} or {"task": null}
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/claim" -d '{"kinds": ["fill_gap"]}'    # {"task": {...}} or {"task": null}
 ```
 
 | Key | What |
@@ -199,10 +201,10 @@ cat > /tmp/result.json <<'JSON'
                {"t": "… — Wikipedia", "u": "https://en.wikipedia.org/wiki/…", "excerpt": "…"}],
      "geo": {"scope": "place", "lat": 9.06, "lon": 7.49, "r": 50, "label": "…", "src": "https://en.wikipedia.org/wiki/…"}}]}}
 JSON
-api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" -d @/tmp/result.json
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/complete" -d @/tmp/result.json
 
 # or, when nothing belongs there:
-api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" \
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/complete" \
   -d '{"result": {"decision": "nothing_notable", "note": "Read History of X (1960s section), Y archive and Z; the only events are …, already on <branch>."}}'
 ```
 

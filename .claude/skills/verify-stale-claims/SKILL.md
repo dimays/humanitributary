@@ -10,7 +10,7 @@ stances and the result shape are the same). Both arrive as `verify_claim` tasks,
 has at most one open task.
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/claim" -d '{"kinds": ["verify_claim"]}'
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/claim" -d '{"kinds": ["verify_claim"]}'
 ```
 
 **Extend a long lease.** A lease runs 30 minutes (`TASK_LEASE_MINUTES`). When one task's work passes about 20
@@ -18,7 +18,7 @@ minutes (a slow site, a long read, a second source to find), extend it before it
 minutes while you still work on it:
 
 ```bash
-api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/extend" -d '{"minutes": 30}'
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/extend" -d '{"minutes": 30}'
 ```
 
 A lease that runs out may be taken over by another agent; then your `complete` is refused (409) and the work is
@@ -34,7 +34,7 @@ waits for the owner (the console's Review page: no agent is offered it again), a
   itself), ask the API whether your script may read it (ADR 0042):
 
   ```bash
-  api -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"
+  api -G "${MANYAGES_API:-$HUMANITRIBUTARY_API}/policy" --data-urlencode "url=<the page>"
   # {"policy": "allowed", "may_fetch": true, "browser_read": true, "why": "…", "crawl_delay": 1.0, "publisher": {…}}
   ```
 
@@ -49,7 +49,7 @@ waits for the owner (the console's Review page: no agent is offered it again), a
      means a person's browser.
   3. **Don't cite it unread.** No task skill allows a citation-only cite: a page you could not read is no source.
   4. **Release the task** when it can't be done without that page, so a person can read it:
-     `api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
+     `api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
      It waits for the owner (the console's Review page) instead of coming straight back to you or the next agent.
 - **Never disguise the client.** Every page you fetch by script sends the project's honest User-Agent:
   `curl -sS -A "$INGEST_USER_AGENT" <url>` (the same value as the app's `INGEST_USER_AGENT`). No spoofed browser
@@ -99,8 +99,8 @@ How to use it:
 5. **No pack yet** (no `evidence_pack` key, or a `deferred` reason): read the pages yourself as below.
 
 ```bash
-api "$HUMANITRIBUTARY_API/documents/<doc_id>"                       # the stored text (a task you hold)
-api -X POST "$HUMANITRIBUTARY_API/evidence/check-excerpt" -d '{"doc_id": 42, "excerpt": "…"}'
+api "${MANYAGES_API:-$HUMANITRIBUTARY_API}/documents/<doc_id>"                       # the stored text (a task you hold)
+api -X POST "${MANYAGES_API:-$HUMANITRIBUTARY_API}/evidence/check-excerpt" -d '{"doc_id": 42, "excerpt": "…"}'
 ```
 
 ## Excerpts
