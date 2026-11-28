@@ -477,3 +477,23 @@ class PreflightSkillTests(TestCase):
             body = (settings.BASE_DIR / f".claude/skills/{skill}/SKILL.md").read_text()
             self.assertIn("INGEST_USER_AGENT", body, skill)
             self.assertIn("one in-app browser tab", body, skill)
+
+
+class SizeCeilingTests(TestCase):
+    """ADR 0038: the ceilings are settings, by default 8 agents a role, 16 in all, 20 tasks an agent."""
+
+    def size(self, agents, tasks):
+        return {"agents": dict(zip(WR.ROLES, agents)), "tasks_per_agent": dict(zip(WR.ROLES, tasks))}
+
+    def test_the_defaults(self):
+        self.assertEqual((WR.MAX_AGENTS_PER_ROLE, WR.MAX_AGENTS, WR.MAX_TASKS_PER_AGENT), (8, 16, 20))
+
+    def test_a_size_at_the_ceilings_is_accepted(self):
+        size = self.size([8, 8, 0, 0], [20, 20, 1, 1])
+        self.assertEqual(WR.validate_size(size), size)
+
+    def test_a_size_over_a_ceiling_is_refused(self):
+        for agents, tasks, words in (([9, 0, 0, 0], [1, 1, 1, 1], "0 to 8"), ([8, 8, 1, 0], [1, 1, 1, 1], "at most 16"),
+                                     ([1, 0, 0, 0], [21, 1, 1, 1], "1 to 20")):
+            with self.assertRaisesRegex(ValueError, words):
+                WR.validate_size(self.size(agents, tasks))

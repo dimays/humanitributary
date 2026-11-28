@@ -41,9 +41,11 @@ FED_BY = {  # task kind → the jobs that queue it (the console's Jobs ↔ Work 
 KIND_ROLE = {kind: role for role, (kind, _) in ROLES.items()}
 DEFAULT_SIZE = {"agents": {"writer": 2, "filler": 2, "verifier": 1, "mapper": 1},
                 "tasks_per_agent": {"writer": 5, "filler": 3, "verifier": 8, "mapper": 10}}
-MAX_AGENTS_PER_ROLE = 4      # an operator may set 0 to this many agents of one role
-MAX_AGENTS = 10              # … and this many in all
-MAX_TASKS_PER_AGENT = 12     # each agent takes 1 to this many tasks
+# The ceilings on the round size (ADR 0038): settings, so they change without a deploy. They are guards against a typo,
+# not the pace: the round size and the owner's plan usage set the pace.
+MAX_AGENTS_PER_ROLE = settings.ROUND_MAX_AGENTS_PER_ROLE   # an operator may set 0 to this many agents of one role
+MAX_AGENTS = settings.ROUND_MAX_AGENTS                     # … and this many in all
+MAX_TASKS_PER_AGENT = settings.ROUND_MAX_TASKS_PER_AGENT   # each agent takes 1 to this many tasks
 DRAFTS_PER_REVIEWER = 40     # an independent reviewer reads at most this many drafts
 STALE_HOURS = 12             # an open round older than this was interrupted: it is closed as failed
 MAX_CARRY_OVER = 200         # held drafts one "send to the next review" may carry

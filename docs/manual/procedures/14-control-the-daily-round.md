@@ -43,8 +43,8 @@ To resume, click "Resume rounds" on the Work page, then confirm with a reason. M
    Make sure that the line "Round size" shows the current size.
 2. Click "Round size" to open the form.
    Make sure that the form shows the agents and the tasks for each role.
-3. Type the new numbers. Use 0 to 4 agents for each role and 1 to 12 tasks for each agent.
-   Make sure that the total of the agents is 10 or less.
+3. Type the new numbers. Use 0 to 8 agents for each role and 1 to 20 tasks for each agent.
+   Make sure that the total of the agents is 16 or less.
 4. Click "Set the round size".
    Make sure that the confirmation page shows each old and new number.
 5. Type the reason and confirm.

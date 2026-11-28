@@ -623,8 +623,9 @@ something needs the owner), `finished` (nothing to publish), `failed`,
 `skipped`. The last five are final: then only `summary` and `notes` change.
 
 **The settings** (`work/rounds.py`, one `JobState` row, `agent_rounds`):
-`paused`, `skip_next`, `size` (agents per role, 0–4 and 10 in all, and tasks
-per agent, 1–12; the roles are writer, filler, verifier and mapper, for
+`paused`, `skip_next`, `size` (agents per role, 0–8 and 16 in all, and tasks
+per agent, 1–20, by default: the ceilings are the settings
+`ROUND_MAX_AGENTS_PER_ROLE`, `ROUND_MAX_AGENTS` and `ROUND_MAX_TASKS_PER_AGENT`; the roles are writer, filler, verifier and mapper, for
 `write_event`, `fill_gap`, `verify_claim` and `map_branch_entities`) and
 `carry_over` (held drafts an operator sends to the next review). Operators
 change them from the Work page ([operations console](operations-console.md));
