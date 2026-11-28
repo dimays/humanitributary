@@ -1,4 +1,4 @@
-# AGENTS.md — working on Humanitributary
+# AGENTS.md — working on ManyAges
 
 Read this before changing anything. It's the short version of how the data
 platform is put together and the rules that keep it that way. How each part
@@ -317,7 +317,7 @@ and mail settings are the owner's to set, never copied from a `.env`. Buildpacks
 (Node 24.x pinned by `package.json`, no dependencies: the publish gates' build)
 then `heroku/python`; staging publishes with `heroku run python manage.py publish`. Staging holds the platform's data
 since November 26, 2026 (moved from the laptop) and is the only place jobs run
-(the `worker` dyno); agents use `https://data.humanitributary.com/api/agent`.
+(the `worker` dyno); agents use `https://data.manyages.com/api/agent`.
 DNS is Cloudflare's (the registrar is Namecheap): `data`, the bare domain and
 `www` point at the app, which serves the public page at `/` (the latest
 release, from the releases store: `infra/site.py`, ADR 0024). A key never goes in a URL (logs). Never

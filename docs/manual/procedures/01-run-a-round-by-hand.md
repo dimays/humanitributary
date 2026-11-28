@@ -14,7 +14,7 @@ To review and publish without the skill, use procedures [02](02-review-drafts-an
 ## Before you start
 
 - You have the Heroku CLI, and it has access to the app `humanitributary-staging`.
-- You have a staff user for `https://data.humanitributary.com/ops/`.
+- You have a staff user for `https://data.manyages.com/ops/`.
 - You have the round tokens from procedure [15](15-set-up-the-daily-round.md), or you make them with procedure
   [09](09-replace-an-agent-token.md).
 - You have the Claude Code desktop app and a checkout of the repository. The skills are in `.claude/skills/`.
@@ -45,7 +45,7 @@ To review and publish without the skill, use procedures [02](02-review-drafts-an
 4. Set the base URL of the agent API:
 
    ```bash
-   export HUMANITRIBUTARY_API=https://data.humanitributary.com/api/agent
+   export HUMANITRIBUTARY_API=https://data.manyages.com/api/agent
    ```
 
    Make sure that the URL has no token in it.

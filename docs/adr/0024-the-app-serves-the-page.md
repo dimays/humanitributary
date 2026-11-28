@@ -1,6 +1,6 @@
 # 0024 — The web process serves the public page until a CDN does
 
-**Status:** proposed (November 2026); amends [0001](0001-postgres-is-the-truth-the-site-reads-snapshots.md) (who serves the snapshot's page); amends [0020](0020-heroku-hosting.md) (the hosted app takes the bare domain)
+**Status:** proposed (November 2026); amends [0001](0001-postgres-is-the-truth-the-site-reads-snapshots.md) (who serves the snapshot's page); amends [0020](0020-heroku-hosting.md) (the hosted app takes the bare domain); amended by [0043](0043-the-manyages-name.md) (the bare domain is manyages.com)
 
 ## Context
 

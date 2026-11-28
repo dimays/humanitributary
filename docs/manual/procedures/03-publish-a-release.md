@@ -13,7 +13,7 @@ gate fails, it writes nothing.
 
 ## Procedure with the console
 
-1. Open the releases page of the console, `https://data.humanitributary.com/ops/releases/`.
+1. Open the releases page of the console, `https://data.manyages.com/ops/releases/`.
    Make sure that the page shows which release the pointer names now.
 2. Start the publish check (`publish_check`).
    Make sure that the page of the new action opens.
@@ -30,7 +30,7 @@ gate fails, it writes nothing.
 8. Wait one minute, and then get the headers of the public page:
 
    ```bash
-   curl -sI https://humanitributary.com/ | grep -i x-release
+   curl -sI https://manyages.com/ | grep -i x-release
    ```
 
    Make sure that `X-Release` names the new version.

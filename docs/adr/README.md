@@ -63,6 +63,7 @@ things work now; an ADR says why, and what was given up.
 | [0040](0040-round-progress-from-a-task-link.md) | A round's progress is counted from a task-to-round link, not a "planned" task state | proposed |
 | [0041](0041-archive-a-job.md) | A job can be archived from the console: paused, its runs stopped, hidden, its history kept | proposed |
 | [0042](0042-deferred-releases-and-the-fetch-policy-endpoint.md) | A released task waits before it is offered again, and agents ask the API before they fetch a page | proposed |
+| [0043](0043-the-manyages-name.md) | The site is ManyAges at manyages.com; humanitributary.com redirects until it expires | proposed |
 <!-- index:end -->
 
 ## Template

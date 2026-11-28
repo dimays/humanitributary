@@ -67,7 +67,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Pointer | The object `releases/latest.json` in the `releases` bucket. It names the release that readers get. |
 | Priority | For a cluster, a score from 0 to 100. For a task, a number. A task with a higher priority goes first. |
 | Procedure | A numbered list of steps for one task in this manual. Each step has one instruction and one check. |
-| Public page | The timeline page at `https://humanitributary.com`. The `web` dyno serves it from the latest release. |
+| Public page | The timeline page at `https://manyages.com`. The `web` dyno serves it from the latest release. |
 | Publish | To make a new release with `manage.py publish` or the console. This manual does not use "publish" for one entry. |
 | Publisher | A cited site, by domain, with a tier, a license, a `fetch_policy` and access notes. |
 | Publication rule | The rule that an entry must obey before it gets the status `published`: no unflagged contested claim, and a source other than Wikipedia. |

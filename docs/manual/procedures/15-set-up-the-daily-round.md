@@ -48,11 +48,11 @@ Do this procedure one time. After that, the routine starts one round each day ([
 4. Open `https://claude.ai/code` and make a new cloud environment with the name `humanitributary-round`.
    Make sure that no other routine or person uses this environment.
 5. Set the network access of the environment to Full.
-   Make sure that the agents can get pages from many sites, and from `data.humanitributary.com`.
+   Make sure that the agents can get pages from many sites, and from `data.manyages.com`.
 6. Add the environment variables in the form `KEY=value`, one on each line:
 
    ```text
-   HUMANITRIBUTARY_API=https://data.humanitributary.com/api/agent
+   HUMANITRIBUTARY_API=https://data.manyages.com/api/agent
    INGEST_USER_AGENT=<the value from step 3>
    HUMANITRIBUTARY_TOKEN_ROUND=<the token of round-recorder>
    HUMANITRIBUTARY_TOKEN_WRITER=<the token of round-writer>

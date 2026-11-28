@@ -5,7 +5,7 @@ Purpose: This file tells what the system does, what its main parts are, and how 
 ## What the system does
 
 The system makes a timeline of history from the Big Bang to today. Each item on the timeline has citations. Readers
-see the timeline as one web page at `https://humanitributary.com`.
+see the timeline as one web page at `https://manyages.com`.
 
 The timeline has two kinds of entries. A branch is a line on the timeline, for example a state, a people or a faith.
 An event is a moment or a period on a branch. Each entry has claims, and each claim has evidence from cited pages.

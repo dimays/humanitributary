@@ -290,9 +290,9 @@ The job order in `ingest/job_defs.py`:
 |---|---|---|---|
 | Database | Postgres 16 in Docker on 5433 (`make db`): a development copy since the move | Heroku Postgres Essential-1, Postgres 16: the platform's data since November 26, 2026 (moved from the laptop), backed up daily | Heroku Postgres (at launch) |
 | Raw documents and releases | MinIO in Docker on `127.0.0.1:9000` (`make db` creates the buckets), or `var/storage/<bucket>/` with `STORAGE_BACKEND=local` | AWS S3 (us-east-1): `humanitributary-staging-raw` and `-releases`, through a user limited to them | S3, its own buckets and user (at launch) |
-| Processes | `make up`: `web` (gunicorn on 127.0.0.1:8000) and `worker` via honcho | The `Procfile`: `release` (`migrate`), one Basic `web` dyno at https://data.humanitributary.com, one Basic `worker` | The same `Procfile` (at launch) |
+| Processes | `make up`: `web` (gunicorn on 127.0.0.1:8000) and `worker` via honcho | The `Procfile`: `release` (`migrate`), one Basic `web` dyno at https://data.manyages.com, one Basic `worker` | The same `Procfile` (at launch) |
 | Scheduled jobs | The worker while `make up` runs, and launchd every 15 minutes if installed (`make schedule-install`); the locks keep them from overlapping | The `worker` dyno: the only place jobs run | A `worker` dyno, or Heroku Scheduler running `run_jobs` |
-| The page | timeline.html in `site/`, built from the mirror in `var/releases/` | https://humanitributary.com: the web process serves the latest release (`infra/site.py`) | The same app (it is production until a separate one exists); a CDN in front later |
+| The page | timeline.html in `site/`, built from the mirror in `var/releases/` | https://manyages.com: the web process serves the latest release (`infra/site.py`) | The same app (it is production until a separate one exists); a CDN in front later |
 
 The Heroku pipeline `humanitributary` holds staging now and production at launch
 ([ADR 0020](../adr/0020-heroku-hosting.md)). CI (`.github/workflows/check.yml`) runs the gate with a throwaway Postgres filled

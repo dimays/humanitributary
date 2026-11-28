@@ -208,7 +208,7 @@ database; the bare domain is reserved for the public page.
 
 | | Staging |
 |---|---|
-| App | `humanitributary-staging` (region us, stack heroku-24), at https://data.humanitributary.com (Heroku-managed certificate) and https://humanitributary-staging-aeb697fb63be.herokuapp.com. Agents use `https://data.humanitributary.com/api/agent` as `HUMANITRIBUTARY_API` |
+| App | `humanitributary-staging` (region us, stack heroku-24), at https://data.manyages.com (Heroku-managed certificate) and https://humanitributary-staging-aeb697fb63be.herokuapp.com. Agents use `https://data.manyages.com/api/agent` as `HUMANITRIBUTARY_API` |
 | Build | Two buildpacks, in order: `heroku/nodejs` (Node 24.x from `package.json`, which has no dependencies; it runs `site/build.mjs` for the publish gates) and `heroku/python` (Python from `.python-version`, packages from `uv.lock`, then `collectstatic`). `heroku buildpacks -a humanitributary-staging` lists them. |
 | Processes | From the `Procfile`: `release` runs `migrate` before each release goes live (a failed migration stops the deploy); `web` 1 × Basic; `worker` 1 × Basic (`run_jobs --loop`): the only place jobs run |
 | Object storage | AWS S3, us-east-1: `humanitributary-staging-raw` and `humanitributary-staging-releases`, private (public access blocked, SSE-S3). The IAM user `humanitributary-staging` has no console login and may only list those two buckets and read, write and delete their objects |
@@ -221,7 +221,8 @@ Config vars (`heroku config -a humanitributary-staging` lists them; never paste 
 |---|---|---|
 | `SECRET_KEY` | the setup, generated on the spot | never printed; rotate with a new random value (it signs out every admin session) |
 | `ENVIRONMENT` | the setup | `staging` |
-| `ALLOWED_HOSTS` | the setup | `data.humanitributary.com` and the app's `herokuapp.com` host |
+| `ALLOWED_HOSTS` | the setup | the app's `herokuapp.com` host, `data.manyages.com`, `manyages.com`, `www.manyages.com`, and `data.humanitributary.com` while agents still use it |
+| `OPS_HOSTS` | the setup | the hosts that serve `/ops/`: `data.manyages.com`, and `data.humanitributary.com` while it serves |
 | `LOG_LEVEL` | the setup | `WARNING` (the worker's progress is in FetchRun rows, the admin and `/healthz`, not the log) |
 | `INGEST_CONTACT` | the setup | the repository's URL |
 | `STORAGE_BACKEND` | the setup | `local` only until the access key is in; unset after, so the `S3_*` variables choose S3 |
@@ -232,15 +233,25 @@ Config vars (`heroku config -a humanitributary-staging` lists them; never paste 
 | `SMITHSONIAN_API_KEY` | the owner | its lookup adapter skips without it |
 | `EUROPEANA_API_KEY` | nobody yet | a Personal key is for non-production use only: leave it unset until a Project key exists ([Sources and terms](sources-and-terms.md)) |
 
-The domain, `humanitributary.com`, is registered at Namecheap (contact verified) with its nameservers on Cloudflare
-(free plan: `angelina.ns.cloudflare.com`, `rex.ns.cloudflare.com`). The zone holds three records:
+The site is ManyAges, at `manyages.com`, registered at Namecheap on November 28, 2026, with its nameservers on
+Cloudflare (free plan: `NS1_PLACEHOLDER`, `NS2_PLACEHOLDER`). It was Humanitributary at `humanitributary.com` until
+then ([ADR 0043](../adr/0043-the-manyages-name.md)). The `manyages.com` zone holds:
 
 | Record | Value | Why |
 |---|---|---|
 | `data` CNAME | the app's Heroku DNS target (`heroku domains -a humanitributary-staging`), DNS only | the admin and the agent API; DNS only so Heroku issues and renews the certificate (`heroku certs:auto`) |
+| `@` CNAME (flattened) and `www` CNAME | each name's own Heroku DNS target (`heroku domains -a humanitributary-staging`), DNS only | the public page; Heroku issues their certificates, and the app redirects `www` to the bare domain |
 | `@` TXT | `v=spf1 -all` | no server may send mail as the domain |
 | `_dmarc` TXT | `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s` | receivers reject mail that claims to come from it |
-| `@` CNAME (flattened) and `www` CNAME | each name's own Heroku DNS target (`heroku domains -a humanitributary-staging`), DNS only | the public page; Heroku issues their certificates, and the app redirects `www` to the bare domain |
+
+The old domain, `humanitributary.com` (Cloudflare `angelina.ns.cloudflare.com`, `rex.ns.cloudflare.com`), is not
+renewed: it expires on November 26, 2027, and its redirects work until then. Its zone keeps the same two mail
+records, and:
+
+| Name | What it does |
+|---|---|
+| `@` and `www` | proxied (orange cloud), so Cloudflare answers them: a redirect rule sends each request, 301, to `https://manyages.com` with the same path and query. A browser keeps the `#` part of a link across a redirect, so an event link (`/#<slug>`) still opens its event |
+| `data` | a CNAME to its Heroku DNS target, DNS only, serving the admin, the console and the agent API like `data.manyages.com`, until every agent environment uses the new name: a redirect would lose an agent's `POST` |
 
 The public page is the web process's `/` ([ADR 0024](../adr/0024-the-app-serves-the-page.md)): the latest release's
 `timeline.html` from the S3 releases bucket, kept in memory and re-checked against `releases/latest.json` at most
@@ -251,7 +262,7 @@ once a minute, so `heroku run python manage.py publish` (or `publish --rollback 
 The preview card is remade by hand (`make release-pull`, `make card`, commit, deploy) after a big content wave or a
 change to how the page draws: the manual's procedure 13. Before the first
 release `/` answers 503; the `X-Release` header names the version being served. `ALLOWED_HOSTS` must list
-`humanitributary.com` and `www.humanitributary.com`. Mail for the domain needs an MX (Cloudflare Email Routing for forwarding) and an SPF
+`manyages.com` and `www.manyages.com`. Mail for the domain needs an MX (Cloudflare Email Routing for forwarding) and an SPF
 that names the sender before anything sends as it.
 
 To create or rotate the access key, with the AWS CLI signed in (`aws login`), the owner runs, in zsh:

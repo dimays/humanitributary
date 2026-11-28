@@ -1,5 +1,5 @@
 {
-  "name": "Humanitributary",
+  "name": "ManyAges",
   "description": "The data platform behind an interactive, cited timeline of all history: the admin, the agent API and the scheduled jobs (docs/adr/0020-heroku-hosting.md).",
   "repository": "https://github.com/dimays/humanitributary",
   "stack": "heroku-24",

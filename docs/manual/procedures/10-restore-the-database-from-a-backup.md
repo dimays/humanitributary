@@ -47,7 +47,7 @@ together.
 5. Get the health of the system:
 
    ```bash
-   curl -s https://data.humanitributary.com/healthz
+   curl -s https://data.manyages.com/healthz
    ```
 
    Make sure that `"ok"` is `true`.
