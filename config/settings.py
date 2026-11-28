@@ -213,6 +213,7 @@ AGENT_API_EDITS_CHECKS_PER_HOUR = int(os.getenv("AGENT_API_EDITS_CHECKS_PER_HOUR
 AGENT_API_EDITS_APPLIES_PER_HOUR = int(os.getenv("AGENT_API_EDITS_APPLIES_PER_HOUR", "6"))
 AGENT_API_RELEASE_CHECKS_PER_HOUR = int(os.getenv("AGENT_API_RELEASE_CHECKS_PER_HOUR", "10"))
 AGENT_API_PUBLISHES_PER_DAY = int(os.getenv("AGENT_API_PUBLISHES_PER_DAY", "4"))
+AGENT_API_ROUNDS_PER_DAY = int(os.getenv("AGENT_API_ROUNDS_PER_DAY", "6"))  # POST rounds per token in any 24 hours (ADR 0050)
 
 # The daily agent round (work/rounds.py, ADR 0035). The routine itself is a Claude Code cloud routine the owner makes,
 # with its own cron; ROUND_SCHEDULE repeats that cron (UTC) so the console can show it in words and say when the next

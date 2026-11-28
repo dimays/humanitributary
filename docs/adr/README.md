@@ -70,6 +70,7 @@ things work now; an ADR says why, and what was given up.
 | [0047](0047-manyages-variable-names.md) | The agent environment variables take the ManyAges name, with a fallback to the old one until the owner deletes it | proposed |
 | [0048](0048-event-images.md) | Events get openly licensed pictures by reference, found by a paced job; pictures that may disturb are blurred until the viewer asks | proposed |
 | [0049](0049-source-ratings-batch-3.md) | A third batch of source ratings: thirty-three more records for the domains agents were refused | proposed |
+| [0050](0050-rounds-per-day-is-a-setting.md) | The number of rounds a token may start in a day is a setting | accepted |
 <!-- index:end -->
 
 ## Template

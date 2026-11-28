@@ -501,3 +501,23 @@ class SizeCeilingTests(TestCase):
                                      ([1, 0, 0, 0], [21, 1, 1, 1], "1 to 20")):
             with self.assertRaisesRegex(ValueError, words):
                 WR.validate_size(self.size(agents, tasks))
+
+
+class RoundsPerDayTests(RoundTests):
+    """ADR 0050: POST rounds per token in any 24 hours is the setting AGENT_API_ROUNDS_PER_DAY (6 by default)."""
+
+    def earlier(self, n):
+        for _ in range(n):  # finished rounds started in the last day by this token
+            Round.objects.create(started_at=timezone.now() - timedelta(hours=1), trigger="manual", started_by="agent:recorder",
+                                 status="finished", finished_at=timezone.now())
+
+    def test_the_default_is_six(self):
+        self.earlier(6)
+        r = self.start(key="round-limit-1")
+        self.assertEqual(r.status_code, 429)
+        self.assertIn("at most 6", r.json()["error"])
+
+    @override_settings(AGENT_API_ROUNDS_PER_DAY=12)
+    def test_the_setting_raises_it(self):
+        self.earlier(6)
+        self.assertEqual(self.start(key="round-limit-2").status_code, 201)
