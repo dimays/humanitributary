@@ -61,6 +61,7 @@ things work now; an ADR says why, and what was given up.
 | [0038](0038-larger-round-ceilings.md) | The round size's ceilings are settings, set by what the platform can carry | accepted |
 | [0039](0039-dismiss-a-failed-run.md) | A failed run follows its retry in Needs attention, and an operator can dismiss it | proposed |
 | [0040](0040-round-progress-from-a-task-link.md) | A round's progress is counted from a task-to-round link, not a "planned" task state | proposed |
+| [0041](0041-archive-a-job.md) | A job can be archived from the console: paused, its runs stopped, hidden, its history kept | proposed |
 <!-- index:end -->
 
 ## Template

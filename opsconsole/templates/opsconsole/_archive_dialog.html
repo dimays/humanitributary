@@ -1,0 +1,20 @@
+{% load ops %}{# The Archive button and its confirmation dialog (ADR 0041). Without JavaScript the button opens the confirmation page instead. #}
+<form class="act" method="post" action="{% url 'opsconsole:act' 'archive_job' %}" data-dialog="archive-dialog">{% csrf_token %}
+  <input type="hidden" name="job" value="{{ j.name }}"><button type="submit" class="btn sm danger">Archive…</button></form>
+<dialog id="archive-dialog" class="gh-dialog" aria-labelledby="archive-title">
+  <form method="post" action="{% url 'opsconsole:confirm' 'archive_job' %}" data-typed-name="{{ archive.plan.confirm_name }}">{% csrf_token %}
+    <input type="hidden" name="token" value="{{ archive.token }}">
+    <header><h2 id="archive-title">Archive {{ j.name }}</h2><button type="button" class="x" data-close aria-label="Close">×</button></header>
+    <div class="gh-warn">This retires the job. Read what it does before you go on.</div>
+    <div class="gh-body">
+      <ul class="gh-list">{% for row in archive.plan.rows %}{% if forloop.counter > 1 %}<li><b>{{ row.0 }}:</b> {{ row.1 }}</li>{% endif %}{% endfor %}</ul>
+      {% for w in archive.plan.warnings %}<div class="banner warn">{{ w }}</div>{% endfor %}
+      <label for="archive-name">To confirm, type <b class="mono">{{ archive.plan.confirm_name }}</b> in the box below</label>
+      <input type="text" id="archive-name" name="confirm_name" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+      <label for="archive-reason">Reason <span class="muted small">(required; recorded with the action)</span></label>
+      <textarea id="archive-reason" name="reason" rows="2" required maxlength="2000"></textarea>
+      <button type="submit" class="btn danger-solid wide" data-typed-submit disabled>Archive this job</button>
+      <div class="muted small" style="margin-top:8px">Done now, in one transaction · as {{ archive.plan.by }} · this form is good for 30 minutes</div>
+    </div>
+  </form>
+</dialog>

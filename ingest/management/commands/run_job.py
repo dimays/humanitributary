@@ -37,7 +37,7 @@ class Command(BaseCommand):
             options[k] = _value(v)
         try:
             runs = jobs.run_named(name, feed=feed, options=options, log=self.stdout.write)
-        except KeyError as e:
+        except (KeyError, jobs.JobArchived) as e:
             raise CommandError(str(e)) from e
         if runs is not None and any(r.status == "failed" for r in runs):
             raise CommandError("the job failed: see the FetchRun error above / in the admin")

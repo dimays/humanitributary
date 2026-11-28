@@ -103,6 +103,10 @@ class Fetcher:
         self.blocked: set[str] = set()
         self.requests = 0
         self._publisher_policy = publisher_policy or _db_publisher_policy
+        # Set by the job runner for the run that uses this fetcher: called before every request, it raises
+        # ingest.jobs.RunStopped when the run's job was archived (ADR 0041). A request is a safe point: a network
+        # error could already end the job there.
+        self.stop_check = None
 
     def close(self):
         self.client.close()
@@ -185,6 +189,8 @@ class Fetcher:
         return self.request("HEAD", url, **kw)
 
     def request(self, method: str, url: str, *, params=None, headers=None, etag="", last_modified="", robots=True, timeout=None) -> Fetched:
+        if self.stop_check is not None:
+            self.stop_check()
         if reason := self.refusal(url, robots=robots, full_url=str(httpx.URL(url, params=params)) if params else url):
             logger.warning("refused %s: %s", _shown(url), reason)
             raise Refused(reason)

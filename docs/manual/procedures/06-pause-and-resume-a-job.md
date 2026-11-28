@@ -46,5 +46,8 @@ A paused job is not a problem. The Dashboard and `/healthz` show it as paused. T
 
 > **NOTE:** `manage.py run_job <name>` runs a paused job all the same. The owner chose the job by name.
 
+> **NOTE:** To stop a job for a long time, archive it ([procedure 17](17-archive-and-unarchive-a-job.md)). The
+> console then hides the job, and its history stays. You cannot pause or resume an archived job.
+
 > **NOTE:** To stop one feed of a feed job and not the other feeds, clear `enabled` on the `Feed` row in the admin.
 > Put the reason in `config["disabled_reason"]`.

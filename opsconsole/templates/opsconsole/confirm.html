@@ -9,3 +9,4 @@
   {% include "opsconsole/_confirm_form.html" %}
 </div>
 {% endblock %}
+{% block scripts %}{% if plan.confirm_name %}{% include "opsconsole/_typed_name.html" %}{% endif %}{% endblock %}

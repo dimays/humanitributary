@@ -7,7 +7,11 @@ runs, tasks or Revisions there are. Nothing here calls a function that writes as
 
 The console speaks in run *states*, Prefect's words for what the runner records (`STATES`): a FetchRun is Running,
 Completed (ok, or partial: completed with errors) or Failed; a run asked for from the console and not yet taken by
-the worker is Pending, or Cancelled if it was withdrawn; a job's next due time is Scheduled, or Paused.
+the worker is Pending, or Cancelled if it was withdrawn; a job's next due time is Scheduled, or Paused. A run stopped
+at a safe point because its job was archived (`stopped`, ADR 0041) is Cancelled too.
+
+An archived job (ADR 0041) is left out of everything here that lists or counts jobs (`jobs()` unless asked, the run
+graph, the tags' jobs, the Work page's "fed by"); its runs stay in `fetch_runs()`, and `archived()` lists it.
 """
 
 import json
@@ -35,11 +39,11 @@ STATES = {  # state → (label, what it means)
     "running": ("Running", "running now"),
     "completed": ("Completed", "finished; a partial run completed with errors"),
     "failed": ("Failed", "raised, or was interrupted"),
-    "cancelled": ("Cancelled", "a console run withdrawn before the worker took it"),
+    "cancelled": ("Cancelled", "a console run withdrawn before the worker took it, or a run stopped because its job was archived"),
     "paused": ("Paused", "the scheduler skips the job until it is resumed"),
 }
-RUN_STATE = {"running": "running", "ok": "completed", "partial": "completed", "failed": "failed"}
-STATE_STATUSES = {"running": ["running"], "completed": ["ok", "partial"], "failed": ["failed"]}  # filter → FetchRun.status
+RUN_STATE = {"running": "running", "ok": "completed", "partial": "completed", "failed": "failed", "stopped": "cancelled"}
+STATE_STATUSES = {"running": ["running"], "completed": ["ok", "partial"], "failed": ["failed"], "cancelled": ["stopped"]}  # filter → FetchRun.status
 HISTORY_RUNS = 10       # runs in a job's history strip
 TIMELINE_HOURS = 24
 OVERDUE = timedelta(minutes=30)
@@ -96,11 +100,26 @@ def tag_set() -> dict[str, str]:
 
 
 def jobs_with_tag(tag: str) -> list[str]:
-    from ingest.jobs import paused_jobs
+    """The jobs with a tag (an archived job keeps its tags, so its runs are still found by tag on the Runs page);
+    "paused" names the paused jobs that are not archived."""
+    from ingest.jobs import archived_jobs, paused_jobs
 
     if tag == "paused":
-        return sorted(paused_jobs())
+        archived = archived_jobs()
+        return sorted(n for n in paused_jobs() if n not in archived)
     return [n for n, j in _registry().items() if tag in j.tags]
+
+
+def archived_names() -> set[str]:
+    from ingest.jobs import archived_jobs
+
+    return set(archived_jobs())
+
+
+def fed_by(kind: str, archived: set[str] | None = None) -> list[str]:
+    """The jobs that queue a task kind (work.rounds.FED_BY), less the archived ones."""
+    archived = archived_names() if archived is None else archived
+    return [j for j in FED_BY.get(kind, []) if j not in archived]
 
 
 # ── Health ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -231,17 +250,21 @@ def recoveries(failed: list, pending: dict[str, list] | None = None) -> dict[int
     return out
 
 
-def jobs(now, *, history: bool = True) -> list[dict]:
+def jobs(now, *, history: bool = True, include_archived: bool = False, holds: tuple | None = None) -> list[dict]:
     """One row per registered job, in run order: tags, schedule, its last finished run (the newest across its feeds),
     failures in a row (the worst feed's), the next due time, whether it is paused (by whom, why; a paused job has no
     failing runs to attend to and never alerts), console runs waiting for the worker, and the last HISTORY_RUNS runs.
     A feed whose last run failed and was dismissed (ADR 0039) is not failing: it is out of `failing`, `failures` and
     `alerting`, and listed in `dismissed` (its count in `dismissed_failures`) until a newer run replaces it. Each
-    failing run that is being retried is in `recoveries` (`recoveries()`). Seven queries."""
-    from ingest.jobs import paused_jobs
+    failing run that is being retried is in `recoveries` (`recoveries()`). An archived job (ADR 0041) has no row
+    unless `include_archived` (its own page); its row's `archived` says by whom and why. `holds` is
+    `ingest.jobs.holds()` when the caller has read it already. Seven queries."""
+    from ingest.jobs import holds as read_holds
 
     reg = _registry()
-    paused = paused_jobs()
+    paused, archived = holds if holds is not None else read_holds()
+    if not include_archived:
+        reg = {n: j for n, j in reg.items() if n not in archived}
     last = {}
     for r in (FetchRun.objects.exclude(status="running").select_related("feed")
               .only("id", "job", "feed_id", "feed__name", "status", "started_at", "finished_at", "counts", "error", "dismissed_at", "dismissed_by", "dismiss_action")
@@ -284,7 +307,7 @@ def jobs(now, *, history: bool = True) -> list[dict]:
         else:
             schedule, schedule_note = every(j.interval), ""
             next_due = (run.started_at + timedelta(minutes=j.interval)) if run else now
-        tags = list(j.tags) + (["paused"] if name in paused else [])
+        tags = list(j.tags) + (["archived"] if name in archived else ["paused"] if name in paused else [])
         # Its feeds' (or its own) last runs that failed: what "needs attention" lists, with a Retry and a Dismiss each,
         # except those an operator dismissed (ADR 0039).
         failed = sorted((r for (job, feed_id), r in last.items() if job == name and r.status == "failed" and (feed_id is not None) == j.feed),
@@ -303,13 +326,29 @@ def jobs(now, *, history: bool = True) -> list[dict]:
             "failing": [] if name in paused else failing, "alerting": name not in paused and worst >= alert_after, "next_due": next_due,
             "dismissed": [r for r in failed if r.dismissed_at], "dismissed_failures": worst_dismissed,
             "overdue": name not in paused and bool(next_due and next_due < now - OVERDUE),
-            "paused": paused.get(name), "not_idempotent": j.not_idempotent,
+            "paused": paused.get(name), "archived": archived.get(name), "not_idempotent": j.not_idempotent,
             "history": hist.get(name, []), "pending": pending.get(name, []),
             "creates": [kind for kind, by in FED_BY.items() if name in by],
         })
     rec = recoveries([run for row in rows for run in row["failing"]], pending)
     for row in rows:
         row["recoveries"] = {run.pk: rec[run.pk] for run in row["failing"] if run.pk in rec}
+    return rows
+
+
+def archived(now) -> list[dict]:
+    """The archived jobs, most recently archived first (ADR 0041): who archived each, when and why, whether the
+    archive paused it, its runs kept and its last one (two queries)."""
+    from ingest.jobs import archived_jobs
+
+    reg = _registry()
+    arch = archived_jobs()
+    if not arch:
+        return []
+    stats = {r["job"]: r for r in FetchRun.objects.filter(job__in=list(arch)).values("job").annotate(n=Count("id"), last=Max("started_at"))}
+    rows = [{"name": n, "doc": reg[n].doc if n in reg else "", "in_code": n in reg, "tags": list(reg[n].tags) if n in reg else [],
+             "archived": a, "runs": stats.get(n, {}).get("n", 0), "last_run": stats.get(n, {}).get("last")} for n, a in arch.items()]
+    rows.sort(key=lambda r: r["archived"].get("at") or "", reverse=True)
     return rows
 
 
@@ -329,13 +368,14 @@ def upcoming(job_rows: list[dict], now, limit: int = 8) -> list[dict]:
     return out[:limit] if limit else out
 
 
-def timeline(now, hours: int = TIMELINE_HOURS) -> dict:
+def timeline(now, hours: int = TIMELINE_HOURS, *, archived: set[str] | None = None) -> dict:
     """The run graph: every run that started in the last `hours`, one row per job (in run order), each bar placed by
     its start and sized by its duration as shares of the window (one query)."""
     start = now - timedelta(hours=hours)
     span = hours * 3600.0
     by_job = defaultdict(list)
-    for r in (FetchRun.objects.filter(started_at__gte=start).values("id", "job", "status", "started_at", "finished_at", "feed__name")
+    archived = archived_names() if archived is None else archived  # it leaves the graph (ADR 0041); its runs stay on the Runs page
+    for r in (FetchRun.objects.filter(started_at__gte=start).exclude(job__in=archived).values("id", "job", "status", "started_at", "finished_at", "feed__name")
               .order_by("started_at", "id")):
         end = r["finished_at"] or now
         secs = max((end - r["started_at"]).total_seconds(), 0.0)
@@ -345,7 +385,7 @@ def timeline(now, hours: int = TIMELINE_HOURS) -> dict:
             "left": round(100 * (r["started_at"] - start).total_seconds() / span, 3),
             "width": round(min(100 * secs / span, 100.0), 3),
         })
-    order = list(_registry())
+    order = [j for j in _registry() if j not in archived]
     names = [j for j in order if by_job.get(j)] + sorted(j for j in by_job if j not in order)
     rows = [{"job": j, "runs": by_job[j], "failed": sum(x["state"] == "failed" for x in by_job[j])} for j in names]
     ticks = []
@@ -544,7 +584,7 @@ def recent_actions(limit: int = 5) -> list:
 
 # ── The queue ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-def queue(now) -> list[dict]:
+def queue(now, *, archived: set[str] | None = None) -> list[dict]:
     """Per task kind: waiting (queued), in progress (claimed, lease live), stuck (claimed, lease expired), done and
     failed today, done in the last seven days, today's new tasks against the daily cap where there is one, the oldest waiting task (two queries)."""
     mid = midnight(now)
@@ -564,6 +604,7 @@ def queue(now) -> list[dict]:
     made = {(r["kind"], r["created_by"]): r["n"] for r in
             AgentTask.objects.filter(created_at__gte=mid, kind__in=[k for k, _, _ in CAPS]).values("kind", "created_by").annotate(n=Count("id"))}
     caps = {kind: {"made": made.get((kind, by), 0), "cap": getattr(settings, setting), "setting": setting} for kind, by, setting in CAPS}
+    archived = archived_names() if archived is None else archived
     out = []
     for kind, label in AgentTask.Kind.choices:
         r = rows.get(kind) or {"kind": kind, "waiting": 0, "in_progress": 0, "stuck": 0, "done_today": 0, "done_7d": 0, "failed_today": 0, "failed": 0,
@@ -573,7 +614,7 @@ def queue(now) -> list[dict]:
         r["label"] = label
         r["oldest_age"] = (now - r["oldest_waiting"]) if r["oldest_waiting"] else None
         r["cap"] = caps.get(kind)
-        r["fed_by"] = FED_BY.get(kind, [])
+        r["fed_by"] = fed_by(kind, archived)
         r["active"] = any(r[k] for k in ("waiting", "in_progress", "stuck", "done_today", "failed_today", "failed"))
         out.append(r)
     return out

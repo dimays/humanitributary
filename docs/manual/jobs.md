@@ -13,6 +13,7 @@ time.
   when the `next_run_at` time of that feed has come. The interval of the `Feed` row (`interval_minutes`) is the real
   schedule.
 - A paused job is never due. `manage.py run_job <name>` runs a paused job all the same.
+- An archived job never runs, and `manage.py run_job <name>` refuses it. Procedure [17](procedures/17-archive-and-unarchive-a-job.md) tells how to archive and unarchive a job.
 - Each run makes one `FetchRun` row: the status (`ok`, `partial`, `failed` or `running`), the counts and the error.
 - The row also records the trigger of the run. The trigger is `schedule`, `manual` or `retry`. For `schedule`, the
   row keeps the time when the job became due (`scheduled_for`). For a retry, the row keeps the failed run and the

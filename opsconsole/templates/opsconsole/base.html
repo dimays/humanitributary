@@ -224,6 +224,16 @@ td .doc { color: var(--muted); font-size: 12.5px; margin-top: 2px; max-width: 52
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; } .btn.primary:hover { filter: brightness(1.06); }
 .btn.danger { color: var(--bad); } .btn.quiet { border-color: transparent; background: transparent; color: var(--muted); }
 .btn.sm { font-size: 12.5px; padding: 2px 9px; }
+.btn.danger-solid { background: var(--bad); border-color: var(--bad); color: #fff; } .btn.danger-solid:hover { filter: brightness(1.06); }
+.btn.danger-solid:disabled { opacity: .45; cursor: not-allowed; filter: none; } .btn.wide { width: 100%; justify-content: center; margin-top: 14px; }
+/* A confirmation dialog in GitHub's style (archive a job, ADR 0041): a header, a warning strip, the consequences, a typed name. */
+dialog.gh-dialog { width: min(480px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: inherit; text-align: left; }
+dialog.gh-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.gh-dialog header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.gh-dialog header h2 { margin: 0; font-size: 15px; } .gh-dialog .x { border: 0; background: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; }
+.gh-dialog .gh-warn { padding: 10px 16px; background: var(--warn-bg); color: var(--warn); border-bottom: 1px solid var(--line); font-size: 13px; }
+.gh-dialog .gh-body { padding: 14px 16px 16px; } .gh-dialog .gh-list { margin: 0 0 12px; padding-left: 18px; font-size: 13px; } .gh-dialog .gh-list li { margin: 4px 0; }
+.gh-dialog label { display: block; margin: 10px 0 4px; font-size: 13px; } .gh-dialog input[type=text], .gh-dialog textarea { width: 100%; box-sizing: border-box; }
 form.act { display: inline; margin: 0; }
 .acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
 .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 0 0 16px; }
