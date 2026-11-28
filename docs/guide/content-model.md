@@ -268,10 +268,11 @@ their small background chip.
 The page breaks ties in its sorts by array order, so the snapshot lists
 entries in a fixed order, and that order is data
 ([ADR 0007](../adr/0007-one-snapshot-shape-byte-identical-both-ways.md)).
-`Entry.sort_key` holds it, as a **fractional index**: a key assigned once,
-chosen to fall between its neighbors, so inserting, deleting or moving one
-entry never changes another's key
-([ADR 0008](../adr/0008-entry-order.md)).
+`Entry.sort_key` holds it, as a **fractional index**: a key chosen to fall
+between its neighbors, so inserting, deleting or moving one entry changes no
+other key ([ADR 0008](../adr/0008-entry-order.md)), until a gap is used up:
+then the entries around it get fresh, short keys in the same order
+([ADR 0045](../adr/0045-short-sort-keys-and-json-errors.md)).
 
 How the keys work (`timeline/ordering.py`):
 
@@ -280,11 +281,24 @@ How the keys work (`timeline/ordering.py`):
   in "0".
 - Keys compare byte by byte. The column uses the "C" collation, so Postgres
   sorts exactly as Python does.
-- `between(lo, hi)` returns a key strictly between two others (`None` is an
-  open end). There is always one; a key grows by a digit only after about 60
-  entries have gone into the same gap.
-- `spread(n, lo, hi)` returns `n` evenly spaced keys. A fresh list of 5,400
-  gets keys of at most four digits (tested in `tests/test_ordering.py`).
+- `between(lo, hi)` returns the key with the fewest digits strictly between
+  two others (the middle one of those; `None` is an open end). With an open
+  end it takes a small step from the closed one, `1/APPEND_STEP` (1/62²) of
+  the room left, so 5,000 appends after a list of 5,400 stay at six digits.
+  The old rule halved the way to the end, a digit every six appends: a few
+  hundred new events since the import pushed the last keys past the
+  column's 64 characters, and `complete` failed with `DataError: value too
+  long` (November 27, 2026). Inserting again and again at one point still
+  halves that gap, a digit every six inserts.
+- `respace(keys, i)` handles that: when `between` would return a key longer
+  than `MAX_LEN` (16), it gives a window around index `i` (four entries each
+  side, doubling until the fresh keys are at most `RESPACED_LEN`, 8, long;
+  the whole list at worst) fresh keys from `spread`, with a place for the new
+  one. Relative order never changes.
+- `spread(n, lo, hi)` returns `n` evenly spaced keys at one width, the
+  narrowest with room for about 60 inserts between neighbors. A fresh list
+  of 5,400 gets keys of at most four digits (tested in
+  `tests/test_ordering.py`).
 - `reconcile(order, current, others)` makes keys follow a wanted order with as
   few writes as possible: the longest run of entries already in order (a
   longest increasing subsequence) keeps its keys; only the rest get new keys
@@ -305,12 +319,28 @@ transaction-scoped `pg_advisory_xact_lock(ORDER_LOCK, hashtext(kind))`, in
 then reads its key. Tested with two threads in `tests/test_rounds.py`
 (`ConcurrentAppendTests`).
 
+Every new key comes from `services._new_key(kind, lo, hi)`, under that lock.
+It returns `between(lo, hi)` when that is at most `MAX_LEN` long; otherwise it
+reads the kind's keys, asks `respace`, and writes each neighbor's new key
+through `apply_changes`, so each moved entry leaves a Revision (`sort_key`,
+`updated_at`) and the snapshot's order is unchanged. The first append after
+this change on a database with the old long keys respaces the crowded end
+once (a few hundred Revisions). `tests/test_ordering.py` (`ShortKeyTests`,
+`DenseInsertTests`) inserts 250 entries after one target and 210 appends
+after a crowded end. The column is 255 characters wide (migration
+`timeline/migrations/0005_sort_key_255.py`), a backstop: keys stay at 16 or fewer.
+
+`apply_changes` also checks every text against its column before it saves: a
+value longer than a `CharField`'s `max_length` is a `ValidationError` whose
+key names the field (`{"location.label": ["301 characters, at most 300"]}`),
+where Postgres's `DataError` would name none.
+
 Where keys come from:
 
 | Writer | What it does |
 |---|---|
-| `services.save_branch` / `save_event` | A new entry goes after the last of its kind. |
-| `services.place(entry, after=slug)` or `before=slug` | Moves one entry; writes its key only. |
+| `services.save_branch` / `save_event` | A new entry goes after the last of its kind (`_new_key(kind, last, None)`). |
+| `services.place(entry, after=slug)` or `before=slug` | Moves one entry; writes its key only, unless its gap is used up (then its neighbors are respaced too). |
 | The loader (`publish/legacy.py` `_sort_keys`, `import_legacy`) | `reconcile()` against the file's order: removing an entry writes nothing, inserting or moving one writes one key. |
 | Migration `timeline/migrations/0003_entry_sort_key.py` | Gave existing rows evenly spaced keys in their old (position, slug) order, as `job:migrate`. |
 

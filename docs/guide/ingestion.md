@@ -759,8 +759,11 @@ URL on a site that hasn't refused us by robots.txt, a bot wall or a TDM reservat
 the unrated domains (`unrated()`), the
 groups with no such URL, the unreadable reasons and hosts, the hosts the policy keeps jobs off, and the host health.
 `--out` writes `evidence-coverage-<date>.md` and `.json`. `manage.py unrated_domains [--json] [--limit N]` prints
-`unrated()` alone: each unrated domain the queued and claimed tasks point at, with the tasks and URLs naming it,
-whether it has a row, and an example URL, most tasks first.
+`unrated()`: each unrated domain the queued and claimed tasks point at, with the tasks and URLs naming it,
+whether it has a row, and an example URL, most tasks first. Below it, the unrated domains agents asked `GET policy`
+about and were refused (`ingest.UnratedLookup`: one row per domain with `lookups`, `first_seen`, `last_seen`,
+`example_url` and `last_actor`, written only by `agentapi.policy.record_unrated`; ADR 0045), most asked first, without
+the ones rated since; `--json` prints both lists, `{"cited_by_tasks", "asked_by_agents"}`.
 
 **Repacking.** `evidence_urls` hashes the candidate keys with `PACK_VERSION` (3): a change to what a pack holds bumps
 it, and every queued task is packed again on the next runs.

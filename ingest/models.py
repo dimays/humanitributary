@@ -439,3 +439,23 @@ class PrefetchedPage(models.Model):
 
     def __str__(self):
         return f"{self.url} ({self.status})"
+
+
+class UnratedLookup(models.Model):
+    """A domain agents asked `GET /api/agent/policy?url=` about that nobody has rated (agentapi/policy.py, ADR 0045):
+    one row per domain, counted on each refusal, so `manage.py unrated_domains` and the console can say which sites
+    agents wanted most. Allowed and rated lookups are not recorded. A row stays when the domain is rated later; the
+    lists leave out domains that are rated by then. Not canonical (no Revision): a tally, like PrefetchedPage."""
+
+    domain = models.CharField(max_length=255, unique=True, help_text="The host without www. (evidence.publishers.domain_of), as Publisher rows name it.")
+    lookups = models.PositiveIntegerField(default=1, help_text="How many times an agent asked about it and was refused as unrated.")
+    first_seen = models.DateTimeField()
+    last_seen = models.DateTimeField(db_index=True)
+    example_url = models.URLField(max_length=2000, help_text="The latest URL asked about.")
+    last_actor = models.CharField(max_length=120, blank=True, help_text="Who asked last (agent:<name>).")
+
+    class Meta:
+        ordering = ["-lookups", "domain"]
+
+    def __str__(self):
+        return f"{self.domain} ({self.lookups})"

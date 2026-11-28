@@ -9,6 +9,10 @@ parent, else `evidence.publishers` defaults), `ingest.policy.NEVER_FETCH`, wheth
 tier), the evidence-pack job's record of a robots.txt that shuts out AI crawlers by name (`PrefetchedPage` rows with
 reason `ai_blocked`) and of a host that refused us lately (`robots`, `blocked`). Nothing is fetched to answer.
 
+An `unrated` answer is counted (`record_unrated`, an `ingest.UnratedLookup` row per domain: the count, first and last
+seen, the latest URL), so `manage.py unrated_domains` and the console's Work page can show which sites agents wanted
+and were refused, most asked first: what to rate next (ADR 0045). No other answer is recorded.
+
 `policy` is the deciding reason, in the evidence pack's `unreadable` words:
 
 | policy | may_fetch | browser_read | |
@@ -24,10 +28,12 @@ Cloud agents have no browser: `browser_read` true there means release the task w
 page can't be replaced by another source.
 """
 
+import logging
 from datetime import timedelta
 from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.db import connection, transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
@@ -40,6 +46,8 @@ from ingest.http import _nearest_publisher
 from ingest.models import PrefetchedPage
 
 from .auth import agent_view, error
+
+log = logging.getLogger("agentapi")
 
 BROWSER = "it needs a browser read: a person's browser, or a local session's in-app browser; never a script. A cloud agent has no browser"
 
@@ -116,6 +124,40 @@ def decide(url: str) -> dict:
                   "crawl_delay": source_policy.host_delay(host)} | extra
 
 
+def record_unrated(url: str, actor: str = "") -> None:
+    """Count one unrated lookup of `url`'s domain: one upsert, so agents asking at once each count. A failure is
+    logged and never changes the answer."""
+    try:
+        with transaction.atomic(), connection.cursor() as c:  # a savepoint: a failure here leaves the request's transaction usable
+            c.execute(
+                """
+                INSERT INTO ingest_unratedlookup (domain, lookups, first_seen, last_seen, example_url, last_actor)
+                VALUES (%s, 1, now(), now(), %s, %s)
+                ON CONFLICT (domain) DO UPDATE SET lookups = ingest_unratedlookup.lookups + 1, last_seen = now(),
+                    example_url = EXCLUDED.example_url, last_actor = EXCLUDED.last_actor
+                """,
+                [domain_of(url)[:255], url[:2000], actor[:120]],
+            )
+    except Exception:  # a tally: never the reason an agent gets no answer
+        log.exception("agent API: could not record an unrated lookup of %s", url)
+
+
+def unrated_lookups(limit: int | None = None) -> list[dict]:
+    """The unrated domains agents asked about, most lookups first, leaving out any rated since (a tier, or a
+    fetch_policy that decides alone: forbidden, citation_only, browser_only)."""
+    from ingest.models import UnratedLookup
+
+    out = []
+    for r in UnratedLookup.objects.order_by("-lookups", "-last_seen", "domain"):
+        if decide(r.example_url)["policy"] != "unrated":
+            continue
+        out.append({"domain": r.domain, "lookups": r.lookups, "first_seen": r.first_seen.isoformat(timespec="seconds"),
+                    "last_seen": r.last_seen.isoformat(timespec="seconds"), "example": r.example_url, "last_actor": r.last_actor})
+        if limit and len(out) >= limit:
+            break
+    return out
+
+
 @agent_view
 @require_http_methods(["GET"])
 def policy(request):
@@ -129,4 +171,7 @@ def policy(request):
         valid = False
     if not valid:
         return error(400, "url must be an http(s) URL")
-    return JsonResponse(decide(url), json_dumps_params={"ensure_ascii": False})
+    out = decide(url)
+    if out["policy"] == "unrated":
+        record_unrated(url, request.agent_token.actor)
+    return JsonResponse(out, json_dumps_params={"ensure_ascii": False})

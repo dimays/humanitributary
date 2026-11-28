@@ -1,6 +1,7 @@
 """Bearer tokens and the per-token rate limit for the agent API (docs/adr/0017-agent-api.md)."""
 
 import hashlib
+import logging
 import secrets
 from functools import wraps
 
@@ -12,6 +13,8 @@ from django.utils import timezone
 from .models import AgentToken
 
 TOKEN_PREFIX = "hta_"
+
+log = logging.getLogger("agentapi")
 
 
 def hash_token(token: str) -> str:
@@ -65,7 +68,9 @@ def authenticate(request) -> tuple[AgentToken | None, JsonResponse | None]:
 
 
 def agent_view(fn):
-    """Authenticate, rate-limit, and pass the token on as `request.agent_token`."""
+    """Authenticate, rate-limit, and pass the token on as `request.agent_token`. An exception the view doesn't handle
+    is logged with its traceback and answered as JSON (500, with the exception's type), never Django's HTML page: an
+    agent reads the body to decide what to do next (ADR 0045)."""
 
     @wraps(fn)
     def wrapper(request, *args, **kwargs):
@@ -73,7 +78,12 @@ def agent_view(fn):
         if err:
             return err
         request.agent_token = token
-        return fn(request, *args, **kwargs)
+        try:
+            return fn(request, *args, **kwargs)
+        except Exception as e:
+            log.exception("agent API: %s %s by %s", request.method, request.path, token.actor)
+            return error(500, f"the server failed ({type(e).__name__}); nothing was kept. It is logged for the owner: "
+                              "send the request again later, or release the task with a reason", exception=type(e).__name__)
 
     wrapper.csrf_exempt = True  # bearer tokens, not cookies: CSRF does not apply
     return wrapper
