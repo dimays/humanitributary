@@ -13,6 +13,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Agent token | A bearer token that gives an agent access to the agent API. The system keeps only its hash. It has scopes and a rate limit. |
 | Alert | One email that the system sends when a job fails three runs in a row. Without the mail config vars, it is a log line. |
 | Approve | To change the status of an entry from `review` to `published`. The `approve` operation of an edit file does this under the publication rule. |
+| Archived job | A job that the console retired. No runner runs it. The console and `/healthz` do not show it, but its runs stay. Unarchive makes it a paused job again. |
 | Branch | A line on the timeline, for example a state, a people, a faith or an idea. A branch is a kind of entry. |
 | Bucket | A container for objects in S3. The system has two: `raw` and `releases`. |
 | Candidate | A possible event that a job made from one or more documents. It has a cluster and a priority. |

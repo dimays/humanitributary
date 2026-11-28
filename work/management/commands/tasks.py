@@ -50,7 +50,7 @@ class Command(BaseCommand):
                 p.add_argument("--no-retry", action="store_true")
             if name == "extend":
                 p.add_argument("--minutes", type=int)
-            if name == "release":  # deferred (ADR 0041): not offered again for --defer-minutes
+            if name == "release":  # deferred (ADR 0042): not offered again for --defer-minutes
                 p.add_argument("--reason", default="")
                 p.add_argument("--defer-minutes", type=int, help=f"0 to {queue.MAX_DEFER_MINUTES} (default {queue.DEFAULT_DEFER_MINUTES}; {queue.NEEDS_DEFER_MINUTES} with --needs).")
                 p.add_argument("--needs", choices=queue.NEEDS, default="", help="A person must act first: a browser read, or the owner's decision.")

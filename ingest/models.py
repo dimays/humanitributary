@@ -54,6 +54,7 @@ class FetchRun(models.Model):
         OK = "ok"
         PARTIAL = "partial"
         FAILED = "failed"
+        STOPPED = "stopped"  # its job was archived while it ran: stopped at a safe point (ADR 0041), not a failure
 
     class Trigger(models.TextChoices):
         SCHEDULE = "schedule"  # the scheduler found it due
@@ -83,7 +84,7 @@ class FetchRun(models.Model):
 
     class Meta:
         ordering = ["-started_at"]
-        constraints = [models.CheckConstraint(condition=Q(status__in=["running", "ok", "partial", "failed"]), name="fetchrun_status_valid"),
+        constraints = [models.CheckConstraint(condition=Q(status__in=["running", "ok", "partial", "failed", "stopped"]), name="fetchrun_status_valid"),
                        models.CheckConstraint(condition=Q(trigger__in=["schedule", "manual", "retry"]), name="fetchrun_trigger_valid")]
         # A job's newest runs (the console's history strips and job pages): one index scan per job.
         indexes = [models.Index(fields=["job", "-started_at"], name="fetchrun_job_started_idx")]

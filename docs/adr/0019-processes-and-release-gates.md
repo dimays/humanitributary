@@ -1,6 +1,6 @@
 # 0019 — Production's processes locally, health and alerts, and release gates
 
-**Status:** proposed (November 2026); amends [0012](0012-ingestion.md) (how jobs run when hosted); amended by [0020](0020-heroku-hosting.md) (the worker runs as a dyno); amended by [0021](0021-the-cutover.md) (the release gates); amended by [0029](0029-release-identity-includes-the-page.md) (a release's identity includes the page); amended by [0039](0039-dismiss-a-failed-run.md) (`/healthz` judges each feed's last run; a `dismissed` state)
+**Status:** proposed (November 2026); amends [0012](0012-ingestion.md) (how jobs run when hosted); amended by [0020](0020-heroku-hosting.md) (the worker runs as a dyno); amended by [0021](0021-the-cutover.md) (the release gates); amended by [0029](0029-release-identity-includes-the-page.md) (a release's identity includes the page); amended by [0039](0039-dismiss-a-failed-run.md) (`/healthz` judges each feed's last run; a `dismissed` state); amended by [0041](0041-archive-a-job.md) (`/healthz` leaves an archived job out)
 
 ## Context
 

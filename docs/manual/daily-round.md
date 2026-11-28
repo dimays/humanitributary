@@ -102,13 +102,13 @@ reviewers read the stored text of these pages through the agent API, and copy th
 refuses an excerpt that is not on a stored page. The list `unreadable` in each task tells the agents which pages
 need a browser: the reasons `browser_only`, `citation_only` and `ai_blocked`.
 
-Before an agent reads a page with a script, it asks the API: `GET /api/agent/policy?url=<url>` (ADR 0041). The agent
+Before an agent reads a page with a script, it asks the API: `GET /api/agent/policy?url=<url>` (ADR 0042). The agent
 reads the page only if the answer has `may_fetch: true`. The answer is false for `browser_only`, `citation_only`,
 `forbidden` and unrated sites, and for sites that block AI crawlers. Then the agent uses a different source. If no
 different source is possible, the agent releases the task with `needs: browser`.
 
 The summary of the round lists each such task on the line "Needs the owner". Do procedure
-[17](procedures/17-do-a-task-that-needs-a-browser.md) for each.
+[18](procedures/18-do-a-task-that-needs-a-browser.md) for each.
 
 A release puts the task back in the queue, but agents do not get it again for 60 minutes. A release with a need
 waits 7 days. Thus the agents of a round do not claim the same task again and again.

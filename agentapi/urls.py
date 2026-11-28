@@ -17,7 +17,7 @@ urlpatterns = [
     path("documents", evidence.documents),
     path("documents/<int:doc_id>", evidence.documents),
     path("evidence/check-excerpt", evidence.check_excerpt),
-    # The source policy for an agent's own reads (ADR 0041)
+    # The source policy for an agent's own reads (ADR 0042)
     path("policy", policy.policy),
     # A round's operations (ADR 0035)
     path("queue", operations.queue),

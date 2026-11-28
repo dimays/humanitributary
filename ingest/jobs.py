@@ -17,6 +17,11 @@
   `BETWEEN_JOBS`: the operations console's queued actions run there, under both locks (opsconsole/worker.py).
 - A job can be paused (`set_paused`, from the console): the JobState "paused_jobs" names it, and `run_due` skips it
   until it is resumed. `run_named` (`manage.py run_job`) still runs it: naming a job is the owner's explicit choice.
+- A job can be archived (`set_archived`, from the console; ADR 0041): the JobState "archived_jobs" names it. An
+  archived job is paused too, and it does not run at all, from the scheduler or `run_named`, until it is unarchived.
+  A run of it already under way stops at its next safe point (`Context.check_stop`): the start of its next request
+  through the Fetcher (where a network error could already end it), a check the job makes itself, or the next feed
+  of a feed job. It is recorded as `stopped`, never `failed`.
 - `Job.not_idempotent` says why a job is not safe to run twice back to back (ADR 0028): the console refuses to run
   such a job again within its interval.
 - `Job.tags` sorts jobs for the console (ADR 0031): a fixed set, `TAGS`, each job naming one or more; an unknown tag
@@ -77,6 +82,18 @@ class Job:
 REGISTRY: dict[str, Job] = {}
 BETWEEN_JOBS: list[Callable] = []  # hooks `loop()` calls between jobs, each `fn(log=…)` (opsconsole registers one)
 PAUSED = "paused_jobs"  # the JobState naming paused jobs: {"jobs": {name: {"by", "at", "reason"}}}
+ARCHIVED = "archived_jobs"  # the JobState naming archived jobs: {"jobs": {name: {"by", "at", "reason", "action", "paused_by_archive"}}}
+STOP_CHECK_SECONDS = 5  # a running job asks "am I archived?" at most this often (one small read)
+
+
+class RunStopped(BaseException):
+    """Raised at a safe point inside a run whose job was archived (ADR 0041). A BaseException, like KeyboardInterrupt,
+    so a job's own `except Exception` around one item does not swallow it and carry on: it ends the run, any open
+    transaction rolls back, and `run_one` records the run as stopped."""
+
+
+class JobArchived(Exception):
+    """`run_named` was asked to run an archived job."""
 
 
 def first_sentence(doc: str) -> str:
@@ -109,6 +126,22 @@ class Context:
     errors: list = field(default_factory=list)
     log: Callable = print
     capture: "runlog.Capture | None" = None  # the run's log (run_one sets it)
+    _stop_checked: float | None = None
+
+    def check_stop(self):
+        """A safe point: raise RunStopped if the job was archived since the run started (ADR 0041). The Fetcher calls
+        it before every request; a long job may call it between items. It reads the database at most once every
+        STOP_CHECK_SECONDS."""
+        import time
+
+        t = time.monotonic()
+        if self._stop_checked is not None and t - self._stop_checked < STOP_CHECK_SECONDS:
+            return
+        self._stop_checked = t
+        a = archived_jobs().get(self.job)
+        if a:
+            raise RunStopped(f"stopped: {self.job} was archived by {a.get('by')} at {a.get('at', '')[:16]}"
+                             + (f" (action #{a['action']})" if a.get("action") else "") + f": {a.get('reason')}")
 
     @property
     def actor(self) -> str:
@@ -155,6 +188,47 @@ def paused_jobs() -> dict[str, dict]:
     return dict(st.get("jobs") or {})
 
 
+def archived_jobs() -> dict[str, dict]:
+    """The archived jobs: {name: {"by", "at", "reason", "action", "paused_by_archive"}}. Reads without creating."""
+    st = JobState.objects.filter(name=ARCHIVED).values_list("state", flat=True).first() or {}
+    return dict(st.get("jobs") or {})
+
+
+def holds() -> tuple[dict[str, dict], dict[str, dict]]:
+    """(paused jobs, archived jobs), in one query."""
+    st = dict(JobState.objects.filter(name__in=[PAUSED, ARCHIVED]).values_list("name", "state"))
+    return dict((st.get(PAUSED) or {}).get("jobs") or {}), dict((st.get(ARCHIVED) or {}).get("jobs") or {})
+
+
+def held_jobs() -> dict[str, dict]:
+    """The jobs the scheduler skips: the paused ones and the archived ones (an archived job is paused too, but its
+    archive holds it even if the pause entry were removed by hand). One query."""
+    paused, archived = holds()
+    return {**paused, **archived}
+
+
+def set_archived(name: str, archived: bool, *, by: str, reason: str, action: int | None = None,
+                 paused_by_archive: bool = False) -> dict[str, dict]:
+    """Archive or unarchive a job (the console's action, which pauses it first and records who and why; ADR 0041).
+    Unarchiving removes only the archive entry: the job comes back paused. → the archived jobs after."""
+    from django.db import transaction
+
+    _load_registry()
+    with transaction.atomic():
+        st, _ = JobState.objects.select_for_update().get_or_create(name=ARCHIVED, defaults={"state": {"jobs": {}}})
+        jobs = dict(st.state.get("jobs") or {})
+        if archived:
+            if name not in REGISTRY:
+                raise KeyError(f"no job {name!r}")
+            jobs[name] = {"by": by, "at": timezone.now().isoformat(timespec="seconds"), "reason": reason, "action": action,
+                          "paused_by_archive": paused_by_archive}
+        else:
+            jobs.pop(name, None)
+        st.state = {**st.state, "jobs": jobs}
+        st.save(update_fields=["state", "updated_at"])
+    return jobs
+
+
 def set_paused(name: str, paused: bool, *, by: str, reason: str) -> dict[str, dict]:
     """Pause or resume a job (the console's action; the caller records who and why). → the paused jobs after."""
     from django.db import transaction
@@ -193,7 +267,7 @@ def _due(j: Job, now, feed: Feed | None, paused: dict) -> tuple[bool, object]:
 
 
 def is_due(j: Job, now, feed: Feed | None = None, *, paused: dict | None = None) -> bool:
-    return _due(j, now, feed, paused_jobs() if paused is None else paused)[0]
+    return _due(j, now, feed, held_jobs() if paused is None else paused)[0]
 
 
 def run_one(j: Job, *, feed: Feed | None = None, options: dict | None = None, fetcher: Fetcher | None = None, log=print,
@@ -217,24 +291,30 @@ def run_one(j: Job, *, feed: Feed | None = None, options: dict | None = None, fe
         own_fetcher = fetcher is None
         fetcher = fetcher or Fetcher()
         ctx = Context(job=j.name, run=run, fetcher=fetcher, feed=feed, options=options or {}, log=ctx_log, capture=cap)
+        fetcher.stop_check = ctx.check_stop  # every request is a safe point (ADR 0041)
+        stopped = ""
         try:
             j.fn(ctx)
             run.status = FetchRun.Status.PARTIAL if ctx.errors else FetchRun.Status.OK
+        except RunStopped as e:  # its job was archived while it ran: not a failure
+            stopped = str(e)
+            run.status = FetchRun.Status.STOPPED
         except Exception as e:  # a failing job is recorded and never stops the next one
             ctx.error(f"{type(e).__name__}: {e}\n{traceback.format_exc()[-3000:]}")
             run.status = FetchRun.Status.FAILED
         finally:
+            fetcher.stop_check = None
             if own_fetcher:
                 ctx.counts["requests"] += fetcher.requests
                 fetcher.close()
     run.finished_at = timezone.now()
     run.counts = dict(sorted(ctx.counts.items()))
-    run.error = mask_secrets("\n".join(ctx.errors))[:20000]
+    run.error = mask_secrets("\n".join(ctx.errors + ([stopped] if stopped else [])))[:20000]
     run.save()
     took = (run.finished_at - now).total_seconds()
-    cap.add("ERROR" if run.status == FetchRun.Status.FAILED else "WARNING" if run.status == FetchRun.Status.PARTIAL else "INFO",
+    cap.add("ERROR" if run.status == FetchRun.Status.FAILED else "WARNING" if run.status in (FetchRun.Status.PARTIAL, FetchRun.Status.STOPPED) else "INFO",
             f"{label} finished: {run.status} in {took:.1f} s" + (f"; {len(ctx.errors)} error(s)" if ctx.errors else "")
-            + (f"; counts {json.dumps(run.counts)}" if run.counts else ""), logger="ingest.jobs")
+            + (f"; counts {json.dumps(run.counts)}" if run.counts else "") + (f"; {stopped}" if stopped else ""), logger="ingest.jobs")
     cap.save()
     if feed is not None:
         feed.last_run_at = now
@@ -274,7 +354,6 @@ def run_due(*, only: list[str] | None = None, log=print, fetcher_factory=Fetcher
             runlog.prune()
         except Exception as e:  # noqa: BLE001 — old logs can wait for the next pass
             logger.warning("pruning run logs failed: %s", type(e).__name__)
-        paused = paused_jobs()
         for j in REGISTRY.values():
             if only and j.name not in only:
                 continue
@@ -283,7 +362,9 @@ def run_due(*, only: list[str] | None = None, log=print, fetcher_factory=Fetcher
                 for feed in feeds_for(j.name).order_by("name"):
                     if stopping():
                         return runs
-                    due, at = _due(j, now_, feed, paused)
+                    # Read before each run (one small query): a job paused or archived during this pass, even
+                    # between two of its own feeds, is held from the next one (ADR 0041).
+                    due, at = _due(j, now_, feed, held_jobs())
                     if due:
                         gap()
                         runs.append(run_one(j, feed=feed, fetcher=fetcher_factory() if fetcher_factory is not Fetcher else None, log=log,
@@ -291,7 +372,7 @@ def run_due(*, only: list[str] | None = None, log=print, fetcher_factory=Fetcher
             else:
                 if stopping():
                     return runs
-                due, at = _due(j, now_, None, paused)
+                due, at = _due(j, now_, None, held_jobs())
                 if due:
                     gap()
                     runs.append(run_one(j, fetcher=fetcher_factory() if fetcher_factory is not Fetcher else None, log=log, scheduled_for=at))
@@ -376,10 +457,14 @@ def run_named(name: str, *, feed: str | None = None, options: dict | None = None
               trigger: str = FetchRun.Trigger.MANUAL, triggered_by: str = "shell", ops_action: int | None = None,
               retry_of: FetchRun | None = None) -> list[FetchRun] | None:
     """Run one job now, due or not, paused or not (every enabled feed of a feed job, or the one named). Its runs are
-    `manual` by "shell" unless the console says otherwise (a run or a retry, with its OpsAction's id and who asked)."""
+    `manual` by "shell" unless the console says otherwise (a run or a retry, with its OpsAction's id and who asked).
+    An archived job is refused (JobArchived): it is retired until unarchived (ADR 0041); a job archived while this
+    runs stops at its next safe point, and its feeds not yet started are not run."""
     _load_registry()
     if name not in REGISTRY:
         raise KeyError(f"no job {name!r}; known: {', '.join(REGISTRY)}")
+    if a := archived_jobs().get(name):
+        raise JobArchived(f"{name} is archived (by {a.get('by')}: {a.get('reason')}); unarchive it from the console first")
     j = REGISTRY[name]
     if not try_lock():
         log("another run_jobs holds the lock; exiting")
@@ -391,8 +476,14 @@ def run_named(name: str, *, feed: str | None = None, options: dict | None = None
             if feed:
                 qs = qs.filter(pk=int(feed)) if feed.isdigit() else qs.filter(name=feed)
             how = dict(trigger=trigger, triggered_by=triggered_by, ops_action=ops_action)
-            return [run_one(j, feed=f, options=options, fetcher=fetcher, log=log, **how,
-                            retry_of=retry_of if retry_of is not None and retry_of.feed_id == f.pk else None) for f in qs.order_by("name")]
+            out = []
+            for f in qs.order_by("name"):
+                if out and name in archived_jobs():  # archived between two feeds: the rest are not started
+                    log(f"{name} was archived: its remaining feeds are not run")
+                    break
+                out.append(run_one(j, feed=f, options=options, fetcher=fetcher, log=log, **how,
+                                   retry_of=retry_of if retry_of is not None and retry_of.feed_id == f.pk else None))
+            return out
         return [run_one(j, options=options, fetcher=fetcher, log=log, trigger=trigger, triggered_by=triggered_by, ops_action=ops_action,
                         retry_of=retry_of)]
     finally:

@@ -24,7 +24,9 @@ How the jobs use these sources is in [ingestion](ingestion.md).
 Every job request goes through `ingest.http.Fetcher` ([ingest/http.py](../../ingest/http.py)). Its `refusal(url)`
 runs these checks in order; the first that fails raises `Refused` with the reason, and no request is made (a test,
 `test_never_fetch_hosts_and_browser_only_publishers_are_refused_before_any_request`, checks that the request count
-stays at zero).
+stays at zero). Before the checks, a Fetcher a job run holds calls its `stop_check`: the run's safe point, which
+raises `RunStopped` once the job is archived ([ADR 0041](../adr/0041-archive-a-job.md); see
+[ingestion](ingestion.md)).
 
 | # | Check | Where it lives | Refused when |
 |---|---|---|---|
@@ -268,7 +270,7 @@ publishers the verdicts set: theguardian.com, bbc.co.uk, bbc.com, npr.org, aljaz
 An agent that reads a page itself (WebFetch, `curl`) bypasses the Fetcher, and in live rounds agents did read a
 `citation_only` news site whose robots.txt names Claude's crawlers, and a `browser_only` one. So the agent API
 answers the policy for any URL: `GET /api/agent/policy?url=…` (`agentapi/policy.py`,
-[ADR 0041](../adr/0041-deferred-releases-and-the-fetch-policy-endpoint.md)), from the same rows the Fetcher and
+[ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md)), from the same rows the Fetcher and
 the evidence-pack job read, fetching nothing. Every task skill calls it before a scripted fetch of a source page.
 
 For an agent's script it is stricter than "a job may fetch": `may_fetch` is true only for a rated `allowed`

@@ -9,11 +9,13 @@
   <div class="tools">{% include "opsconsole/_refresh.html" %}
     {% if older %}<a class="btn sm quiet" href="{% url 'opsconsole:run' older %}">← Older</a>{% endif %}
     {% if newer %}<a class="btn sm quiet" href="{% url 'opsconsole:run' newer %}">Newer →</a>{% endif %}
-    {% if r.status == 'failed' and not recovery %}{% act "retry_run" "Retry" "primary" run=r.pk %}{% endif %}
+    {% if r.status == 'failed' and not recovery and not job_archived %}{% act "retry_run" "Retry" "primary" run=r.pk %}{% endif %}
     {% if dismissable %}{% act "dismiss_run" "Dismiss" "quiet" run=r.pk %}{% endif %}</div>
 </div>
 
 {% if r.status == 'failed' %}<div class="banner bad"><b>Failed:</b> {{ error_head }}</div>{% endif %}
+{% if r.status == 'stopped' %}<div class="banner warn"><b>Stopped</b> at a safe point: its job was archived while it ran. It is not counted as a failure.</div>{% endif %}
+{% if job_archived %}<div class="banner info">Its job, <a href="{% url 'opsconsole:job' r.job %}">{{ r.job }}</a>, is <a href="{% url 'opsconsole:jobs_archived' %}">archived</a>: its runs are kept here, and it can't be run or retried until it is unarchived.</div>{% endif %}
 {% if recovery %}<div class="banner info"><b>{{ recovery.label }}:</b>
   {% if recovery.action %}<a href="{% url 'opsconsole:action' recovery.action %}">action #{{ recovery.action }}</a>{% endif %}{% if recovery.run %}{% if recovery.action %} · {% endif %}<a href="{% url 'opsconsole:run' recovery.run %}">run #{{ recovery.run }}</a>{% endif %}</div>{% endif %}
 {% if r.dismissed_at %}<div class="banner info"><b>Dismissed</b> from Needs attention by {{ r.dismissed_by }}, {{ r.dismissed_at|date:"M j, H:i" }} UTC{% if r.dismiss_action %} (<a href="{% url 'opsconsole:action' r.dismiss_action %}">action #{{ r.dismiss_action }}</a>, with the reason){% endif %}: it is not counted as failing; a newer failure is.</div>{% endif %}

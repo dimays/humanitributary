@@ -160,7 +160,7 @@ plain waiting task is skipped: there is nothing to undo.
 A released task used to go straight back as `queued` with its priority
 unchanged, so the next claim, by the same agent or another, returned the
 same task: two verifiers spent a whole batch on one task that needed a
-person's browser. Since [ADR 0041](../adr/0041-deferred-releases-and-the-fetch-policy-endpoint.md)
+person's browser. Since [ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md)
 a release waits:
 
 - `defer_minutes` runs from 0 to `MAX_DEFER_MINUTES` (10,080, a week). It
@@ -428,7 +428,7 @@ documents?url=` and checks excerpts against it, and in a cloud round a draft onl
 held.
 
 Every skill that may fetch a page (all but `run-round`'s own steps, which brief the agents the same way) starts its
-fetching rules with **ask the policy before every fetch** ([ADR 0041](../adr/0041-deferred-releases-and-the-fetch-policy-endpoint.md)):
+fetching rules with **ask the policy before every fetch** ([ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md)):
 `GET policy?url=` before any WebFetch or `curl` of a source page, and no fetch unless `may_fetch`; then another
 source (Wikipedia's references), a browser where there is one and `browser_read` allows it, never a cite of a page
 not read, and, when the task can't be done without the page, a release with `{"needs": "browser", "reason":
@@ -639,7 +639,7 @@ The `prefetch_sources` job ([ingestion](ingestion.md#evidence-packs),
 | Key | What |
 |---|---|
 | `evidence_pack` | `[{url, title, publisher, tier, fetched_at, doc_id, words, passages: [{text, score, matches}]}]`: each stored page (non-Wikipedia first), with up to five ranked passages; at most 20,000 bytes. A page read through its official API adds `"via": "api", "api": "openalex"` (or `crossref`, `loc`, `smithsonian`, `europeana`): the record (abstract, metadata), not the page, and its `publisher` is the API's. A page purged by retention keeps its entry with no passages and `purged: true`. |
-| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it, and since ADR 0041 neither does an agent's script (`GET policy` says `may_fetch: false`); `api_<…>` that a catalog page's API failed or lacks its key; `api_only` that the publisher allows only its API and no route reaches it. `browser_only`, `citation_only` and `ai_blocked` (robots.txt shuts out AI crawlers by name, ADR 0037) are the reasons an agent opens a browser for; `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
+| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it, and since ADR 0042 neither does an agent's script (`GET policy` says `may_fetch: false`); `api_<…>` that a catalog page's API failed or lacks its key; `api_only` that the publisher allows only its API and no route reaches it. `browser_only`, `citation_only` and `ai_blocked` (robots.txt shuts out AI crawlers by name, ADR 0037) are the reasons an agent opens a browser for; `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
 | `evidence_ready` | A stored page that isn't Wikipedia: what the console's "evidence ready" share counts. |
 | `evidence_pack_at`, `evidence_urls` | When it was built, and from which URLs (a hash; `+deferred` when a cap cut it short). |
 
@@ -662,7 +662,7 @@ reads a page itself (WebFetch, `curl`) has no Fetcher in front of it, and in
 live rounds writers read nbcnews.com (`citation_only`, and its robots.txt
 names Claude's crawlers) and fillers touched un.org (`browser_only`). So
 `GET policy?url=<url>` (`agentapi/policy.py`,
-[ADR 0041](../adr/0041-deferred-releases-and-the-fetch-policy-endpoint.md))
+[ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md))
 answers from the same rows, fetching nothing, and every task skill asks it
 before any scripted fetch of a source page.
 

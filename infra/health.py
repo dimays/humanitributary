@@ -15,7 +15,8 @@ the worst feed's failures in a row), "ok" when they completed, "never_run", "pau
 console (a paused job isn't failing, whatever its last runs did; its count is still shown), or "dismissed" when every
 one that failed was dismissed by an operator from the console (ADR 0039: with who, when and the run; the count is
 still shown). Only failing jobs are in `failing_jobs`. Resuming a job, or a newer failed run after a dismissal, brings
-it back. A failed run being retried stays failing until the retry completes.
+it back. A failed run being retried stays failing until the retry completes. An archived job (ADR 0041) is left out
+altogether: it is not in `jobs`, `failing_jobs`, `paused_jobs` or `dismissed_jobs` (it is paused, and retired).
 Nothing secret is in it: names of jobs, counts and timestamps.
 """
 
@@ -65,7 +66,7 @@ def status() -> dict:
 
 def jobs() -> dict:
     from infra.alerts import consecutive_failures
-    from ingest.jobs import REGISTRY, _load_registry, paused_jobs
+    from ingest.jobs import REGISTRY, _load_registry, archived_jobs, paused_jobs
     from ingest.models import FetchRun
 
     _load_registry()
@@ -77,8 +78,11 @@ def jobs() -> dict:
               .order_by("job", "feed_id", "-started_at", "-id").distinct("job", "feed_id")):
         lasts.setdefault(r.job, []).append(r)
     paused = paused_jobs()
+    archived = archived_jobs()
     out = {}
     for name in REGISTRY:
+        if name in archived:
+            continue
         mine = sorted(lasts.get(name, []), key=lambda r: (r.started_at, r.pk), reverse=True)
         last = mine[0] if mine else None
         failed = [r for r in mine if r.status == "failed"]

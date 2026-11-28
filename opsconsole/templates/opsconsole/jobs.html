@@ -8,6 +8,7 @@
 <div class="chips" role="navigation" aria-label="Filter by tag">
   <a href="{% url 'opsconsole:jobs' %}" class="{% if not tag %}on{% endif %}">All<span class="n">{{ total }}</span></a>
   {% for t, about in tags.items %}<a href="?tag={{ t }}" class="{% if tag == t %}on{% endif %}" title="{{ about }}">{{ t }}<span class="n">{{ tag_counts|get:t }}</span></a>{% endfor %}
+  {% if archived_count %}<a href="{% url 'opsconsole:jobs_archived' %}" title="archived jobs: hidden from this list, the Dashboard and health; their runs are kept">Archived jobs<span class="n">{{ archived_count }}</span></a>{% endif %}
 </div>
 <div class="card flush"><div class="scroll"><table>
 <thead><tr><th>Job</th><th>Tags</th><th>Schedule</th><th>Last run</th><th>Last 10 runs</th><th>Next</th>{% if can_act %}<th></th>{% endif %}</tr></thead>
@@ -24,6 +25,6 @@
   {% if can_act %}<td style="width:1%">{% include "opsconsole/_job_acts.html" %}</td>{% endif %}
 </tr>{% empty %}<tr><td colspan="7" class="muted">No job has this tag.</td></tr>{% endfor %}
 </tbody></table></div></div>
-<p class="small muted" style="margin-top:14px">Tags are fixed in <span class="mono">ingest/jobs.py</span> <span class="mono">TAGS</span>; “paused” marks a job paused from here.</p>
+<p class="small muted" style="margin-top:14px">Tags are fixed in <span class="mono">ingest/jobs.py</span> <span class="mono">TAGS</span>; “paused” marks a job paused from here. Archived jobs are not listed: <a href="{% url 'opsconsole:jobs_archived' %}">Archived jobs</a>.</p>
 {% endblock %}
 {% block scripts %}{% include "opsconsole/_run_cards.html" %}{% endblock %}

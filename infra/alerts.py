@@ -16,7 +16,10 @@ from ingest.policy import mask_secrets
 
 
 def consecutive_failures(job: str, feed_id: int | None) -> int:
-    runs = FetchRun.objects.filter(job=job, feed_id=feed_id).exclude(status=FetchRun.Status.RUNNING).order_by("-started_at", "-id")
+    # A stopped run (its job was archived while it ran: ADR 0041) neither fails nor resets the count, as in the
+    # console's failure streaks (opsconsole/queries.py FAILURE_STREAKS_SQL).
+    runs = (FetchRun.objects.filter(job=job, feed_id=feed_id).exclude(status__in=[FetchRun.Status.RUNNING, FetchRun.Status.STOPPED])
+            .order_by("-started_at", "-id"))
     n = 0
     for status in runs.values_list("status", flat=True)[: settings.ALERT_AFTER_FAILURES + 1]:
         if status != FetchRun.Status.FAILED:

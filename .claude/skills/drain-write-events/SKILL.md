@@ -40,7 +40,7 @@ api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/extend" -d '{"minutes": 30}'
 
 A lease that runs out may be taken over by another agent; then your `complete` is refused (409) and the work is
 lost. If you can't finish, `release` the task (untouched) or `fail` it with the reason; never leave it to lapse.
-A release is deferred (ADR 0041): the task isn't offered again for an hour, so neither you nor the next agent claims it
+A release is deferred (ADR 0042): the task isn't offered again for an hour, so neither you nor the next agent claims it
 straight back. Say why, `-d '{"reason": "…"}'` (`"defer_minutes"`: 0 to 10080 for another wait). When only a person
 can unblock it, add `"needs": "browser"` (a page only a browser may read) or `"needs": "owner"` (the owner's call): it
 waits a week, and the round's summary lists it for the owner. Never release and re-claim the same task in a loop.
@@ -48,7 +48,7 @@ waits a week, and the round's summary lists it for the owner. Never release and 
 ## Fetching: honest, one tab, never forced
 
 - **Ask the policy before every fetch.** Before any WebFetch or `curl` of a source page (anything but the agent API
-  itself), ask the API whether your script may read it (ADR 0041):
+  itself), ask the API whether your script may read it (ADR 0042):
 
   ```bash
   api -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"

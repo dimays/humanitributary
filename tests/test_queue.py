@@ -90,7 +90,7 @@ class QueueTests(TestCase):
 
 
 class DeferredReleaseTests(TestCase):
-    """A released task waits (ADR 0041): the next claim doesn't hand the same task straight back."""
+    """A released task waits (ADR 0042): the next claim doesn't hand the same task straight back."""
 
     def claim(self, agent="agent:a"):
         return queue.next_task(agent=agent, claim=True)

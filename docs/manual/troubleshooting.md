@@ -22,6 +22,8 @@ procedure.
 | A console action stays `pending`. | No worker holds the scheduler lock, or the worker is in a long job. | If the action page says that no worker runs, start the worker. Otherwise wait for the job to end. You can withdraw a `pending` action from its page. |
 | `run_job` prints `another run_jobs holds the lock; exiting`. | The worker runs a job now. Only one runner can hold the lock. | Wait some minutes and do the command again. Or use the console action, which runs between jobs. |
 | `run_jobs --list` shows a job as paused. | An operator paused it from the console. | Read who paused it and why on the page of the job in the console. Resume it with procedure [06](procedures/06-pause-and-resume-a-job.md). |
+| A job is not on the Jobs page or in `/healthz`. | An operator archived it. | Open the page "Archived jobs" of the console. Read who archived it and why. To bring it back, do procedure [17](procedures/17-archive-and-unarchive-a-job.md). |
+| A run shows as "Cancelled" on the Runs page, with an error that starts with `stopped:`. | An operator archived its job while it ran. The run stopped at its next request. | No action. The stop is not a failure. |
 | The Dashboard shows a job with an amber "Paused" badge, and its last runs failed. | An operator paused the job after the failures. A paused job is not a problem. | No action. When you correct the cause, resume the job with procedure [06](procedures/06-pause-and-resume-a-job.md). |
 
 ## The queue and the agents
@@ -39,7 +41,7 @@ procedure.
 | An agent gets 403 on `GET documents/<id>`. | The agent does not hold a task with that page in its evidence pack. | Tell the agent to claim the task first. A reviewer uses a token with the scope `review`, and an entry in review must cite the page. |
 | The "evidence ready" share on the Work page is low. | The tasks cite only Wikipedia, unrated publishers, `browser_only` sites or sites that refuse scripts. Or `prefetch_sources` did not run. | Do procedure [16](procedures/16-measure-the-evidence-coverage.md). Make sure that `prefetch_sources` has runs with the status `ok` or `partial`. |
 | An agent gets 429 from the agent API. | The token made more than `AGENT_API_RATE_PER_MINUTE` (120) requests in one minute. | Wait the number of seconds in `retry_after`, then continue. |
-| A task shows "Deferred" and "needs browser" on the console. | An agent needed a page that only a browser can read, and it released the task (ADR 0041). | Do procedure [17](procedures/17-do-a-task-that-needs-a-browser.md). |
+| A task shows "Deferred" and "needs browser" on the console. | An agent needed a page that only a browser can read, and it released the task (ADR 0042). | Do procedure [18](procedures/18-do-a-task-that-needs-a-browser.md). |
 | A task shows "Deferred" with a time "not before", and no need. | An agent released the task. Agents do not get it until that time. | Wait. If the task must run now, requeue it on the console. |
 | `GET policy` says `may_fetch: false` for a site that agents need. | The site is `browser_only`, `citation_only` or unrated, or it blocks AI crawlers. | If the site has no tier, read its terms. Then give it a tier and a policy with procedure [12](procedures/12-add-a-data-source.md). |
 | A task shows as stuck on the console. | The lease time is past, and the agent did not release the task. | Do procedure [07](procedures/07-release-a-stuck-task.md). |

@@ -1,4 +1,4 @@
-# 0041 — A released task waits before it is offered again, and agents ask the API before they fetch a page
+# 0042 — A released task waits before it is offered again, and agents ask the API before they fetch a page
 
 **Status:** proposed (November 2026); amends [0003](0003-deterministic-jobs-and-an-agent-queue.md) (an agent's release defers the task and may record a need for a person), [0017](0017-agent-api.md) (a body for `release`, and `GET policy`), [0036](0036-evidence-packs.md) (the agents' own reads follow the policy the evidence-pack job follows) and [0037](0037-source-ratings-2026-11-28.md) (the ratings bind an agent's scripted reads, not only jobs)
 

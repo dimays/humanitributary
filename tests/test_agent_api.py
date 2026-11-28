@@ -177,7 +177,7 @@ class AgentApiTests(TestCase):
 
 
 class DeferredReleaseApiTests(TestCase):
-    """POST tasks/<id>/release takes {"reason", "defer_minutes", "needs"} and defers the task (ADR 0041)."""
+    """POST tasks/<id>/release takes {"reason", "defer_minutes", "needs"} and defers the task (ADR 0042)."""
 
     def setUp(self):
         _, self.token = create_token("verifier", ["verify_claim"], created_by="human:owner")
@@ -222,7 +222,7 @@ class DeferredReleaseApiTests(TestCase):
 
 
 class FetchPolicyApiTests(TestCase):
-    """GET policy?url=: may an agent's own script fetch a page (ADR 0041)? One case per fetch policy, an unrated
+    """GET policy?url=: may an agent's own script fetch a page (ADR 0042)? One case per fetch policy, an unrated
     domain, a robots.txt that shuts out AI crawlers, and api_only inside and outside its API base."""
 
     def setUp(self):

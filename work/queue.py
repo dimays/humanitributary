@@ -10,7 +10,7 @@ Operators (the console, ADR 0028) have their own versions, each naming who acts 
 a lease that changed hands in the meantime is refused), `requeue` (failed or cancelled tasks back to the queue, their
 attempts reset) and `cancel` (queued tasks, or claimed ones whose lease ran out), at most MAX_BATCH at once.
 
-Deferral (docs/adr/0041-deferred-releases-and-the-fetch-policy-endpoint.md): an agent's `release` sets `not_before`
+Deferral (docs/adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md): an agent's `release` sets `not_before`
 (DEFAULT_DEFER_MINUTES from now unless it says otherwise), so the next claim doesn't hand the same task straight back;
 a release that `needs` a person (a browser read, the owner's decision) waits NEEDS_DEFER_MINUTES and records the need
 in `payload["needs"]`, where the console shows it. An operator's `requeue` also takes such a deferred task, and clears

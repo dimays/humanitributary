@@ -29,7 +29,12 @@ class Command(BaseCommand):
         if list:
             now = timezone.now()
             paused = jobs.paused_jobs()
+            archived = jobs.archived_jobs()
             for j in jobs.REGISTRY.values():
+                if j.name in archived:
+                    a = archived[j.name]
+                    self.stdout.write(f"{j.name:22} {j.interval:>6}m  {'archived':27} by {a.get('by')}: {a.get('reason', '')[:60]}")
+                    continue
                 if j.name in paused:
                     self.stdout.write(f"{j.name:22} {j.interval:>6}m  {'paused':27} by {paused[j.name].get('by')}: {paused[j.name].get('reason', '')[:60]}")
                     continue

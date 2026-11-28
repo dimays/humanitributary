@@ -1,4 +1,4 @@
-"""The source policy for an agent's own reads (docs/adr/0041-deferred-releases-and-the-fetch-policy-endpoint.md).
+"""The source policy for an agent's own reads (docs/adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md).
 
     GET /api/agent/policy?url=…   → {url, publisher, policy, may_fetch, browser_read, why, api_base?, crawl_delay?}
 

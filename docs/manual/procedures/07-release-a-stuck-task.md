@@ -37,7 +37,7 @@ heroku run python manage.py tasks release <id> --agent agent:<holder name> --def
 Make sure that the output shows the task with the status `queued` and `"not_before": null`.
 
 > **NOTE:** A release from the command line or from an agent waits 60 minutes before agents get the task again
-> (ADR 0041). The option `--defer-minutes 0` cancels the wait.
+> (ADR 0042). The option `--defer-minutes 0` cancels the wait.
 
 ## Other actions on a task
 

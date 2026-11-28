@@ -20,7 +20,7 @@ validates the result against its kind's schema and applies it through the servic
     POST /api/agent/evidence/check-excerpt  {"doc_id" | "url", "excerpt"} → verbatim on the stored page? (and the closest passage)
     GET  /api/agent/policy?url=…            may an agent's script fetch this page? {publisher, policy, may_fetch, why, …}
 
-A release is deferred (ADR 0041): the task isn't offered again for `defer_minutes` (0 to 10080; 60 by default, also
+A release is deferred (ADR 0042): the task isn't offered again for `defer_minutes` (0 to 10080; 60 by default, also
 for a bare POST), so the next claim doesn't return the same task. `needs` ("browser": only a browser may read a page
 it needs; "owner": a decision for the owner) defers it a week unless `defer_minutes` says otherwise, and records the
 need in the task's payload for the console. `GET policy` (agentapi/policy.py) is the source policy for an agent's own

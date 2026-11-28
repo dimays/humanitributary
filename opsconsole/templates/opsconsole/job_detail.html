@@ -1,18 +1,19 @@
 {% extends "opsconsole/base.html" %}{% load ops %}
 {% block title %}{{ j.name }}{% endblock %}
 {% block content %}
-<div class="crumb"><a href="{% url 'opsconsole:jobs' %}">Jobs</a> /</div>
+<div class="crumb"><a href="{% url 'opsconsole:jobs' %}">Jobs</a> /{% if j.archived %} <a href="{% url 'opsconsole:jobs_archived' %}">Archived</a> /{% endif %}</div>
 <div class="head">
   <div><h1>{{ j.name }}</h1><div class="sub">{{ j.doc }}</div>
-    <div class="tags" style="margin-top:10px">{% for t in j.tags %}<a class="tag{% if t == 'paused' %} paused{% endif %}" href="{% url 'opsconsole:jobs' %}?tag={{ t }}" title="{{ tags|get:t }}">{{ t }}</a>{% endfor %}</div></div>
-  <div class="tools">{% include "opsconsole/_job_acts.html" %}</div>
+    <div class="tags" style="margin-top:10px">{% for t in j.tags %}{% if t == 'archived' %}<a class="tag paused" href="{% url 'opsconsole:jobs_archived' %}" title="archived: hidden from the console and health until it is unarchived">archived</a>{% else %}<a class="tag{% if t == 'paused' %} paused{% endif %}" href="{% url 'opsconsole:jobs' %}?tag={{ t }}" title="{{ tags|get:t }}">{{ t }}</a>{% endif %}{% endfor %}</div></div>
+  <div class="tools">{% include "opsconsole/_job_acts.html" %}{% if archive %}{% include "opsconsole/_archive_dialog.html" %}{% endif %}</div>
 </div>
-{% if j.paused %}<div class="banner warn">Paused by {{ j.paused.by }} {% if j.paused.at %}on {{ j.paused.at|slice:":16" }} UTC{% endif %}: {{ j.paused.reason }}. The scheduler skips it until it is resumed.</div>{% endif %}
+{% if j.archived %}<div class="banner info"><b>Archived</b> by {{ j.archived.by }} {% if j.archived.at %}on {{ j.archived.at|slice:":16" }} UTC{% endif %}{% if j.archived.action %} (<a href="{% url 'opsconsole:action' j.archived.action %}">action #{{ j.archived.action }}</a>){% endif %}: {{ j.archived.reason }}. It never runs and is hidden from the console and health; its history is kept below. Unarchive brings it back paused.</div>
+{% elif j.paused %}<div class="banner warn">Paused by {{ j.paused.by }} {% if j.paused.at %}on {{ j.paused.at|slice:":16" }} UTC{% endif %}: {{ j.paused.reason }}. The scheduler skips it until it is resumed.</div>{% endif %}
 <div class="grid g2">
   <div class="card"><dl class="kv">
     {% if j.creates %}<dt>Makes tasks</dt><dd>{% for k in j.creates %}<a href="{% url 'opsconsole:work_kind' k %}">{{ k }}</a>{% if not forloop.last %}, {% endif %}{% endfor %} <span class="muted">(agents do them in rounds: Work)</span></dd>{% endif %}
     <dt>Schedule</dt><dd>{{ j.schedule }}{% if j.schedule_note %} <span class="muted">({{ j.schedule_note }})</span>{% endif %}</dd>
-    <dt>Next run</dt><dd>{% if j.paused %}{% badge "paused" %}{% elif j.next_due %}{{ j.next_due|date:"M j, H:i" }} UTC <span class="muted">({{ j.next_due|ago }}{% if j.overdue %}, overdue{% endif %})</span>{% else %}–{% endif %}</dd>
+    <dt>Next run</dt><dd>{% if j.archived %}never: archived{% elif j.paused %}{% badge "paused" %}{% elif j.next_due %}{{ j.next_due|date:"M j, H:i" }} UTC <span class="muted">({{ j.next_due|ago }}{% if j.overdue %}, overdue{% endif %})</span>{% else %}–{% endif %}</dd>
     <dt>Last run</dt><dd>{% if j.run %}<a href="{% url 'opsconsole:run' j.run.pk %}">{% if j.partial %}{% badge "completed" "Completed" "with errors" %}{% else %}{% badge j.state %}{% endif %}</a> <span class="muted">{{ j.run.started_at|ago }}{% if j.duration is not None %} · {{ j.duration|seconds }}{% endif %}</span>{% else %}never{% endif %}</dd>
     {% if j.failures and j.paused %}<dt>Before the pause</dt><dd class="muted">{{ j.failures }} failed in a row{% if j.worst_feed %} ({{ j.worst_feed }}){% endif %}; not counted as a problem or alerted while paused</dd>
     {% elif j.failures %}<dt>Failing</dt><dd style="color:var(--bad)">{{ j.failures }} in a row{% if j.worst_feed %} ({{ j.worst_feed }}){% endif %}{% if j.alerting %}: the alert has been sent{% endif %}</dd>{% endif %}
@@ -30,7 +31,7 @@
 <thead><tr><th>Feed</th><th>Schedule</th><th>Last fetched</th><th>Next</th>{% if can_act %}<th></th>{% endif %}</tr></thead><tbody>
 {% for f in feeds %}<tr><td>{{ f.name }}{% if not f.enabled %} <span class="tag">off</span>{% endif %}<div class="doc mono">{{ f.url|truncatechars:70 }}</div></td>
   <td class="small">{{ f.schedule }}</td><td class="small">{{ f.last_run_at|ago }}</td><td class="small">{% if f.enabled %}{{ f.next_run_at|ago }}{% else %}–{% endif %}</td>
-  {% if can_act %}<td><div class="acts">{% if f.enabled and not j.paused %}{% act "run_job" "Run" "sm" job=j.name feed=f.pk %}{% endif %}</div></td>{% endif %}</tr>{% endfor %}
+  {% if can_act %}<td><div class="acts">{% if f.enabled and not j.paused and not j.archived %}{% act "run_job" "Run" "sm" job=j.name feed=f.pk %}{% endif %}</div></td>{% endif %}</tr>{% endfor %}
 </tbody></table></div></div>{% endif %}
 <div class="card flush" style="margin-top:18px">
   <h2>Run history<span class="count">{{ page.paginator.count }}</span></h2>
@@ -38,4 +39,4 @@
 </div>
 {% include "opsconsole/_pager.html" %}
 {% endblock %}
-{% block scripts %}{% include "opsconsole/_run_cards.html" %}{% endblock %}
+{% block scripts %}{% include "opsconsole/_run_cards.html" %}{% if archive %}{% include "opsconsole/_typed_name.html" %}{% endif %}{% endblock %}

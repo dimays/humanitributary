@@ -1,9 +1,9 @@
-# 17. Do a task that needs a browser
+# 18. Do a task that needs a browser
 
 Purpose: This procedure tells how to do a task that an agent released because only a browser can read a page that it
 needs.
 
-An agent never reads a page with a script if the source policy refuses it (ADR 0041). Before each script read, the
+An agent never reads a page with a script if the source policy refuses it (ADR 0042). Before each script read, the
 agent asks the API: `GET /api/agent/policy?url=<url>`. For a `browser_only` or `citation_only` site, an unrated site
 or a site that blocks AI crawlers, the answer is `may_fetch: false`. A cloud agent has no browser. If the agent
 cannot do the task with a different source, it releases the task with `needs: browser`.

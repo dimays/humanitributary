@@ -235,7 +235,7 @@ or cancels it.
 
 ## Fetching: honest, one tab, never forced
 
-- **Ask the policy before every fetch** (ADR 0041). Before any WebFetch or `curl` of a source page, every agent
+- **Ask the policy before every fetch** (ADR 0042). Before any WebFetch or `curl` of a source page, every agent
   and every reviewer calls `api <TOKEN_VAR> -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"` and
   fetches only when `may_fetch` is true, `crawl_delay` seconds apart per host. `citation_only`, `browser_only`,
   `never_fetch`, `ai_blocked`, `robots`, `blocked`, `unrated`, `forbidden`, and `api_only` outside its `api_base`
@@ -267,7 +267,7 @@ AP, Al Jazeera, un.org, nobelprize.org …, the payload's `fetch_policy`) can't 
 - **Hold a draft whose only support is a `browser_only` source** (a reviewer can't check it either). Name it in
   the summary so the owner can review it by hand in a browser (procedure 01). A task (not a draft) that can't be
   done without such a page is released with `"needs": "browser"`, and the summary's "Needs the owner" line names it
-  (procedure 17). A task's `unreadable` list names
+  (procedure 18). A task's `unreadable` list names
   those sources (reasons `browser_only`, `citation_only`, `ai_blocked`); its `evidence_pack` holds the ones a cloud round can read and check.
 - **Use the evidence packs.** In a cloud round they are most of what can be read: the stored pages, their
   passages, `GET documents/<doc_id>` and `evidence/check-excerpt`.

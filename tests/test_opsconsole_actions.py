@@ -260,7 +260,7 @@ class QuickActionTests(ActionsBase):
         self.assertIn("human:op: cancelled (was queued): testing the console", failed.error)
 
     def test_a_deferred_release_is_shown_and_requeue_clears_it(self):
-        # ADR 0041: an agent's release defers the task and may record a need; the Work → kind page shows both, and
+        # ADR 0042: an agent's release defers the task and may record a need; the Work → kind page shows both, and
         # the operator's requeue (one task, or the Deferred tab as a batch) offers it at once.
         from work import queue
 

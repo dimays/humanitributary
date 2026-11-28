@@ -1,0 +1,19 @@
+<script>
+/* Typed-name confirmation (ADR 0041): the submit button stays disabled until the box holds the exact name. The server
+   checks it again (views.confirm). A form with data-dialog opens that dialog instead of the confirmation page. */
+(function () {
+  document.querySelectorAll("form[data-typed-name]").forEach(function (form) {
+    var want = form.getAttribute("data-typed-name"), box = form.querySelector('[name="confirm_name"]'), go = form.querySelector("[data-typed-submit]");
+    function check() { go.disabled = box.value !== want; }
+    box.addEventListener("input", check); check();
+    form.addEventListener("submit", function (e) { if (box.value !== want) { e.preventDefault(); box.focus(); } });
+  });
+  document.querySelectorAll("form[data-dialog]").forEach(function (form) {
+    var dlg = document.getElementById(form.getAttribute("data-dialog"));
+    if (!dlg || typeof dlg.showModal !== "function") return;
+    form.addEventListener("submit", function (e) { e.preventDefault(); dlg.showModal(); var b = dlg.querySelector('[name="confirm_name"]'); if (b) b.focus(); });
+    dlg.querySelectorAll("[data-close]").forEach(function (b) { b.addEventListener("click", function () { dlg.close(); }); });
+    dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
+  });
+})();
+</script>

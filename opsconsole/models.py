@@ -37,6 +37,8 @@ class OpsAction(models.Model):
         EDITS_CHECK = "edits_check", "check an edit file (agent API)"
         EDITS_APPLY = "edits_apply", "apply an edit file (agent API)"
         DISMISS_RUN = "dismiss_run", "dismiss a failed run from Needs attention"
+        ARCHIVE_JOB = "archive_job", "archive a job"
+        UNARCHIVE_JOB = "unarchive_job", "unarchive a job"
 
     class Status(models.TextChoices):
         PENDING = "pending"      # waiting for the worker
