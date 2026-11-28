@@ -2,12 +2,16 @@
 and era, and which hosts and reasons leave pages to read by hand (docs/adr/0036-evidence-packs.md). Behind
 `manage.py evidence_coverage`; it reads the queue and the page rows and makes no request.
 
-Two numbers per group: **ready** (the pack holds at least one stored non-Wikipedia page) and **possible** (the
-task points at at least one non-Wikipedia URL the policy lets a job fetch, whether or not it has been read yet), so
-a gap between them is the job's backlog, and a low "possible" is where new sources are needed.
+Three numbers per group: **ready** (the pack holds at least one stored non-Wikipedia page), **possible** (the task
+points at at least one non-Wikipedia URL the policy lets a job fetch, read or not) and **open** (such a URL whose
+site hasn't refused us: no robots.txt refusal, bot wall or TDM reservation on record). A low "possible" is where new
+sources are needed; "possible" well above "open" means the sources found are on sites that refuse automated
+readers; "open" above "ready" is the job's backlog.
 """
 
 from collections import Counter, defaultdict
+
+from urllib.parse import urlsplit
 
 from django.utils import timezone
 
@@ -52,8 +56,12 @@ def _where(t: AgentTask, regions: dict) -> tuple[str, float | None]:
 def report(fetcher=None) -> dict:
     """The coverage of the queued tasks the prefetch job serves."""
     from ingest.http import Fetcher
+    from ingest.models import PrefetchedPage
 
     fetcher = fetcher or Fetcher()
+    refusing = {"robots", "blocked", "tdm_reserved"}
+    refused_urls = set(PrefetchedPage.objects.filter(status="unreadable", reason__in=refusing).values_list("url", flat=True))
+    refused_hosts = set(PrefetchedPage.objects.filter(status="unreadable", reason__in=refusing).values_list("host", flat=True))
     regions = dict(Branch.objects.values_list("slug", "region__slug"))
     tasks = list(AgentTask.objects.filter(kind__in=prefetch.KINDS, status="queued").select_related("target_entry").order_by("kind", "id"))
     groups = {k: defaultdict(Counter) for k in ("kind", "region", "era", "kind_region", "kind_era")}
@@ -62,7 +70,9 @@ def report(fetcher=None) -> dict:
         p = t.payload or {}
         region, y = _where(t, regions)
         cands = prefetch.candidates(t, prefetch.DEFAULTS["urls"])
-        possible = any(not prefetch.is_wikipedia(k) and not prefetch.policy_reason(fetcher, u)[0] for k, u, _ in cands)
+        allowed = [(k, u) for k, u, _ in cands if not prefetch.is_wikipedia(k) and not prefetch.policy_reason(fetcher, u)[0]]
+        possible = bool(allowed)
+        open_ = any(k not in refused_urls and (urlsplit(u).hostname or "").lower() not in refused_hosts for k, u in allowed)
         for k, u, _ in cands:
             why = prefetch.policy_reason(fetcher, u)[0]
             if why:
@@ -75,6 +85,7 @@ def report(fetcher=None) -> dict:
             c["packed"] += packed
             c["ready"] += ready
             c["possible"] += possible
+            c["open"] += open_
         if not possible:
             missing[(t.kind, region, era(y))] += 1
         for u in p.get("unreadable", []):
@@ -83,7 +94,7 @@ def report(fetcher=None) -> dict:
     share = lambda c, k: round(c[k] / c["tasks"], 3) if c["tasks"] else None  # noqa: E731
     out = {"at": timezone.now().isoformat(timespec="seconds"), "tasks": len(tasks), "groups": {}}
     for g, rows in groups.items():
-        out["groups"][g] = sorted(({"group": k, **c, "ready_share": share(c, "ready"), "possible_share": share(c, "possible"),
+        out["groups"][g] = sorted(({"group": k, **c, "ready_share": share(c, "ready"), "possible_share": share(c, "possible"), "open_share": share(c, "open"),
                                     "packed_share": share(c, "packed")} for k, c in rows.items()), key=lambda r: (-r["tasks"], r["group"]))
     out["unreadable_reasons"] = reasons.most_common()
     out["unreadable_hosts"] = [{"host": h, "reason": r, "n": n} for (h, r), n in hosts.most_common(40)]
@@ -97,11 +108,13 @@ def markdown(r: dict) -> str:
     pct = lambda x: "–" if x is None else f"{100 * x:.0f}%"  # noqa: E731
     lines = [f"# Evidence coverage, {r['at'][:16]} UTC", "",
              f"{r['tasks']} queued write_event, fill_gap and verify_claim tasks. **Ready**: the pack holds a stored non-Wikipedia "
-             "page. **Possible**: the task points at a non-Wikipedia URL a job may fetch (read or not). A low possible share is "
-             "where new sources are needed; ready below possible is the job's backlog.", ""]
+             "page. **Possible**: the task points at a non-Wikipedia URL the policy lets a job fetch. **Open**: one whose site "
+             "has not refused us (robots.txt, a bot wall, a TDM reservation). Low possible: new sources are needed. Possible "
+             "above open: the sources found are on sites that refuse automated readers. Open above ready: the job's backlog.", ""]
     for g, title in (("kind", "By task kind"), ("region", "By region"), ("era", "By era"), ("kind_era", "By kind and era"), ("kind_region", "By kind and region")):
-        lines += [f"## {title}", "", "| Group | Tasks | Packed | Ready | Possible |", "|---|---:|---:|---:|---:|"]
-        lines += [f"| {x['group']} | {x['tasks']} | {pct(x['packed_share'])} | {pct(x['ready_share'])} | {pct(x['possible_share'])} |" for x in r["groups"][g]]
+        lines += [f"## {title}", "", "| Group | Tasks | Packed | Ready | Open | Possible |", "|---|---:|---:|---:|---:|---:|"]
+        lines += [f"| {x['group']} | {x['tasks']} | {pct(x['packed_share'])} | {pct(x['ready_share'])} | {pct(x['open_share'])} | {pct(x['possible_share'])} |"
+                  for x in r["groups"][g]]
         lines.append("")
     lines += ["## Where no allowed non-Wikipedia source is known", "", "| Kind | Region | Era | Tasks |", "|---|---|---|---:|"]
     lines += [f"| {x['kind']} | {x['region']} | {x['era']} | {x['tasks']} |" for x in r["no_allowed_source"]] + [""]

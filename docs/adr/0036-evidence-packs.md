@@ -28,7 +28,8 @@ deletes nothing (ADR 0016). Excerpts are at most 25 words and must be verbatim (
   filing's primary document filed within 3 days of the story.
 - **Policy first.** A URL whose publisher is `browser_only` or `forbidden`, or whose host is in NEVER_FETCH, is never
   requested; it goes in the payload's `unreadable` list with its reason, which is what tells an agent to open a
-  browser. Everything else goes through the Fetcher (robots.txt, bot walls, backoff). A host that blocked us or
+  browser. A page that reserves text and data mining (the W3C TDM Reservation Protocol's `tdm-reservation: 1`
+  header or meta tag) is read but never stored (`tdm_reserved`). Everything else goes through the Fetcher (robots.txt, bot walls, backoff). A host that blocked us or
   refused by robots.txt in the last 14 days is not asked again (read from its page rows).
 - Caps: 60 requests a run, 8 a host (24 for the Wikimedia API), 40 tasks a run; what a cap leaves is `deferred` and
   done next run. A page stored less than 7 days ago is reused without a request; an older one gets a conditional GET.
@@ -90,8 +91,8 @@ e-mail; ours names the bot and `INGEST_CONTACT` (a project address, never a pers
 filings show as `blocked` and are read by hand.
 
 **Measuring it.** `manage.py evidence_coverage [--out var/]` (`ingest/coverage.py`, no requests) reports, per task
-kind, region and era, the share of queued tasks whose pack holds a non-Wikipedia page ("ready") and that point at one
-a job may fetch at all ("possible"), the unreadable hosts and reasons, and the host health: where new sources are
+kind, region and era, the share of queued tasks whose pack holds a non-Wikipedia page ("ready"), that point at one
+a job may fetch at all ("possible"), and at one on a site that hasn't refused us ("open"), the unreadable hosts and reasons, and the host health: where new sources are
 needed. The console's Work page shows the "evidence ready" share per queue, and a task's page shows its pack.
 
 ## Consequences
@@ -105,6 +106,17 @@ needed. The console's Work page shows the "evidence ready" share per queue, and 
 - We hold full text of third-party pages, privately, for up to six months (a year for openly licensed ones). The
   retention purge, the `allowed`-only rule and the 403 on documents are what keep that within the terms we read;
   a publisher whose policy changes to `browser_only` is no longer fetched, and its stored pages age out.
+- **The first measurement** (a scratch database loaded with the archive and filled by the real jobs, November 28,
+  2026: 20 `write_event`, 40 `fill_gap`, 248 `verify_claim`): 55% of `write_event` tasks were ready (news outlets
+  that allow scripts), but 0% of `fill_gap` and `verify_claim`. Their non-Wikipedia candidates are the lookup
+  adapters' catalog pages (siris-libraries.si.edu and loc.gov items behind bot walls; europeana.eu, doi.org,
+  n2t.net and openalex.org refused by robots.txt), and 200 of the 248 claims cite Wikipedia alone. Evidence packs
+  help most once the lookups point at readable full text: the next source-discovery round's job.
+- `allowed` is the default for a domain nobody rated (`evidence.publishers.defaults_for`), so on the first run the
+  job stored pages from news publishers whose terms nobody has read for this use (ft.com, time.com, nbcnews.com
+  among them), as link health already fetched them. The TDMRep check catches the ones that say no in the page; the
+  rest wait on the source-discovery round, which should rate the frequent hosts (`evidence_coverage` lists them)
+  and set the ones whose terms forbid it `browser_only`.
 - The job adds up to 60 polite requests every 15 minutes to the worker's load; the caps are job options.
 - What would make us revisit it: a publisher objecting to stored copies (shorten the retention or drop the host),
   passages that rank badly (the weights are in `ingest/passages.py`), or a need to share passages across tasks

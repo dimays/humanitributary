@@ -63,6 +63,9 @@ MAX_TEXT_CHARS = 400_000
 MIN_TEXT_WORDS = 40
 OPEN_LICENSE_RE = re.compile(r"\bCC[ -]?(0|BY)|public domain|Open Government Licen[cs]e", re.I)
 HTML_TYPES = ("text/html", "application/xhtml+xml")
+# The W3C TDM Reservation Protocol: a page that reserves text and data mining (the `tdm-reservation: 1` header or
+# meta tag) is never stored, whatever its publisher's policy says; an agent reads it by hand.
+TDM_META_RE = re.compile(rb"<meta[^>]+name=[\"']tdm-reservation[\"'][^>]+content=[\"']1[\"']|<meta[^>]+content=[\"']1[\"'][^>]+name=[\"']tdm-reservation[\"']", re.I)
 WIKI_RE = re.compile(r"^https://en\.wikipedia\.org/wiki/([^?#]+)")
 
 # Stories about a filing with the US Securities and Exchange Commission: the filing itself, from EDGAR.
@@ -397,6 +400,8 @@ def _fetch_page(fetcher, url: str, page, now):
     if len(r.content) > MAX_BYTES:
         return None, ("too_large", f"{len(r.content)} bytes", r.status)
     ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if (r.headers.get("tdm-reservation") or "").strip() == "1" or TDM_META_RE.search(r.content[:200_000]):
+        return None, ("tdm_reserved", "the page reserves text and data mining (TDMRep): read it by hand", r.status)
     if ctype in HTML_TYPES or (not ctype and r.content.lstrip()[:1] == b"<"):
         ex = extract_html(r.text, r.final_url, deduplicate=False)
         text, title, lang = ex.text, ex.title, ex.language

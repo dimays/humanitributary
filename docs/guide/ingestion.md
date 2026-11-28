@@ -653,7 +653,9 @@ disallows it) and no crawling ([sources and terms](sources-and-terms.md#the-verd
 5. **Fetch** through the Fetcher (robots.txt, bot walls, delays, backoff, the honest User-Agent), with the stored
    page's `etag` / `last_modified` for a conditional GET (a 304 moves `fetched_at` and `retain_until` on). English
    Wikipedia goes through the MediaWiki API (`prop=extracts|info`, plain text, `etag` `rev:<lastrevid>`). Other
-   pages: HTML through `extract_html`, `text/plain` as is; anything else (a PDF) is `unsupported`, more than
+   pages: a page that reserves text and data mining (the W3C TDMRep `tdm-reservation: 1` header or meta tag,
+   `TDM_META_RE`) is `tdm_reserved` and never stored; HTML through `extract_html`, `text/plain` as is; anything
+   else (a PDF) is `unsupported`, more than
    `MAX_BYTES` (5 MB) `too_large`, fewer than `MIN_TEXT_WORDS` (40) of main text `empty`.
 6. **Outcomes**: a 401, 403, 429, 451 or a bot wall is `blocked`; another 4xx or 5xx `http_<status>`; a refusal by
    robots.txt `robots`; a network error `error`. A stored page whose refresh fails keeps its stored copy.
@@ -698,7 +700,8 @@ the publisher's license is open (`OPEN_LICENSE_RE`: CC0, CC BY, public domain, t
 
 **Coverage** ([ingest/coverage.py](../../ingest/coverage.py), `manage.py evidence_coverage [--out var/]`, no
 requests): per task kind, region (the task's branch's) and era (`ERAS`), the share of queued tasks that are packed,
-**ready** (`evidence_ready`) and **possible** (pointing at a non-Wikipedia URL the policy lets a job fetch), the
+**ready** (`evidence_ready`), **possible** (pointing at a non-Wikipedia URL the policy lets a job fetch) and **open**
+(such a URL on a site that hasn't refused us by robots.txt, a bot wall or a TDM reservation), the
 groups with no such URL, the unreadable reasons and hosts, the hosts the policy keeps jobs off, and the host health.
 `--out` writes `evidence-coverage-<date>.md` and `.json`.
 

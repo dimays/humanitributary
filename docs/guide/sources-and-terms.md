@@ -244,7 +244,12 @@ store under `pages/`, so agents can check excerpts against it. What holds it to 
 
 - **Only `allowed` publishers.** A `browser_only` or `forbidden` publisher, or a NEVER_FETCH host, is never
   requested (`policy_reason`, before the Fetcher's own checks), and `store_page` checks the policy again just before
-  writing. Those URLs go in the task's `unreadable` list for an agent's browser.
+  writing. Those URLs go in the task's `unreadable` list for an agent's browser. A page that reserves text and data
+  mining (the W3C TDM Reservation Protocol: a `tdm-reservation: 1` header or meta tag) is never stored either
+  (`tdm_reserved`), whatever its publisher's policy.
+- **`allowed` is also the default.** A domain without a Publisher row, or one created by the import without a terms
+  check, is `allowed` (`defaults_for`), so news pages from publishers nobody reviewed are stored too. Setting such a
+  publisher `browser_only` in the admin stops it; its stored pages age out.
 - **Never published.** The text is in neither a snapshot, a release, the public page nor the database; the agent
   API serves it only to the agent holding a task whose pack names it, or to a reviewer (scope `review`) when an
   entry in review cites it.

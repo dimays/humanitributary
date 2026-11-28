@@ -63,7 +63,7 @@ publishers whose policy lets a job read them, and put them in the payload:
   and `passages` (the page's sentences that name the task's dates, years, numbers, entities or title words, best
   first, each with its `score` and `matches`, such as `"date:June 6"`, `"entity:Normandy (Q8205)"`).
 - `unreadable`: the URLs it did not read, each with a `reason`: `browser_only` (read it in a browser),
-  `forbidden` (never), `never_fetch`, `robots`, `blocked`, `http_404`, `error`, `unsupported` (a PDF, say), `empty`,
+  `forbidden` (never), `never_fetch`, `robots`, `blocked`, `tdm_reserved` (the page opts out of text and data mining: read it by hand), `http_404`, `error`, `unsupported` (a PDF, say), `empty`,
   `deferred` (not yet: the next run reads it).
 - `evidence_ready`: true when at least one stored page is not Wikipedia.
 

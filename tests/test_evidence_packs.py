@@ -52,6 +52,7 @@ PAYLOAD = {
         {"url": "https://openstax.org/books/us-history/pages/27-3", "domain": "openstax.org"},
         {"url": "https://blocked.example.org/story", "domain": "blocked.example.org"},
         {"url": "https://robots.example.net/private/page", "domain": "robots.example.net"},
+        {"url": "https://tdm.example.com/article", "domain": "tdm.example.com"},
     ],
     "story_article": "https://en.wikipedia.org/wiki/Normandy_landings",
 }
@@ -82,6 +83,7 @@ ROUTES = {
     "www.archives.gov/milestone-documents/treaty-of-example": (200, "text/html; charset=utf-8", HTML),
     "blocked.example.org/story": (403, "text/html", "<html><body>Please complete the captcha</body></html>"),
     "robots.example.net/robots.txt": (200, "text/plain", "User-agent: *\nDisallow: /private/\n"),
+    "tdm.example.com/article": (200, "text/html", HTML.replace("<head>", "<head><meta name='tdm-reservation' content='1'>")),
 }
 
 
@@ -127,8 +129,10 @@ class PackTests(FreshStorage, TestCase):
         self.assertEqual(reasons["openstax.org"], "forbidden")
         self.assertEqual(reasons["blocked.example.org"], "blocked")
         self.assertEqual(reasons["robots.example.net"], "robots")
+        self.assertEqual(reasons["tdm.example.com"], "tdm_reserved", "a page that reserves text and data mining is never stored")
         self.assertNotIn("robots.example.net/private/page", self.mock.seen, "robots.txt refuses before the page is asked for")
         self.assertFalse(PrefetchedPage.objects.filter(host__in=["britannica.com", "theguardian.com", "openstax.org"]).exists())
+        self.assertFalse(PrefetchedPage.objects.filter(host="tdm.example.com", status="stored").exists())
 
     def test_a_host_that_blocked_us_is_left_alone_for_a_while(self):
         self.run_job()
@@ -200,6 +204,19 @@ class PackTests(FreshStorage, TestCase):
         self.assertIn("entity:Eisenhower", [m for x in a[1:] for m in x.matches])
         self.assertEqual(P.split("Gen. Eisenhower met the U.S. delegation in Washington. The meeting lasted two hours today.")[0].text,
                          "Gen. Eisenhower met the U.S. delegation in Washington.")
+
+    def test_the_coverage_report(self):
+        from ingest import coverage
+
+        self.run_job()
+        fetcher = Fetcher(transport=httpx.MockTransport(Mock({})), sleep=lambda s: None)
+        r = coverage.report(fetcher)
+        row = next(x for x in r["groups"]["kind"] if x["group"] == "write_event")
+        self.assertEqual((row["tasks"], row["ready"], row["possible"], row["open"]), (1, 1, 1, 1))
+        self.assertIn(("browser_only", 2), [tuple(x) for x in r["unreadable_reasons"]])
+        self.assertIn({"host": "blocked.example.org", "reason": "blocked", "n": 1}, r["unreadable_hosts"])
+        self.assertIn("## By task kind", coverage.markdown(r))
+        self.assertEqual(fetcher.requests, 0, "the report makes no requests")
 
     def test_stored_text_never_reaches_a_snapshot(self):
         self.run_job()

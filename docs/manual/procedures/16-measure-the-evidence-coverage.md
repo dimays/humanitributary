@@ -8,7 +8,8 @@ the sites whose publisher has the fetch policy `allowed`. It keeps the clean tex
 for 180 days (365 days for an open license). Agents copy their excerpts from this text.
 
 A task is "ready" when its evidence pack has one or more stored pages that are not Wikipedia. A task is "possible"
-when it cites a page that is not Wikipedia and that a job can read.
+when it cites a page that is not Wikipedia and that the policy lets a job read. A task is "open" when such a page is
+on a site that did not refuse the job.
 
 ## Before you start
 
@@ -30,9 +31,11 @@ when it cites a page that is not Wikipedia and that a job can read.
    Make sure that you have a list of these groups. They need new sources.
 4. Find the hosts in the tables "Left to read by hand" and "Hosts the policy keeps jobs off".
    Make sure that you know the reason for each frequent host.
-5. Find the groups where "Ready" is less than "Possible".
+5. Find the groups where "Open" is less than "Possible".
+   Make sure that you know the sites that refuse the job. These sources need a replacement.
+6. Find the groups where "Ready" is less than "Open".
    Make sure that you know which tasks the job has not read yet. The next runs read them.
-6. Open the page of one task from a group with a low share.
+7. Open the page of one task from a group with a low share.
    Make sure that the evidence pack shows the stored pages and the pages to read by hand.
 
 > **NOTE:** A new source needs its terms first. Do procedure [12](12-add-a-data-source.md) for each new source.
