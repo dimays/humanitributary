@@ -430,8 +430,8 @@ skip them.
 
    `VERDICTS` is applied only once per database (the `JobState` named `terms_verdicts_v1`), so a new verdict does
    not reach an existing database by itself. That is why step 2 happens in the admin.
-5. **What already exists stays.** Citations to the publisher remain, and agents re-read them in a browser
-   (`browser_read`). Documents already fetched stay in the `raw` store. If the terms also limit what we may keep
+5. **What already exists stays.** Citations to the publisher remain, and a person re-reads them in their own browser
+   (`browser_read`, from the console's Review page: ADR 0046). Documents already fetched stay in the `raw` store. If the terms also limit what we may keep
    (some ask for deletion within a time limit), that is a separate clean-up to plan.
 
 [Sources and terms](sources-and-terms.md) explains the policy layers.

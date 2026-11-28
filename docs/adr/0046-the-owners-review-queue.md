@@ -82,10 +82,14 @@ Approve and Deny wait five seconds in the browser with an Undo before they are s
 so the undo is honest, and leaving the page in those seconds sends the decision at once. The page's GET writes
 nothing; the owner's lease is a separate POST, not an OpsAction (the task's `claimed_by` records it).
 
-**The rounds hand these reads to the owner.** The `run-round` skill says so: its agents and reviewers never read a
-`browser_only` page themselves; a draft resting on one only is held, and a task that needs one is released with
-`needs: browser`; the summary's last line counts what waits on the Review page and links to it. The task skills
-say a `needs` release waits for the owner, not a week.
+**Every agent hands these reads to the owner.** A `browser_only` source is for a person's own browser. A Claude
+session driving the in-app browser, or Claude in Chrome, is not a person's read, in a desktop session or a cloud one.
+Every task skill (`drain-write-events`, `fill-gaps`, `verify-claims`, `verify-stale-claims`, `map-branch-entities`,
+`review-branch-proposals`) and `run-round` say so: an agent or a reviewer never reads such a page with any tool
+(and never cites it unread); it uses another source, or releases the task with `needs: browser`; a draft resting on
+one only is held; the round's summary ends with a line counting what waits on the Review page, with its link. The
+skills no longer keep "one in-app browser tab" rules, and `GET policy`'s `why` for these pages says to release the
+task for the owner. The task skills also say a `needs` release waits for the owner, not a week.
 
 ## Consequences
 
@@ -100,6 +104,6 @@ say a `needs` release waits for the owner, not a week.
 - A person's lease that lapses (the owner closed the laptop) is taken over like any expired lease, and is not
   counted as stuck on the Dashboard or as an expired lease in `/healthz`.
 - The sidebar's count costs one query on every console page (a UNION of the tasks and the drafts, the open rounds and the backlog checked in SQL).
-- The role skills (`drain-write-events`, `fill-gaps`, `verify-claims`, `verify-stale-claims`) still let a desktop
-  session's in-app browser read a `browser_only` page for an `unreadable` URL. Whether an agent driving a browser is
-  "a person's read" is the owner's call; until they decide, this ADR changes only `run-round` and the wait.
+- No agent marks a cite `browser_read` any more: that method is now the owner's (`human:<username>` from the Review
+  page). The agent API still accepts it in a result, for the evidence agents recorded before this ADR; refusing it
+  from agents would be a later change.

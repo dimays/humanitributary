@@ -90,12 +90,12 @@ The scope `*` does not give `review`, `publish` or `round`. The owner must name 
 > **CAUTION:** Do not put a token in a URL, in a log or in a file that git tracks. If another person gets a token,
 > revoke it with procedure [09](procedures/09-replace-an-agent-token.md).
 
-## The cloud session has no browser
+## No agent reads a browser-only page
 
-A cloud session has no in-app browser. Thus the agents cannot read the `browser_only` publishers, for example
-Britannica, BBC, the Guardian, NPR, AP, Al Jazeera and un.org. The agents never get these pages with a script. They
-use other reputable sources. If a draft has support only from a `browser_only` page, the reviewer holds it. Then
-you can examine it in a browser with procedure [01](procedures/01-run-a-round-by-hand.md).
+Only a person reads the `browser_only` publishers, for example Britannica, BBC, the Guardian, NPR, AP, Al Jazeera
+and un.org (ADR 0046). An agent never reads these pages with a tool. This rule applies to a cloud round and to a
+round on your computer. The agents use other reputable sources. If a draft has support only from a `browser_only`
+page, the reviewer holds it. Then you read it with procedure [19](procedures/19-review-the-items-that-need-a-person.md).
 
 The job `prefetch_sources` reads the `allowed` pages of each task before the round (ADR 0036). The agents and the
 reviewers read the stored text of these pages through the agent API, and copy their excerpts from it. The API

@@ -44,7 +44,7 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
 | `guide/` | The guide's tools behind `manage.py guide check / stamp / status / covers / index`: `chapters.py`, `coverage.py` (what a chapter covers, its hash), `checks.py`. No models. |
 | `scripts/` | `make_env.py` (writes `.env`, or adds the keys it lacks, printing no values); `validate_branch_rules.sh` (replays the branch rules on the content before `data/90` and `data/91`); `check_adr.py` (`make check-adr`); `check_ste.py` (`make check-manual`: the manual's STE rules); `check_pr.py` (`make check-pr`, the gate, and its receipt in `var/gate-receipt.json`). |
 | `.claude/settings.json`, `.claude/hooks/` | Hooks only: before `git commit`, the guide must be fresh; before `gh pr create`, the gate must have passed on the committed code; at the end of a turn, a reminder. |
-| `.claude/skills/` | Agent skills: `drain-write-events`, `fill-gaps`, `map-branch-entities`, `review-branch-proposals`, `verify-claims`, `verify-stale-claims`, and `run-round` (the daily cloud routine's: a whole round, end to end; ADR 0035); all work through the agent API (`HUMANITRIBUTARY_API`, `HUMANITRIBUTARY_API_TOKEN`; the routine's one token per role), and read a task's evidence pack first (ADR 0036); before any scripted fetch of a source page they ask `GET policy?url=`, and a task that needs a browser is released with `{"needs": "browser"}` (ADR 0042). |
+| `.claude/skills/` | Agent skills: `drain-write-events`, `fill-gaps`, `map-branch-entities`, `review-branch-proposals`, `verify-claims`, `verify-stale-claims`, and `run-round` (the daily cloud routine's: a whole round, end to end; ADR 0035); all work through the agent API (`HUMANITRIBUTARY_API`, `HUMANITRIBUTARY_API_TOKEN`; the routine's one token per role), and read a task's evidence pack first (ADR 0036); before any scripted fetch of a source page they ask `GET policy?url=`, and a task that needs a browser is released with `{"needs": "browser"}` (ADR 0042); no agent reads a `browser_only` page with any tool, desktop or cloud: the owner reads it from the Review page (ADR 0046). |
 | `Procfile`, `app.json`, `docker-compose.yml`, `.github/workflows/check.yml` | The processes (`release`, `web`, `worker`; `make up` runs web and worker with honcho), Heroku's description of the app (buildpack, formation, add-on, config vars: ADR 0020), the local services (Postgres on 5433, MinIO on 127.0.0.1:9000/9001), and CI (`make check-pr` on pull requests and pushes to main). |
 
 ## Rules
@@ -104,8 +104,9 @@ read path. Django 6, Python 3.12, uv, psycopg 3, Postgres 16 in Docker.
    textbooks by AI systems. The database refuses such a citation; its
    publisher is `forbidden`. Respect every publisher's `fetch_policy`: a
    `browser_only` or `citation_only` site (Britannica, un.org,
-   nobelprize.org, most news …) is read in a browser by a person (the
-   console's Review page, ADR 0046), never by a job or an agent's script; an `api_only` one only through its `api_base`, with a key where
+   nobelprize.org, most news …) is read by a person in their own browser
+   (the console's Review page, ADR 0046), never by a job, and never by an
+   agent with any tool (a script, the in-app browser, Claude in Chrome); an `api_only` one only through its `api_base`, with a key where
    one is needed; a site whose robots.txt shuts out AI crawlers by name is
    never fetched by the evidence-pack job (ADR 0037). An agent asks `GET
    /api/agent/policy?url=` before any scripted fetch (WebFetch, curl) and

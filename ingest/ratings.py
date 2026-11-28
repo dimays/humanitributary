@@ -66,7 +66,7 @@ SHARED_HOSTS = {"raw.githubusercontent.com", "github.com"}
 HOST_RE = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")
 # The round's `forbidden` means "never fetched, terms forbid mining" (Al Jazeera). Here `forbidden` also means "never
 # cited" (OpenStax: the database refuses its citations), so it is recorded as `citation_only`: jobs never fetch it,
-# agents may still cite it and read it in a browser, as ADR 0013 already had it.
+# it may still be cited once a person has read it in their own browser (ADR 0013; no agent reads it: ADR 0046).
 POLICY_FOR = {"forbidden": "citation_only"}
 # Reliability tiers for confident permissive ratings (1 primary, official; 2 scholarly or institutional; 3 general).
 TIERS = {"api.semanticscholar.org": 2, "loc.gov": 1, "plato.stanford.edu": 2, "wikidata.org": 3, "govinfo.gov": 1, "congress.gov": 1,

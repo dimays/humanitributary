@@ -413,7 +413,7 @@ only way to complete a kind without a result schema.
 | `tasks next [--kind K]… [--claim --agent A] [--lease M]` | The best available task, or `null`. `--kind` repeats. With `--claim`, leases it to the agent. |
 | `tasks complete <id> --result <file> --agent A` | Done, with the JSON in the file (`-` reads standard input). |
 | `tasks fail <id> --error "…" [--no-retry] --agent A` | Back to the queue while attempts remain, else failed. |
-| `tasks release <id> --agent A [--reason "…"] [--defer-minutes N] [--needs browser\|owner]` | Back to the queue untouched, deferred (60 minutes by default; a week with `--needs`). |
+| `tasks release <id> --agent A [--reason "…"] [--defer-minutes N] [--needs browser\|owner]` | Back to the queue untouched, deferred (60 minutes by default; with `--needs`, until a person decides: ADR 0046). |
 | `tasks extend <id> [--minutes M] --agent A` | A longer lease. |
 | `tasks list [--status S] [--kind K] [--limit N]` | Tasks in queue order, 50 by default. |
 | `tasks add <kind> --by WHO [--entry SLUG] [--ref R] [--payload JSON] [--priority P] [--dedupe KEY]` | Queue a task by hand. Only an entry target can be given. |
@@ -435,29 +435,31 @@ production URL.
 
 | Skill | Works | What it covers |
 |---|---|---|
-| `drain-write-events` | `write_event` | Claim over the API; read the payload (and `GET entries/<slug>`, `GET branches/<slug>`, `GET search`); decide (duplicate, rejected, or one event); fetch and read every source cited (`browser_only` publishers in a browser, marked `browser_read`; never openstax.org); aim for a non-Wikipedia source; complete with the event in `site/SCHEMA.md` style, which lands in review; the owner publishes it (`facts publish`), and the next release carries it. |
+| `drain-write-events` | `write_event` | Claim over the API; read the payload (and `GET entries/<slug>`, `GET branches/<slug>`, `GET search`); decide (duplicate, rejected, or one event); fetch and read every source cited (never a `browser_only` publisher, with any tool: it goes to the owner, ADR 0046; never openstax.org); aim for a non-Wikipedia source; complete with the event in `site/SCHEMA.md` style, which lands in review; the owner publishes it (`facts publish`), and the next release carries it. |
 | `verify-claims` | `verify_claim` | Claim; read each cited page; complete with a stance per page and part as `evidence` rows; what to do per reason (`no_second_source` on the atomic parts, `conflict` with a `proposed_text` for the owner, the recheck reasons). |
 | `verify-stale-claims` | `verify_claim` from ingestion | The dead-link and changed-page cases (archived copies, replacements, re-recording `supports` to stamp a new hash) and suggested second sources (read each, add it as evidence only if it explicitly supports the claim, list it in `suggestions.accepted` or `rejected`). |
 | `review-branch-proposals` | `review_branch_proposal` | What to ask of each rule; fill every `needs_agent` field; accept with the operations (for the owner's `branches apply`) or reject with a note. |
 | `fill-gaps` | `fill_gap` | Claim; read the window, the events around it and the pointers; check duplicates with `GET search`; write 1–3 events in SCHEMA style on the branch's id prefix (titles ≤ 60, verbatim excerpts, contested claims attributed, a non-Wikipedia source each), or complete `nothing_notable` with what was read. |
 | `map-branch-entities` | `map_branch_entities` | Claim; read the payload's variants and cited articles; look the candidates up on Wikidata with the honest User-Agent; keep only items the branch is about (the polity, faith, movement or organization; a group's member states as `member`), never a disambiguation page, a predecessor or a namesake place; complete with up to 20 items or an empty list and a note. |
-| `run-round` | a whole round | The daily routine's skill ([rounds](#rounds)): the settings first (stop when paused), `GET queue`, a plan by value (gaps, then `map_branch_entities`, `write_event`, `verify_claim`) and the round size, `POST rounds`, role agents with the four skills above, fresh reviewers in batches of at most 40 drafts who read every cited page and write the edit file, `edits/check` then `edits/apply`, `releases/check` then `releases/publish` when everything passes, the round recorded, a summary posted. It carries the review rounds' hard-won rules and the cloud constraint (no browser: `browser_only` sources are never fetched by script; a draft resting on one only is held). |
+| `run-round` | a whole round | The daily routine's skill ([rounds](#rounds)): the settings first (stop when paused), `GET queue`, a plan by value (gaps, then `map_branch_entities`, `write_event`, `verify_claim`) and the round size, `POST rounds`, role agents with the four skills above, fresh reviewers in batches of at most 40 drafts who read every cited page and write the edit file, `edits/check` then `edits/apply`, `releases/check` then `releases/publish` when everything passes, the round recorded, a summary posted. It carries the review rounds' hard-won rules and the browser-only rule (no agent reads a `browser_only` source with any tool, desktop or cloud; a draft resting on one only is held for the owner's Review page). |
 
 Every skill that records evidence (`drain-write-events`, `fill-gaps`, `verify-claims`, `verify-stale-claims`)
 carries the same section, "The evidence pack: read it first": read the passages and `GET documents/<doc_id>`, copy
-excerpts from the stored text (checked with `POST evidence/check-excerpt`), and open a browser only for an `unreadable`
-URL whose reason is `browser_only`. For a page not in the pack the old excerpt rule holds: copy the sentence from
-the page's own text (the in-app browser's page text, or the raw page where the site allows scripts), never from a
+excerpts from the stored text (checked with `POST evidence/check-excerpt`), and never read an `unreadable` URL whose
+reason is `browser_only`, `citation_only` or `ai_blocked`, with any tool: another source, or a release with `needs:
+browser` for the owner's Review page ([ADR 0046](../adr/0046-the-owners-review-queue.md)). For a page not in the
+pack the old excerpt rule holds: copy the sentence from the page's own text (the raw page where `GET policy` says
+`may_fetch`), never from a
 fetch tool's summary, whose "quotes" are often paraphrased; if only a summary is reachable, the cite goes in without
 an excerpt. `run-round` briefs its role agents and reviewers the same way: a reviewer reads a stored page with `GET
-documents?url=` and checks excerpts against it, and in a cloud round a draft only `browser_only` pages support is
+documents?url=` and checks excerpts against it, and in every round a draft only `browser_only` pages support is
 held.
 
 Every skill that may fetch a page (all but `run-round`'s own steps, which brief the agents the same way) starts its
 fetching rules with **ask the policy before every fetch** ([ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md)):
 `GET policy?url=` before any WebFetch or `curl` of a source page, and no fetch unless `may_fetch`; then another
-source (Wikipedia's references), a browser where there is one and `browser_read` allows it, never a cite of a page
-not read, and, when the task can't be done without the page, a release with `{"needs": "browser", "reason":
+source (Wikipedia's references), never a browser (the in-app one or Claude in Chrome, desktop or cloud: a page the
+policy refuses is read by a person, ADR 0046), never a cite of a page not read, and, when the task can't be done without the page, a release with `{"needs": "browser", "reason":
 "<url>: <why>"}`. An `unrated` page in the evidence pack is no longer "read it yourself": scripts never fetch it.
 Every task skill's API section says a release is deferred and asks for a reason; `run-round` asks its role agents
 to report every `needs` release and lists them on the summary's "Needs the owner" line, with a "Review" line: how
@@ -470,8 +472,8 @@ Every task skill also says to **extend a long lease** (`POST tasks/<id>/extend` 
 20 minutes, and every 20 minutes after), and the skills that fetch pages (`drain-write-events`, `fill-gaps`,
 `verify-claims`, `verify-stale-claims`, `map-branch-entities`, `run-round`) carry three fetching rules: **never
 disguise the client** (every script fetch sends `INGEST_USER_AGENT`; no spoofed User-Agent, header tricks, proxies
-or mirrors), **one in-app browser tab per agent**, reused and always closed (leftover tabs fill the pane's cap and
-starve other agents), and **never force a paid or blocked wire** (Reuters 401, AFP, CNN 451): a `write_event`
+or mirrors), **no browser for source pages** (no in-app browser, no Claude in Chrome, in any session: ADR 0046),
+and **never force a paid or blocked wire** (Reuters 401, AFP, CNN 451): a `write_event`
 without two readable independent sources is rejected or failed with `retry: false`.
 
 ## From a task to the records
@@ -693,7 +695,7 @@ The `prefetch_sources` job ([ingestion](ingestion.md#evidence-packs),
 | Key | What |
 |---|---|
 | `evidence_pack` | `[{url, title, publisher, tier, fetched_at, doc_id, words, passages: [{text, score, matches}]}]`: each stored page (non-Wikipedia first), with up to five ranked passages; at most 20,000 bytes. A page read through its official API adds `"via": "api", "api": "openalex"` (or `crossref`, `loc`, `smithsonian`, `europeana`): the record (abstract, metadata), not the page, and its `publisher` is the API's. A page purged by retention keeps its entry with no passages and `purged: true`. |
-| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it, and since ADR 0042 neither does an agent's script (`GET policy` says `may_fetch: false`); `api_<…>` that a catalog page's API failed or lacks its key; `api_only` that the publisher allows only its API and no route reaches it. `browser_only`, `citation_only` and `ai_blocked` (robots.txt shuts out AI crawlers by name, ADR 0037) are the reasons an agent opens a browser for; `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
+| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it, and since ADR 0042 neither does an agent's script (`GET policy` says `may_fetch: false`); `api_<…>` that a catalog page's API failed or lacks its key; `api_only` that the publisher allows only its API and no route reaches it. `browser_only`, `citation_only` and `ai_blocked` (robots.txt shuts out AI crawlers by name, ADR 0037) are a person's to read in their own browser, never an agent's with any tool (ADR 0046); `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
 | `evidence_ready` | A stored page that isn't Wikipedia: what the console's "evidence ready" share counts. |
 | `evidence_pack_at`, `evidence_urls` | When it was built, and from which URLs (a hash; `+deferred` when a cap cut it short). |
 
@@ -729,7 +731,7 @@ first of these that holds; `policy` names it, in the evidence pack's
 |---|---|---|---|
 | `forbidden` | false | false | The publisher's `fetch_policy` (OpenStax): never read or cite. |
 | `citation_only` | false | true | Cite the link; never fetch it. |
-| `browser_only` | false | true | `why` says it needs a person's browser (or a local session's in-app one). A cloud agent has none. |
+| `browser_only` | false | true | `why` says it needs a person's read in their own browser: no agent reads it, with any tool, desktop or cloud (ADR 0046). |
 | `never_fetch` | false | true | `ingest.policy.NEVER_FETCH` lists the host. |
 | `api_only` | only under its `api_base`, and only when a key it needs is set | true | `api_base` is returned; outside it `why` names the base to use. |
 | `unrated` | false | true | No row, or a row with no tier: nobody read its terms. (An `api_only` row counts as rated.) |

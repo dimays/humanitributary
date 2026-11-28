@@ -68,10 +68,11 @@ Ask whether a reader would be better served by the change:
   origin note. Never pick a parent because the stories mention it.
 
 Look things up as you would to write an event (`site/SCHEMA.md` citation rules: fetch and read every page you cite;
-never openstax.org; britannica.com only in a browser). **Before any WebFetch or `curl` of a source page, ask the
+never openstax.org; britannica.com never: a person reads it). **Before any WebFetch or `curl` of a source page, ask the
 policy** (ADR 0042): `api -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"`, and fetch only when
-`may_fetch` is true. When it is false, use another source (Wikipedia's references often lead to a readable one), or
-a browser if you have one and `browser_read` is true; never reach the page another way. A proposal you can't decide
+`may_fetch` is true. When it is false, use another source (Wikipedia's references often lead to a readable one), and
+never reach the page another way: not a browser either (the in-app one, Claude in Chrome), since a page the policy
+refuses is read by a person (ADR 0046). A proposal you can't decide
 without such a page is released with `{"needs": "browser", "reason": "<url>: <why>"}`.
 
 ## 3a. Accept: write the operations

@@ -178,7 +178,8 @@ Every request goes through `ingest.http.Fetcher` and the source policy
 
 The `fill-gaps` skill (`.claude/skills/fill-gaps/SKILL.md`) claims a task,
 reads (asking `GET policy?url=` before every scripted fetch and fetching only
-when `may_fetch`, with the project's honest User-Agent, one browser tab at most, a lease
+when `may_fetch`, with the project's honest User-Agent, never a `browser_only` page with any tool: a person
+reads those, ADR 0046; a lease
 extended when a task passes about 20 minutes), and completes it over the agent API with one of
 ([the schema](work-queue-and-agents.md#results-validated-then-applied)):
 

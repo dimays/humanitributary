@@ -4,8 +4,8 @@ Purpose: This procedure tells how to start one agent round from a Claude Code se
 examine its result.
 
 The daily cloud routine does the same round each day ([the daily round](../daily-round.md)). Run a round by hand when
-you want one now, or when drafts need the in-app browser. A cloud session has no browser, so it cannot read the
-`browser_only` publishers. A desktop session can read them.
+you want one now. No session reads the `browser_only` publishers, also not a session on your computer. You read
+them on the Review page with procedure [19](19-review-the-items-that-need-a-person.md).
 
 The skill `run-round` does all the stages: the plan, the role agents, the review, the edit file and the release.
 To review and publish without the skill, use procedures [02](02-review-drafts-and-apply-an-edit-file.md) and
@@ -71,8 +71,8 @@ To review and publish without the skill, use procedures [02](02-review-drafts-an
    Make sure that its first API call is `GET rounds/settings`.
 10. Monitor the Work page of the console.
     Make sure that the new round shows the state `running`, and later `reviewing`.
-11. If a draft has support only from a `browser_only` page, tell Claude to read that page in the in-app browser.
-    Make sure that each agent uses only one tab and closes it at the end.
+11. If a draft has support only from a `browser_only` page, do procedure [19](19-review-the-items-that-need-a-person.md) after the round.
+    Make sure that the draft shows on the Review page.
 12. Read the summary at the end of the session.
     Make sure that it gives the round number and the release, or the reason for no release.
 13. Open the page of the round. On the Work page, click the square of the round.

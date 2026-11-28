@@ -566,7 +566,7 @@ The payload is everything an agent needs to write the event:
 - `suggested`: the story's branches (`routing.suggested`: the top one, then up to two with at least 35% of its
   score), date, precision, first and last dates, a title hint, branches to link (the ones after the first);
 - `items`: up to 12 members with their text (up to 1,200 characters), source and attribution;
-- `sources`: up to 15 links with tier and `fetch_policy` (so the agent knows which to read in a browser), and an
+- `sources`: up to 15 links with tier and `fetch_policy` (so the agent knows which it may not read: those go to the owner's Review page, ADR 0046), and an
   excerpt of at most 25 words for feed items;
 - `entities`: up to 15, with QIDs, kinds, coordinates and Wikipedia links;
 - `possible_duplicates`, `priority_parts`, the story article, and a pointer to `.claude/skills/drain-write-events`.
@@ -793,7 +793,7 @@ status `UNREACHABLE` (599).
 **Blocked is not dead.** A `blocked` outcome says the site refuses automated readers, not that the page is gone, so
 it never overwrites the citation's `http_status`: the citation keeps its last real status, and the `LinkCheck` row
 keeps the 401, 403 or 429. The fact sweep also ignores those statuses (policy `blocked_http_statuses`), so a blocked
-page never becomes a `dead_link` task; an agent checks it in a browser when it next verifies the claim.
+page never becomes a `dead_link` task; its claim waits for the next check by a readable source, or for the owner's read on the Review page (ADR 0046).
 
 Turning dead or changed links into stale claims and `verify_claim` tasks is the fact sweep's job, which runs right
 after ([evidence and fact-checking](evidence-and-fact-checking.md), [how claims are checked](../fact-checking.md)).

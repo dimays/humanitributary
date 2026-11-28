@@ -60,8 +60,9 @@ waits for the owner (the console's Review page: no agent is offered it again), a
   its `api_base` are never read by script. `why` says which (for `api_only`, the API base to use instead). Then:
   1. **Use another source.** Wikipedia's article on the subject cites several; its references often lead to a
      readable one (ask the policy for each). Wikipedia and Wikidata themselves are `allowed`.
-  2. **Read it in a browser** only if you have one (a local session's in-app browser) and `browser_read` is true;
-     mark the cite `"method": "browser_read"`. A cloud session has no browser.
+  2. **Never read it with another tool.** A page the policy refuses is read by a person in their own browser, never by an agent with any tool: not
+     the in-app browser, not Claude in Chrome, in a desktop session or a cloud one (ADR 0046). `browser_read: true`
+     means a person's browser.
   3. **Don't cite it unread.** No task skill allows a citation-only cite: a page you could not read is no source.
   4. **Release the task** when it can't be done without that page, so a person can read it:
      `api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
@@ -70,8 +71,8 @@ waits for the owner (the console's Review page: no agent is offered it again), a
   `curl -sS -A "$INGEST_USER_AGENT" <url>` (the same value as the app's `INGEST_USER_AGENT`). No spoofed browser
   User-Agent, no header tricks, no proxies, mirrors or caches to get round a site that refuses automated reads.
   Wikidata and Wikipedia welcome scripts that say who they are; keep to a request a second.
-- **Exactly one in-app browser tab per agent**, if you use the browser at all: reuse it, and close it when you
-  finish, also when you stop early. A cloud session has no in-app browser; you don't need one here.
+- **No browser for source pages.** Never open the in-app browser or Claude in Chrome to read a source, in a desktop
+  session or a cloud one: a page only a browser may read is the owner's, on the console's Review page (ADR 0046).
 
 ## 1. Claim and read the payload
 

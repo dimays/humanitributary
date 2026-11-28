@@ -115,8 +115,8 @@ Start the role agents as subagents, in parallel, one per agent in the plan. Brie
 - **extend the lease** (`POST tasks/<id>/extend -d '{"minutes": 30}'`) whenever one task passes about 20
   minutes, and again every 20 minutes;
 - the fetching rules below (`GET policy?url=` before every scripted fetch, and no fetch unless `may_fetch`; honest
-  User-Agent; one browser tab at most, closed at the end; never force a site);
-- the cloud constraint (no `browser_only` pages; see below);
+  User-Agent; no browser for source pages, in-app or Claude in Chrome; never force a site);
+- the browser-only rule (no agent reads a `browser_only` page, with any tool; see below);
 - **the evidence pack first** (each task skill's "The evidence pack: read it first"): passages and `GET
   documents/<doc_id>`, excerpts copied from the stored text (`complete` refuses one that isn't on a stored page);
   `browser_only` pages are read by a person, never by an agent (ADR 0046): the owner's review queue gets them;
@@ -255,21 +255,23 @@ releases above and the drafts held only for a person's read. Leave it out when t
   spoofed browser User-Agent, no header tricks, no proxies, mirrors or caches to get round a site that refuses
   automated reads (two round-4 agents tried a spoofed User-Agent; the safety checks blocked them). If a site
   refuses, use another reputable source, or hold or reject the draft.
-- **Exactly one in-app browser tab per agent**, reused, and always closed at the end, also when an agent stops
-  early. Leftover tabs fill the pane's cap (about eight) and starve the other agents.
+- **No browser for source pages**, in a desktop round or a cloud one (ADR 0046): no agent and no reviewer opens the
+  in-app browser or Claude in Chrome to read a source. A page only a browser may read is the owner's, on the
+  console's Review page.
 - **Paid and blocked wires are common for news**: Reuters (401), AFP (access denied), CNN (451). A `write_event`
   with no two readable independent sources is completed `rejected` with a note, or failed with
   `{"retry": false}`; never forced.
 
-## The cloud constraint: no browser
+## Browser-only pages: the owner's, in every round
 
-A cloud session has **no in-app browser**. The `browser_only` publishers (Britannica, the BBC, the Guardian, NPR,
-AP, Al Jazeera, un.org, nobelprize.org …, the payload's `fetch_policy`) can't be read there, so in a cloud round:
+The `browser_only` publishers (Britannica, the BBC, the Guardian, NPR, AP, Al Jazeera, un.org, nobelprize.org …, the
+payload's `fetch_policy`) are read by a person in their own browser, never by an agent (ADR 0046). A cloud session
+has no browser, and a desktop session's in-app browser or Claude in Chrome doesn't count either. So in every round:
 
 - **Never fetch a page `GET policy` refuses by script** (`browser_only`, `citation_only` and the rest): not with
   curl, not with a fetch tool, not through a mirror or an archive copy of it, and not by driving the VM's headless
-  Chrome (that is a script too). The source policy forbids it (AGENTS.md rules 6 and 13). `browser_read: true`
-  means a person's browser, which a cloud round doesn't have.
+  Chrome (that is a script too), and not with an in-app browser or Claude in Chrome. The source policy forbids it
+  (AGENTS.md rules 6 and 13). `browser_read: true` means a person's browser, which no round has.
 - **Prefer other reputable sources** that scripts may read: official sites, national archives, universities and
   museums, peer-reviewed papers, reputable outlets that allow automated reads.
 - **Hand `browser_only` reads to the owner's review queue** (ADR 0046): a `browser_only` page is read by a

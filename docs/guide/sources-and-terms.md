@@ -50,7 +50,7 @@ Hosts no job ever requests, because their terms forbid automated reading or AI u
 
 | Host | Why (the reason string in `NEVER_FETCH`, shortened) |
 |---|---|
-| britannica.com | Terms forbid automated access; agents read it in a browser. |
+| britannica.com | Terms forbid automated access; a person reads it in their own browser (ADR 0046). |
 | openstax.org | Terms forbid use of its textbooks by AI systems: never read or cite. |
 | theguardian.com, guardianapis.com | Open Platform terms 6(g) ban TDM, aggregation, AI/ML synthesis and any automated program; clause 5: delete within 24 hours. |
 | bbc.co.uk, bbc.com, bbci.co.uk | BBC terms of use §15: no taking metadata from content or RSS feeds; robots.txt bans TDM and AI use. |
@@ -131,15 +131,15 @@ The policy values (`evidence.models.Publisher.Fetch`):
 |---|---|
 | `allowed` | Jobs may fetch it, subject to robots.txt and the rest. The default. |
 | `api_only` | Jobs may fetch only URLs under its `api_base` (a prefix, optionally with a query parameter the URL must carry: "https://www.loc.gov/ ?fo=json"; several joined by " \| "), and only when `api_needs_key` is false or `api_key_setting` names a setting that is set. A keyed API without its key stays off ([ADR 0037](../adr/0037-source-ratings-2026-11-28.md)). |
-| `browser_only` | Blocks or forbids automated readers. Jobs never fetch it; an agent reads it in a browser. |
-| `citation_only` | Jobs never fetch it; an agent may cite the link and read it in a browser (ADR 0037). |
+| `browser_only` | Blocks or forbids automated readers. Jobs never fetch it and no agent reads it, with any tool; a person reads it in their own browser, from the console's Review page (ADR 0046). |
+| `citation_only` | Jobs never fetch it and no agent reads it; the link may be cited once a person has read it in their own browser (ADR 0037, ADR 0046). |
 | `forbidden` | Never fetched and never cited. |
 
 Known publishers that start as something other than `allowed`:
 
 | Domain | Tier | Policy | Access note |
 |---|---|---|---|
-| britannica.com | 2 | `browser_only` | Blocks automated fetching: read in a browser. |
+| britannica.com | 2 | `browser_only` | Blocks automated fetching: a person reads it in their own browser. |
 | openstax.org | unrated | `forbidden` | Never read or cite. |
 | worldhistory.org | 3 | `browser_only` | Blocks automated fetching. |
 | unesco.org, whc.unesco.org | 2 | `browser_only` | Often blocks automated fetching. |
@@ -216,7 +216,7 @@ ADR 0013, since archive.org has no verdict entry. "Fetched by" names the job or 
 | Al Jazeera | Nothing. Links only. | robots.txt notice. |
 | Associated Press | Nothing. Links only. | No public feed or API; robots.txt disallows its feeds. |
 | Olympedia | Nothing. Links and names only. | No published terms for automated reuse; Crawl-delay 10. |
-| Britannica | Nothing; agents read it in a browser. | Terms forbid automated access. |
+| Britannica | Nothing; a person reads it in their own browser (ADR 0046). | Terms forbid automated access. |
 | OpenStax | Nothing, ever, and never cited. | Terms forbid use of its textbooks by AI systems. |
 
 The Guardian, BBC, NPR, Al Jazeera and AP are blocked twice: by `NEVER_FETCH`, and by their publishers'
@@ -264,19 +264,20 @@ stay closed to scripts: its robots.txt disallows `/`, and its copyright page bar
 
 ## Citation-only sources and browser_only publishers
 
-A **citation-only** source is one we may link to and an agent may read in a browser, but no job ever fetches. News
+A **citation-only** source is one we may link to and a person may read in their own browser, but no job ever fetches
+and no agent reads ([ADR 0046](../adr/0046-the-owners-review-queue.md)). News
 corroboration comes mostly from these: the links Wikipedia's editors cite in the Current events portal. The portal
 job stores each item's external links (URL, anchor text, domain) in the candidate's `details.external`. They are
 never requested by ingestion, and the `write_event` payload lists each with its publisher's tier and
-`fetch_policy`, so the agent knows which ones to open in a browser.
+`fetch_policy`, so the agent knows which ones it may not read: those are the owner's.
 
 What keeps jobs off them:
 
 - **The Fetcher** refuses them before any request (checks 2 and 3 above).
 - **Link health** never selects a citation whose host is in `NEVER_FETCH` or whose publisher (or nearest parent
-  row) isn't `allowed`. Agents re-read those pages themselves.
+  row) isn't `allowed`. A person re-reads those pages, from the console's Review page.
 - **Links built, not fetched.** The Nobel job and adapter build nobelprize.org prize links for candidates and
-  suggestions without requesting them; the adapter's hits say "nobelprize.org is browser_only: read it in a browser".
+  suggestions without requesting them; the adapter's hits say "nobelprize.org is browser_only: a person reads it in their own browser, never an agent (ADR 0046)".
 
 Publishers that are `browser_only` after seeding: britannica.com, worldhistory.org, unesco.org, whc.unesco.org,
 un.org (and its subdomains news.un.org and press.un.org, which start with its rating), nobelprize.org, and the news
@@ -294,9 +295,10 @@ For an agent's script it is stricter than "a job may fetch": `may_fetch` is true
 publisher, or an `api_only` one under its `api_base` (with its key, where it needs one). `forbidden`,
 `citation_only`, `browser_only`, NEVER_FETCH hosts, unrated domains (no tier: nobody has read the terms), a host the
 evidence-pack job found shutting AI crawlers out in robots.txt (`ai_blocked`) and one that refused our User-Agent or
-walled us lately (`robots`, `blocked`) are all `may_fetch: false`. `browser_read` says whether a person's browser
-(or a local session's in-app browser) may read it instead: true for all of them but `forbidden`. A cloud agent has no
-browser: it uses another source, or releases the task with `{"needs": "browser"}` for the owner
+walled us lately (`robots`, `blocked`) are all `may_fetch: false`. `browser_read` says whether a person may read it
+in their own browser instead: true for all of them but `forbidden`. No agent reads such a page with any tool (no
+in-app browser, no Claude in Chrome, desktop or cloud: [ADR 0046](../adr/0046-the-owners-review-queue.md)): it uses
+another source, or releases the task with `{"needs": "browser"}` for the owner's Review page
 ([work queue](work-queue-and-agents.md#the-fetch-policy-for-an-agents-own-reads)).
 
 ## Evidence packs: full text, privately, for a while
@@ -416,7 +418,7 @@ the project's GitHub repository (Wikimedia requires a contact). The robots.txt t
    `Content-Signal` or tdmrep.json) and the license of the data. Decide what jobs may keep: metadata, a headline and
    link, a lead of at most 60 words from the feed, or nothing.
 2. **If jobs may not read it**, add the host to `NEVER_FETCH` with the reason, and to `SKIPPED` if it was a
-   candidate feed. Its links can still be cited and read in a browser.
+   candidate feed. Its links can still be cited and read by a person in their own browser.
 3. **If they may**, add its publisher defaults to `PUBLISHERS` (tier, license; `fetch_policy` `allowed` on a
    subdomain whose parent isn't), its verdict to `VERDICTS` with the clause relied on, a `HOST_DELAY` if it states
    a rate or Crawl-delay, and its feed to `FEEDS`. A key goes in `config/settings.py`, `.env.example` (empty),

@@ -17,7 +17,7 @@ lists it on the line "Needs the owner". The console shows it on the tab Deferred
 ## Before you start
 
 - You have a staff user with the permission `ops_operator`.
-- You have a browser, or a local Claude Code session with the in-app browser.
+- You have a browser. You read the page in your own browser. No Claude session reads it for you.
 
 ## Procedure
 
@@ -31,18 +31,17 @@ lists it on the line "Needs the owner". The console shows it on the tab Deferred
    Make sure that the field Needs shows the same URL and the agent.
 5. Open the URL in your browser. Read the page.
    Make sure that the page supports the claim, or that it does not.
-6. If the task is necessary, click Requeue on the page of the task. Type a reason, for example "read in a browser".
+6. Find a page that agents can read and that says the same thing.
+   Make sure that `GET policy` gives `may_fetch: true` for that page.
+7. If the task is necessary, click Requeue on the page of the task. Type the URL of that page as the reason.
    Make sure that the confirmation page shows the task with its time "not before".
-7. Confirm the requeue.
+8. Confirm the requeue.
    Make sure that the task has the status `queued` and that the field Not before is empty.
-8. Start a local Claude Code session in the repository. Tell it to work the task kind with its skill and its in-app
-   browser, as procedure [01](01-run-a-round-by-hand.md) tells.
-   Make sure that the session uses one browser tab and marks the page `"method": "browser_read"`.
-9. Examine the page of the task again after the session.
+9. Examine the page of the task again after the next round.
    Make sure that the task has the status `done`.
 
-> **NOTE:** An agent claims the best task of its kind. Thus the local session can do other tasks before this task.
-> Also, a cloud agent can claim the task first. If it releases the task again, do this procedure again.
+> **NOTE:** The agent sees your reason in the notes of the task. If it releases the task again, do this procedure
+> again, or cancel the task.
 
 ## If the task is not necessary
 
