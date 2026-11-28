@@ -31,6 +31,7 @@ from django.utils import timezone
 
 from ingest.prefetch import PAYLOAD_KEYS as PREFETCH_KEYS
 from work.models import AgentTask
+from work.queue import PAYLOAD_KEYS as QUEUE_KEYS
 from work.queue import enqueue
 
 from . import metrics as gm
@@ -438,7 +439,7 @@ def run(*, now: datetime | None = None, per_day: int | None = None, dry_run: boo
                     wc[f"{wname}.open"] += 1
                     if t.status == "queued" and not dry_run:
                         p = payload(g, M, ctx, refs[g.branch], imp)
-                        keep = {k: t.payload[k] for k in ("pointers", *PREFETCH_KEYS) if k in (t.payload or {})}
+                        keep = {k: t.payload[k] for k in ("pointers", *PREFETCH_KEYS, *QUEUE_KEYS) if k in (t.payload or {})}
                         if {**p, **keep} != t.payload or t.priority != priority(g):
                             t.payload, t.priority = {**p, **keep}, priority(g)
                             t.save(update_fields=["payload", "priority"])

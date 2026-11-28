@@ -37,6 +37,10 @@ api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/extend" -d '{"minutes": 30}'
 
 A lease that runs out may be taken over by another agent; then your `complete` is refused (409) and the work is
 lost. If you can't finish, `release` the task (untouched) or `fail` it with the reason; never leave it to lapse.
+A release is deferred (ADR 0042): the task isn't offered again for an hour, so neither you nor the next agent claims it
+straight back. Say why, `-d '{"reason": "…"}'` (`"defer_minutes"`: 0 to 10080 for another wait). When only a person
+can unblock it, add `"needs": "browser"` (a page only a browser may read) or `"needs": "owner"` (the owner's call): it
+waits a week, and the round's summary lists it for the owner. Never release and re-claim the same task in a loop.
 
 ## 1. Claim a task
 
@@ -64,7 +68,11 @@ Ask whether a reader would be better served by the change:
   origin note. Never pick a parent because the stories mention it.
 
 Look things up as you would to write an event (`site/SCHEMA.md` citation rules: fetch and read every page you cite;
-never openstax.org; britannica.com only in a browser).
+never openstax.org; britannica.com only in a browser). **Before any WebFetch or `curl` of a source page, ask the
+policy** (ADR 0042): `api -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"`, and fetch only when
+`may_fetch` is true. When it is false, use another source (Wikipedia's references often lead to a readable one), or
+a browser if you have one and `browser_read` is true; never reach the page another way. A proposal you can't decide
+without such a page is released with `{"needs": "browser", "reason": "<url>: <why>"}`.
 
 ## 3a. Accept: write the operations
 
@@ -90,4 +98,6 @@ api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/complete" -d '{"result": {"decision
 ```
 
 The rule will not propose it again for 180 days, and then only if its evidence grew by half. Say why so the owner can
-tune the thresholds. If you cannot decide, `POST tasks/<id>/release`; `fail` only if it can never be decided.
+tune the thresholds. If you cannot decide, `POST tasks/<id>/release` with a reason (`-d '{"reason": "…"}'`; add `"needs": "owner"` when
+the decision is the owner's, `"needs": "browser"` when it waits on a page only a browser may read); `fail` only if it
+can never be decided.

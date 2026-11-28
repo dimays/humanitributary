@@ -28,6 +28,7 @@ from infra import storage
 from ingest.models import Candidate, Document, Feed, FetchRun, JobState
 from ingest.policy import mask_secrets
 from ingest.prefetch import KINDS as PREFETCH_KINDS
+from work import queue as work_queue
 from work.models import AgentTask
 from work.rounds import FED_BY
 
@@ -627,21 +628,26 @@ def stuck_leases(now, limit: int = 20) -> list:
 
 
 # The Work page's tabs → the `status` filter `tasks()` and the batch actions take.
-TABS = [("waiting", "Waiting", "queued"), ("in_progress", "In progress", "live"), ("stuck", "Stuck", "stale"),
+# Deferred: queued tasks an agent released for later (a `not_before` ahead) or that need a person (ADR 0042).
+TABS = [("waiting", "Waiting", "queued"), ("deferred", "Deferred", "deferred"), ("in_progress", "In progress", "live"), ("stuck", "Stuck", "stale"),
         ("done", "Done", "done"), ("failed", "Failed", "failed"), ("cancelled", "Cancelled", "cancelled")]
 
 
 def tasks(*, kind="", status="", agent="", q=""):
     """Tasks, newest first, by kind, status (queued, claimed, done, failed, cancelled; `stale`: claimed with an
-    expired lease; `live`: claimed with a live one), agent and a text match. The batch actions use the same filters."""
+    expired lease; `live`: claimed with a live one; `deferred`: queued, released for later or needing a person),
+    agent and a text match. The batch actions use the same filters."""
     qs = AgentTask.objects.defer("payload", "result").annotate(
-        decision=KT("result__decision"), note=KT("result__note"), result_entry=KT("result__entry"))
+        decision=KT("result__decision"), note=KT("result__note"), result_entry=KT("result__entry"),
+        needs_kind=KT("payload__needs__kind"), needs_reason=KT("payload__needs__reason"), needs_by=KT("payload__needs__by"))
     if kind:
         qs = qs.filter(kind=kind)
     if status == "stale":
         qs = qs.filter(status="claimed", lease_until__lt=timezone.now())
     elif status == "live":
         qs = qs.filter(status="claimed", lease_until__gte=timezone.now())
+    elif status == "deferred":
+        qs = qs.filter(work_queue.deferred_q(timezone.now()))
     elif status:
         qs = qs.filter(status=status)
     if agent:
@@ -655,6 +661,7 @@ def kind_counts(kind: str, now) -> dict:
     """One kind's tasks per tab (one query)."""
     return AgentTask.objects.filter(kind=kind).aggregate(
         waiting=Count("id", filter=Q(status="queued")),
+        deferred=Count("id", filter=work_queue.deferred_q(now)),
         in_progress=Count("id", filter=Q(status="claimed", lease_until__gte=now)),
         stuck=Count("id", filter=Q(status="claimed", lease_until__lt=now)),
         done=Count("id", filter=Q(status="done")),

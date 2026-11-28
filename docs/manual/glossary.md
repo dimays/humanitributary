@@ -28,6 +28,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Content wave | A period of history in equal windows. The `gap_waves` job finds the gaps in the active wave and in the newer waves. |
 | Contested | A claim status: sources that conflict with the claim have enough weight against it. |
 | Dedupe key | A key that a job gives to a task. Only one open task can have a given kind and key. |
+| Deferred task | A queued task that an agent released. Agents do not get it before its time "not before". The console shows it on the tab Deferred. |
 | Deploy | The step that puts new code on the Heroku app. Heroku deploys `main` after CI passes. |
 | Deterministic | A program is deterministic when the same input always gives the same output. All jobs are deterministic. |
 | Dismissed | The mark on a failed job run that an operator removed from "Needs attention" without a new run. The run stays in the history. |
@@ -40,6 +41,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Feed | A source that a job reads on a schedule, with an interval and an on or off value. |
 | Feed job | A job that runs one time for each `Feed` row that names it. |
 | `fetch_policy` | How jobs can read a publisher: `allowed`, `api_only`, `browser_only`, `citation_only` or `forbidden`. With `api_only`, jobs use only its API. With `citation_only`, agents cite it and read it in a browser. |
+| Fetch policy endpoint | The call `GET /api/agent/policy?url=<url>`. It tells an agent if its script can read a page (`may_fetch`). |
 | Fetcher | `ingest.http.Fetcher`, the one HTTP client of all jobs. It refuses a request that the source policy does not permit. |
 | Gap | A window of a content wave in which a branch has no published event, or far fewer events than its peers. |
 | Gate | `make check-pr`: the checks and the tests that a pull request must pass. CI runs the same command. |
@@ -50,6 +52,7 @@ Purpose: This file defines each term that this manual uses. Each term has only o
 | Jobs tab | The console page of the jobs. The worker runs them on a schedule. They collect and prepare material and make tasks, without Claude. |
 | Lease | The time for which an agent holds a claimed task. After the lease time, another agent can take the task. |
 | Lock | A Postgres advisory lock. The runner lock lets one runner run jobs. The scheduler lock lets one worker schedule. |
+| Needs | A note on a deferred task: `browser` (only a browser can read a page that the task needs) or `owner` (the owner must decide). |
 | New events | The console page that shows each content item from the fetch to the release, with its five steps. It also shows the numbers of the last 14 days. |
 | One-off dyno | A dyno that `heroku run` starts for one command. It stops when the command ends. |
 | Operation scope | A token scope that is not a task kind: `review`, `publish` or `round`. The scope `*` does not give it. |

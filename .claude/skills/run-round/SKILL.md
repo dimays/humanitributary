@@ -114,14 +114,17 @@ Start the role agents as subagents, in parallel, one per agent in the plan. Brie
   or a claim returns `{"task": null}`;
 - **extend the lease** (`POST tasks/<id>/extend -d '{"minutes": 30}'`) whenever one task passes about 20
   minutes, and again every 20 minutes;
-- the fetching rules below (honest User-Agent, one browser tab at most, closed at the end, never force a site);
+- the fetching rules below (`GET policy?url=` before every scripted fetch, and no fetch unless `may_fetch`; honest
+  User-Agent; one browser tab at most, closed at the end; never force a site);
 - the cloud constraint (no `browser_only` pages; see below);
 - **the evidence pack first** (each task skill's "The evidence pack: read it first"): passages and `GET
   documents/<doc_id>`, excerpts copied from the stored text (`complete` refuses one that isn't on a stored page),
   a browser only for `unreadable` URLs whose reason is `browser_only`, `citation_only` or `ai_blocked`;
-- to finish by releasing (`POST tasks/<id>/release`) any task it holds and can't finish, and to report:
-  task ids claimed, completed, failed and released per kind; every slug it drafted (`result.entry`,
-  `result.entries`); and the sources that refused it.
+- to release a task it can't do without a page only a browser may read with `{"needs": "browser", "reason":
+  "<url>: <why>"}` (it waits a week for the owner), never to release and re-claim it in a loop, and to finish by
+  releasing (`POST tasks/<id>/release -d '{"reason": "…"}'`) any task it holds and can't finish, and to report:
+  task ids claimed, completed, failed and released per kind; every `needs` release, with its task id, kind, URL and
+  why; every slug it drafted (`result.entry`, `result.entries`); and the sources that refused it.
 
 When every agent has reported, `PATCH rounds/<id>`:
 
@@ -155,8 +158,9 @@ against it), writes nothing through the API, and returns:
   `add_event` or `add_branch`: over the API an added entry lands in review, for the next round;
 - the sources it could only partly read, or could not read.
 
-Brief every reviewer with the hard-won rules below, in full. A reviewer must **read every cited page itself**: a
-draft whose excerpt it could not check against the page is not approved. A stored page (ADR 0036) counts as read
+Brief every reviewer with the fetching rules and the hard-won rules below, in full (`GET policy?url=` before
+every scripted fetch: a reviewer never reads by script a page the policy refuses). A reviewer must **read every
+cited page itself**: a draft whose excerpt it could not check against the page is not approved. A stored page (ADR 0036) counts as read
 from `GET documents?url=`: the reviewer reads the text there, judges the stance from it and checks each excerpt
 with `evidence/check-excerpt`; it opens a browser (desktop rounds) only for a `browser_only` page. `edits/check`
 refuses an excerpt that isn't on a stored page, naming the closest passage, so a reviewer's `add_evidence` and
@@ -221,10 +225,24 @@ Tasks: fill_gap 6/6, map_branch_entities 4/4, write_event 6/8 (1 failed, 1 relea
 Drafts 11 → approve 7, approve with edits 2, hold 2, reject 1 (duplicate of …).
 Edit file: 31 ops (edit 9, add_evidence 12, approve 9, reject 1); 64 revisions.
 Held: <slugs and why>. Unreadable sources: <hosts>.
+Needs the owner: #426 verify_claim needs browser (https://www.un.org/…: browser_only); #431 …
 ```
+
+The **Needs the owner** line lists every release the role agents (and reviewers) made with `needs`, as they
+reported them: task id, kind, `browser` or `owner`, and the reason. Leave the line out when there were none. Those
+tasks wait a week in the console's Work → kind page, tab Deferred; the owner reads the page and requeues the task,
+or cancels it.
 
 ## Fetching: honest, one tab, never forced
 
+- **Ask the policy before every fetch** (ADR 0042). Before any WebFetch or `curl` of a source page, every agent
+  and every reviewer calls `api <TOKEN_VAR> -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"` and
+  fetches only when `may_fetch` is true, `crawl_delay` seconds apart per host. `citation_only`, `browser_only`,
+  `never_fetch`, `ai_blocked`, `robots`, `blocked`, `unrated`, `forbidden`, and `api_only` outside its `api_base`
+  are never read by script (in the rounds of November 27 a writer read nbcnews.com, `citation_only` with a
+  robots.txt that names Claude's crawlers, and fillers touched un.org). Use another source instead (Wikipedia's
+  references often lead to a readable one), never cite the page unread, and when a task can't be done without it,
+  release the task with `{"needs": "browser", "reason": "<url>: <why>"}`.
 - **Never disguise the client.** Every page fetched by script sends `curl -sS -A "$INGEST_USER_AGENT" <url>`. No
   spoofed browser User-Agent, no header tricks, no proxies, mirrors or caches to get round a site that refuses
   automated reads (two round-4 agents tried a spoofed User-Agent; the safety checks blocked them). If a site
@@ -240,13 +258,16 @@ Held: <slugs and why>. Unreadable sources: <hosts>.
 A cloud session has **no in-app browser**. The `browser_only` publishers (Britannica, the BBC, the Guardian, NPR,
 AP, Al Jazeera, un.org, nobelprize.org …, the payload's `fetch_policy`) can't be read there, so in a cloud round:
 
-- **Never fetch a `browser_only` page by script**: not with curl, not with a fetch tool, not through a mirror or
-  an archive copy of it, and not by driving the VM's headless Chrome (that is a script too). The source policy
-  forbids it (AGENTS.md rules 6 and 13).
+- **Never fetch a page `GET policy` refuses by script** (`browser_only`, `citation_only` and the rest): not with
+  curl, not with a fetch tool, not through a mirror or an archive copy of it, and not by driving the VM's headless
+  Chrome (that is a script too). The source policy forbids it (AGENTS.md rules 6 and 13). `browser_read: true`
+  means a person's browser, which a cloud round doesn't have.
 - **Prefer other reputable sources** that scripts may read: official sites, national archives, universities and
   museums, peer-reviewed papers, reputable outlets that allow automated reads.
 - **Hold a draft whose only support is a `browser_only` source** (a reviewer can't check it either). Name it in
-  the summary so the owner can review it by hand in a browser (procedure 01). A task's `unreadable` list names
+  the summary so the owner can review it by hand in a browser (procedure 01). A task (not a draft) that can't be
+  done without such a page is released with `"needs": "browser"`, and the summary's "Needs the owner" line names it
+  (procedure 18). A task's `unreadable` list names
   those sources (reasons `browser_only`, `citation_only`, `ai_blocked`); its `evidence_pack` holds the ones a cloud round can read and check.
 - **Use the evidence packs.** In a cloud round they are most of what can be read: the stored pages, their
   passages, `GET documents/<doc_id>` and `evidence/check-excerpt`.

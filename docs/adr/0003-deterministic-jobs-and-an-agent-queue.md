@@ -1,6 +1,6 @@
 # 0003 — Deterministic jobs, and a queue for agents
 
-**Status:** accepted (November 2026)
+**Status:** accepted (November 2026); amended by [0042](0042-deferred-releases-and-the-fetch-policy-endpoint.md) (an agent's release defers the task and may record a need)
 
 ## Context
 

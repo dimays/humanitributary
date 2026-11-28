@@ -5,28 +5,28 @@
 <div class="head">
   <div><h1>{{ kind }}</h1><div class="sub">{{ label|capfirst }}.</div></div>
   <div class="tools">{% if can_act and page.paginator.count %}
-    {% if tab == 'failed' or tab == 'cancelled' %}{% act "requeue_tasks" "Requeue these" "sm" kind=kind status=status q=q %}{% endif %}
-    {% if tab == 'waiting' or tab == 'stuck' %}{% act "cancel_tasks" "Cancel these" "sm danger" kind=kind status=status q=q %}{% endif %}
+    {% if tab == 'failed' or tab == 'cancelled' or tab == 'deferred' %}{% act "requeue_tasks" "Requeue these" "sm" kind=kind status=status q=q %}{% endif %}
+    {% if tab == 'waiting' or tab == 'deferred' or tab == 'stuck' %}{% act "cancel_tasks" "Cancel these" "sm danger" kind=kind status=status q=q %}{% endif %}
   {% endif %}</div>
 </div>
 <nav class="tabs" aria-label="Task state">{% for key, name, st in tabs %}<a href="?tab={{ key }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="{% if key == tab %}on{% endif %}">{{ name }}<span class="n">{{ counts|get:key }}</span></a>{% endfor %}</nav>
 <form class="filters" method="get"><input type="hidden" name="tab" value="{{ tab }}">
   <label>Search<input type="search" name="q" value="{{ q }}" placeholder="dedupe key, target, creator"></label>
   <button class="btn" type="submit">Search</button>{% if q %}<a class="btn quiet" href="?tab={{ tab }}">Clear</a>{% endif %}</form>
-{% if can_act and page.paginator.count > max_batch %}{% if tab == 'failed' or tab == 'cancelled' or tab == 'waiting' or tab == 'stuck' %}<p class="small muted">A batch acts on at most {{ max_batch }} tasks, highest priority first; the confirmation lists them.</p>{% endif %}{% endif %}
+{% if can_act and page.paginator.count > max_batch %}{% if tab == 'failed' or tab == 'cancelled' or tab == 'waiting' or tab == 'deferred' or tab == 'stuck' %}<p class="small muted">A batch acts on at most {{ max_batch }} tasks, highest priority first; the confirmation lists them.</p>{% endif %}{% endif %}
 <div class="card flush"><div class="scroll"><table>
 <thead><tr><th>Task</th><th>State</th><th class="n">Priority</th><th>About</th><th>Agent</th><th>Age</th><th>Outcome</th>{% if can_act %}<th></th>{% endif %}</tr></thead>
 <tbody>{% for t in page %}<tr>
   <td><a class="mono" href="{% url 'opsconsole:task' t.pk %}">#{{ t.pk }}</a></td>
-  <td>{% badge t|task_state %}</td>
+  <td>{% if t.deferred %}{% badge "paused" "Deferred" %}{% else %}{% badge t|task_state %}{% endif %}{% if t.status == 'queued' and t.not_before and t.not_before > now %}<div class="small muted nowrap" title="{{ t.not_before|date:'c' }}">not before {{ t.not_before|date:"M j, H:i" }}</div>{% endif %}</td>
   <td class="n">{{ t.priority }}</td>
   <td class="small" title="{{ t.dedupe_key }}">{{ t.subject|default:"–" }}</td>
   <td class="small">{{ t.claimed_by|default:"–" }}</td>
   <td class="small nowrap">{{ t.age|span }}</td>
-  <td class="small muted">{{ t.summary|default:"" }}{% if t.status == 'failed' and t.error %}<span class="err">{{ t.error|masked|truncatechars:70 }}</span>{% endif %}</td>
+  <td class="small muted">{% if t.needs_kind %}<div><b>needs {{ t.needs_kind }}</b>{% if t.needs_reason %}: {{ t.needs_reason|truncatechars:90 }}{% endif %}{% if t.needs_by %} <span class="muted">({{ t.needs_by }})</span>{% endif %}</div>{% endif %}{{ t.summary|default:"" }}{% if t.status == 'failed' and t.error %}<span class="err">{{ t.error|masked|truncatechars:70 }}</span>{% endif %}</td>
   {% if can_act %}<td><div class="acts">
     {% if t.status == 'claimed' %}{% act "release_lease" "Release" "sm" task=t.pk holder=t.claimed_by %}{% endif %}
-    {% if t.status == 'failed' or t.status == 'cancelled' %}{% act "requeue_tasks" "Requeue" "sm" task=t.pk %}{% endif %}
+    {% if t.status == 'failed' or t.status == 'cancelled' or t.deferred %}{% act "requeue_tasks" "Requeue" "sm" task=t.pk %}{% endif %}
     {% if t.status == 'queued' or t.stale %}{% act "cancel_tasks" "Cancel" "sm quiet" task=t.pk %}{% endif %}
   </div></td>{% endif %}
 </tr>{% empty %}<tr><td colspan="8" class="muted">No tasks here.</td></tr>{% endfor %}</tbody>

@@ -82,7 +82,7 @@ class LinkTests(ApiBase):
         rnd = a_round()
         queue.enqueue("write_event", created_by="job:process", dedupe_key="a")
         t = self.claim("round-writer")
-        self.assertEqual(self.call("post", f"tasks/{t['id']}/release", {}, as_="round-writer").status_code, 200)
+        self.assertEqual(self.call("post", f"tasks/{t['id']}/release", {"defer_minutes": 0}, as_="round-writer").status_code, 200)
         task = AgentTask.objects.get(pk=t["id"])
         self.assertEqual((task.status, task.round_id), ("queued", rnd.pk))
         self.claim("round-writer")

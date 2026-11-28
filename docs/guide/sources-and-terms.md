@@ -265,6 +265,23 @@ Publishers that are `browser_only` after seeding: britannica.com, worldhistory.o
 un.org (and its subdomains news.un.org and press.un.org, which start with its rating), nobelprize.org, and the news
 publishers the verdicts set: theguardian.com, bbc.co.uk, bbc.com, npr.org, aljazeera.com, apnews.com.
 
+## The same policy for an agent's own reads
+
+An agent that reads a page itself (WebFetch, `curl`) bypasses the Fetcher, and in live rounds agents did read a
+`citation_only` news site whose robots.txt names Claude's crawlers, and a `browser_only` one. So the agent API
+answers the policy for any URL: `GET /api/agent/policy?url=…` (`agentapi/policy.py`,
+[ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md)), from the same rows the Fetcher and
+the evidence-pack job read, fetching nothing. Every task skill calls it before a scripted fetch of a source page.
+
+For an agent's script it is stricter than "a job may fetch": `may_fetch` is true only for a rated `allowed`
+publisher, or an `api_only` one under its `api_base` (with its key, where it needs one). `forbidden`,
+`citation_only`, `browser_only`, NEVER_FETCH hosts, unrated domains (no tier: nobody has read the terms), a host the
+evidence-pack job found shutting AI crawlers out in robots.txt (`ai_blocked`) and one that refused our User-Agent or
+walled us lately (`robots`, `blocked`) are all `may_fetch: false`. `browser_read` says whether a person's browser
+(or a local session's in-app browser) may read it instead: true for all of them but `forbidden`. A cloud agent has no
+browser: it uses another source, or releases the task with `{"needs": "browser"}` for the owner
+([work queue](work-queue-and-agents.md#the-fetch-policy-for-an-agents-own-reads)).
+
 ## Evidence packs: full text, privately, for a while
 
 The `prefetch_sources` job ([ingestion](ingestion.md#evidence-packs), [ADR 0036](../adr/0036-evidence-packs.md))

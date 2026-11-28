@@ -42,7 +42,7 @@ An `AgentTask` row is one piece of judgment work. Its fields:
 | `target_ref` | Anything else the task is about, as text (a URL, a Wikidata QID). |
 | `payload` | Everything the agent needs that isn't in the target, as JSON. A GIN index (`task_payload_gin`) lets jobs query it. |
 | `dedupe_key` | A job's key for the task. At most one open task per (kind, key). |
-| `not_before` | The task isn't offered before this time. |
+| `not_before` | The task isn't offered before this time. An agent's `release` sets it ([below](#deferred-releases)); an operator's requeue clears it. |
 | `claimed_by`, `claimed_at`, `lease_until` | The lease: who holds it, since when, until when. |
 | `attempts`, `max_attempts` | Times claimed, and the limit (default 3). |
 | `result` | The agent's JSON result, set on completion. |
@@ -72,12 +72,12 @@ carries the task's id in its Revision (see
 queued ──claim──▶ claimed ──complete──▶ done
   ▲                 │ │
   │   release, fail │ └──fail (no retry, or out of attempts)──▶ failed
-  └──(retry left)───┘
+  └──(retry left)───┘    (a release is deferred: not offered before not_before)
   ▲                 │
   └─lease runs out──┘  (offered again; past max_attempts → failed)
 
 queued ──a job withdraws it, or an operator cancels it──▶ cancelled
-failed, cancelled ──an operator requeues it (attempts reset)──▶ queued
+failed, cancelled, deferred ──an operator requeues it (attempts reset, not_before and needs cleared)──▶ queued
 ```
 
 `cancelled` is set by jobs (branch governance cancels the queued task of a
@@ -129,7 +129,7 @@ still finish, as long as nobody has claimed the task since.
 |---|---|---|---|
 | `complete(id, agent, result)` | `POST tasks/<id>/complete` | `tasks complete <id> --result <file>` | `done`, stores `result`, sets `completed_at`, clears the lease. The API first validates and applies the result ([below](#the-agent-api)). |
 | `fail(id, agent, error, retry=True)` | `POST tasks/<id>/fail` | `tasks fail <id> --error "…" [--no-retry]` | Appends `<agent>: <error>` to `error` and clears the lease. Back to `queued` if `retry` and `attempts < max_attempts`; else `failed`. The attempt stays counted. |
-| `release(id, agent)` | `POST tasks/<id>/release` | `tasks release <id>` | Back to `queued`, untouched, and the attempt is given back (`attempts − 1`). |
+| `release(id, agent, reason="", defer_minutes=None, needs="")` | `POST tasks/<id>/release` with an optional `{"reason", "defer_minutes", "needs"}` | `tasks release <id> [--reason "…"] [--defer-minutes N] [--needs browser\|owner]` | Back to `queued`, untouched, and the attempt is given back (`attempts − 1`), but deferred: `not_before` = now + `defer_minutes` ([deferred releases](#deferred-releases)). |
 | `extend(id, agent, minutes)` | `POST tasks/<id>/extend` | `tasks extend <id> [--minutes N]` | `lease_until` = now + `minutes` (default `TASK_LEASE_MINUTES`). Counted from now, not from the old lease end. |
 
 ### Operators' versions
@@ -149,6 +149,38 @@ what happened to it; the console also records an `OpsAction` row.
 
 `requeue` and `cancel` take at most `MAX_BATCH` (50) ids, lock them
 (`select_for_update`) and return `{"done": [ids], "skipped": {id: why}}`.
+`requeue` also takes a deferred task (`queue.deferred_q`: queued with
+`not_before` ahead, or with a recorded need), and clears `not_before` and
+`payload["needs"]`, so the task is offered at once; its note says what it
+was (`requeued (was deferred until …, needs browser, 0 attempts): …`). A
+plain waiting task is skipped: there is nothing to undo.
+
+### Deferred releases
+
+A released task used to go straight back as `queued` with its priority
+unchanged, so the next claim, by the same agent or another, returned the
+same task: two verifiers spent a whole batch on one task that needed a
+person's browser. Since [ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md)
+a release waits:
+
+- `defer_minutes` runs from 0 to `MAX_DEFER_MINUTES` (10,080, a week). It
+  defaults to `DEFAULT_DEFER_MINUTES` (60), also for a bare `POST` with no
+  body. 0 means no wait (`not_before` empty).
+- `needs` is `"browser"` (a page only a browser may read: the
+  [policy endpoint](#the-fetch-policy-for-an-agents-own-reads) said
+  `may_fetch: false`) or `"owner"` (a decision only the owner makes). It
+  defers `NEEDS_DEFER_MINUTES` (a week) unless `defer_minutes` says
+  otherwise, and records `payload["needs"] = {kind, by, at, reason}`. Over
+  the API a release with `needs` must say why (`reason`, typically
+  `"<url>: <why>"`).
+- `<agent>: released[, needs <kind>][: <reason>] (deferred until <time> UTC)`
+  is appended to `error`.
+
+The jobs that refresh a queued task's payload (`process`, `gap_waves`,
+`branches review`) keep `queue.PAYLOAD_KEYS` (`needs`), as they keep the
+evidence pack's keys. The console's Work → kind page has a **Deferred** tab
+(the same `deferred_q`) that shows each task's "not before" time and its
+need, and offers Requeue and Cancel; the task's page shows both too.
 
 ## One open task per key
 
@@ -355,7 +387,7 @@ only way to complete a kind without a result schema.
 | `tasks next [--kind K]… [--claim --agent A] [--lease M]` | The best available task, or `null`. `--kind` repeats. With `--claim`, leases it to the agent. |
 | `tasks complete <id> --result <file> --agent A` | Done, with the JSON in the file (`-` reads standard input). |
 | `tasks fail <id> --error "…" [--no-retry] --agent A` | Back to the queue while attempts remain, else failed. |
-| `tasks release <id> --agent A` | Back to the queue untouched. |
+| `tasks release <id> --agent A [--reason "…"] [--defer-minutes N] [--needs browser\|owner]` | Back to the queue untouched, deferred (60 minutes by default; a week with `--needs`). |
 | `tasks extend <id> [--minutes M] --agent A` | A longer lease. |
 | `tasks list [--status S] [--kind K] [--limit N]` | Tasks in queue order, 50 by default. |
 | `tasks add <kind> --by WHO [--entry SLUG] [--ref R] [--payload JSON] [--priority P] [--dedupe KEY]` | Queue a task by hand. Only an entry target can be given. |
@@ -394,6 +426,15 @@ fetch tool's summary, whose "quotes" are often paraphrased; if only a summary is
 an excerpt. `run-round` briefs its role agents and reviewers the same way: a reviewer reads a stored page with `GET
 documents?url=` and checks excerpts against it, and in a cloud round a draft only `browser_only` pages support is
 held.
+
+Every skill that may fetch a page (all but `run-round`'s own steps, which brief the agents the same way) starts its
+fetching rules with **ask the policy before every fetch** ([ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md)):
+`GET policy?url=` before any WebFetch or `curl` of a source page, and no fetch unless `may_fetch`; then another
+source (Wikipedia's references), a browser where there is one and `browser_read` allows it, never a cite of a page
+not read, and, when the task can't be done without the page, a release with `{"needs": "browser", "reason":
+"<url>: <why>"}`. An `unrated` page in the evidence pack is no longer "read it yourself": scripts never fetch it.
+Every task skill's API section says a release is deferred and asks for a reason; `run-round` asks its role agents
+to report every `needs` release and lists them on the summary's "Needs the owner" line.
 
 Every task skill also says to **extend a long lease** (`POST tasks/<id>/extend` when one task's work passes about
 20 minutes, and every 20 minutes after), and the skills that fetch pages (`drain-write-events`, `fill-gaps`,
@@ -447,7 +488,7 @@ From `agentapi/views.py` (routes in `agentapi/urls.py`):
 | `GET tasks/<id>` | A task you claimed, or any queued task of a kind you may take (403 otherwise). |
 | `POST tasks/<id>/extend` | `{"minutes": N}` (1–240; default `TASK_LEASE_MINUTES`). |
 | `POST tasks/<id>/complete` | `{"result": {…}}` → validated, applied, done. |
-| `POST tasks/<id>/release` | Hand it back untouched. |
+| `POST tasks/<id>/release` | Hand it back untouched, deferred: `{"reason", "defer_minutes": 0–10080 (60), "needs": "browser" \| "owner"}`, all optional; a bare POST defers an hour ([deferred releases](#deferred-releases)). A bad value is a 400 and the task stays yours. |
 | `POST tasks/<id>/fail` | `{"error": "…", "retry": true}`. |
 | `GET entries/<slug>` | An entry, its location and its claims (with status and confidence). |
 | `GET branches/<slug>` | A branch: its events (up to 300 listed), latest metrics, open proposals. |
@@ -455,6 +496,7 @@ From `agentapi/views.py` (routes in `agentapi/urls.py`):
 | `GET search?q=…&kind=event` | Events and branches by title or name (trigram similarity; `kind` is `event` or `branch`, `limit` up to 50). |
 | `GET documents/<id>`, `GET documents?url=…` | A stored page's clean text ([evidence packs](#evidence-packs)): for the holder of a claimed task whose pack names it, or a `review` token when an entry in review cites it. |
 | `POST evidence/check-excerpt` | `{"doc_id" | "url", "excerpt"}` → whether it is verbatim on the stored page, and the closest passage when not. |
+| `GET policy?url=…` | May the agent's own script fetch this page? `{url, publisher, policy, may_fetch, browser_read, why, api_base?, crawl_delay?}` ([below](#the-fetch-policy-for-an-agents-own-reads)). Any token. |
 | `GET queue` | What a round plans from ([below](#a-rounds-operations)). Any token. |
 | `POST edits/check`, `POST edits/apply` | An edit file checked (a dry run) and applied. Scope `review`. |
 | `POST releases/check`, `POST releases/publish` | The release gates, and a release. Scope `publish`. |
@@ -597,7 +639,7 @@ The `prefetch_sources` job ([ingestion](ingestion.md#evidence-packs),
 | Key | What |
 |---|---|
 | `evidence_pack` | `[{url, title, publisher, tier, fetched_at, doc_id, words, passages: [{text, score, matches}]}]`: each stored page (non-Wikipedia first), with up to five ranked passages; at most 20,000 bytes. A page read through its official API adds `"via": "api", "api": "openalex"` (or `crossref`, `loc`, `smithsonian`, `europeana`): the record (abstract, metadata), not the page, and its `publisher` is the API's. A page purged by retention keeps its entry with no passages and `purged: true`. |
-| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it (an agent may read it itself, with the honest User-Agent); `api_<…>` that a catalog page's API failed or lacks its key; `api_only` that the publisher allows only its API and no route reaches it. `browser_only`, `citation_only` and `ai_blocked` (robots.txt shuts out AI crawlers by name, ADR 0037) are the reasons an agent opens a browser for; `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
+| `unreadable` | `[{url, reason, detail}]`: the pages left to read by hand. `unrated` means the publisher has no rating, so the job doesn't fetch it, and since ADR 0042 neither does an agent's script (`GET policy` says `may_fetch: false`); `api_<…>` that a catalog page's API failed or lacks its key; `api_only` that the publisher allows only its API and no route reaches it. `browser_only`, `citation_only` and `ai_blocked` (robots.txt shuts out AI crawlers by name, ADR 0037) are the reasons an agent opens a browser for; `forbidden`, `never_fetch`, `robots` and `blocked` are never fetched by script either; `tdm_reserved` (the page reserves text and data mining: read it by hand, it is never stored), `http_<n>`, `error`, `unsupported`, `too_large`, `empty`; `deferred` means the next run reads it. |
 | `evidence_ready` | A stored page that isn't Wikipedia: what the console's "evidence ready" share counts. |
 | `evidence_pack_at`, `evidence_urls` | When it was built, and from which URLs (a hash; `+deferred` when a cap cut it short). |
 
@@ -611,6 +653,46 @@ unknown page and 410 for a purged one. `POST evidence/check-excerpt` answers
 the page isn't stored). The same comparison (`ingest.passages.contains`:
 Unicode NFC and whitespace collapsed, nothing else) backs the auto-verify on
 `complete` and on edit files.
+
+## The fetch policy for an agent's own reads
+
+Jobs fetch through `ingest.http.Fetcher`, which refuses what the source
+policy forbids ([sources and terms](sources-and-terms.md)). An agent that
+reads a page itself (WebFetch, `curl`) has no Fetcher in front of it, and in
+live rounds writers read nbcnews.com (`citation_only`, and its robots.txt
+names Claude's crawlers) and fillers touched un.org (`browser_only`). So
+`GET policy?url=<url>` (`agentapi/policy.py`,
+[ADR 0042](../adr/0042-deferred-releases-and-the-fetch-policy-endpoint.md))
+answers from the same rows, fetching nothing, and every task skill asks it
+before any scripted fetch of a source page.
+
+`decide(url)` takes the nearest `Publisher` for the domain or a parent (as
+the Fetcher does), else the `evidence.publishers` defaults, and stops at the
+first of these that holds; `policy` names it, in the evidence pack's
+`unreadable` words:
+
+| `policy` | `may_fetch` | `browser_read` | When |
+|---|---|---|---|
+| `forbidden` | false | false | The publisher's `fetch_policy` (OpenStax): never read or cite. |
+| `citation_only` | false | true | Cite the link; never fetch it. |
+| `browser_only` | false | true | `why` says it needs a person's browser (or a local session's in-app one). A cloud agent has none. |
+| `never_fetch` | false | true | `ingest.policy.NEVER_FETCH` lists the host. |
+| `api_only` | only under its `api_base`, and only when a key it needs is set | true | `api_base` is returned; outside it `why` names the base to use. |
+| `unrated` | false | true | No row, or a row with no tier: nobody read its terms. (An `api_only` row counts as rated.) |
+| `ai_blocked` | false | true | The host's latest page row from `prefetch_sources` (or this URL's own) says robots.txt disallows an AI crawler by name. |
+| `robots`, `blocked` | false | true | The host refused our User-Agent or showed a bot wall in the last `HOST_COOLDOWN_DAYS` (`prefetch.host_refusal`). |
+| `allowed` | true | true | Rated and allowed; `crawl_delay` is `ingest.policy.host_delay` (1 second unless the host has its own). |
+
+Wikimedia's API hosts skip the robots checks, as in the Fetcher. A robots.txt
+nobody has read yet (a rated host the job never asked) isn't known here: the
+endpoint answers from records only. It is an ordinary read: any scope, the
+per-token rate limit, 400 for a missing or non-http(s) `url`.
+
+When `may_fetch` is false a skill doesn't fetch: it finds another source
+(Wikipedia's references often lead to a readable one), or cites the page
+unread only where it already allows that, or, when the task can't be done
+without the page, releases it with `{"needs": "browser", "reason": "<url>:
+<why>"}`; `run-round` lists those releases for the owner.
 
 ## Rounds
 
@@ -697,4 +779,4 @@ the link have no linked tasks, so their counts show only what was planned.
 | A round setting, a limit on the round size, `DRAFTS_PER_REVIEWER` | `work/rounds.py`, the `run-round` skill and the Work page together; `tests/test_rounds.py`. A change to the auto-publish policy is a new ADR (it amends ADR 0035). |
 | Which tokens link their claims to a round, or what a round's progress counts | `rounds.ROUND_AGENT`, `round_for_claim` and `progress`, the Work page's strip (`opsconsole/queries.py` `live_round`) and `tests/test_round_progress.py` together; procedure 15 names the tokens. |
 | The heavy operations' limits | `AGENT_API_EDITS_CHECKS_PER_HOUR`, `AGENT_API_EDITS_APPLIES_PER_HOUR`, `AGENT_API_RELEASE_CHECKS_PER_HOUR`, `AGENT_API_PUBLISHES_PER_DAY` in the environment. |
-| Queue behavior | `tests/test_queue.py` covers ordering, peeking, ownership, takeover, release and fail, max attempts, dedupe, `not_before` and SKIP LOCKED between two connections. Extend it. A change of contract (leases, ownership) belongs in ADR 0003. |
+| Queue behavior | `tests/test_queue.py` covers ordering, peeking, ownership, takeover, release and fail, deferred releases and needs, max attempts, dedupe, `not_before` and SKIP LOCKED between two connections; `tests/test_agent_api.py` the release body and `GET policy`, one case per policy. Extend them. A change of contract (leases, ownership) belongs in ADR 0003. |

@@ -22,6 +22,7 @@ from django.utils import timezone
 from evidence.models import Evidence
 from timeline.models import Connection, EventLink
 from work.models import AgentTask
+from work.queue import PAYLOAD_KEYS as QUEUE_KEYS
 from work.queue import enqueue
 
 from . import metrics as M_
@@ -262,6 +263,8 @@ def _propose(f: Finding, today: date, actor: str, M: dict) -> str:
     task_payload = _task_payload(p, f, M)
     task, created = enqueue("review_branch_proposal", created_by=actor, dedupe_key=f"proposal:{p.pk}", priority=30 + min(20, int(10 * f.strength)),
                             payload=task_payload, target_proposal=p, target_entry=branch)
+    if not created and task.status == "queued":
+        task_payload |= {k: task.payload[k] for k in QUEUE_KEYS if k in (task.payload or {})}  # a release's recorded need
     if not created and task.status == "queued" and task.payload != task_payload:
         task.payload = task_payload
         task.save(update_fields=["payload"])
