@@ -234,7 +234,7 @@ Config vars (`heroku config -a humanitributary-staging` lists them; never paste 
 | `EUROPEANA_API_KEY` | nobody yet | a Personal key is for non-production use only: leave it unset until a Project key exists ([Sources and terms](sources-and-terms.md)) |
 
 The site is ManyAges, at `manyages.com`, registered at Namecheap on November 28, 2026, with its nameservers on
-Cloudflare (free plan: `NS1_PLACEHOLDER`, `NS2_PLACEHOLDER`). It was Humanitributary at `humanitributary.com` until
+Cloudflare (free plan: `angelina.ns.cloudflare.com`, `rex.ns.cloudflare.com`, the same pair as the old zone). It was Humanitributary at `humanitributary.com` until
 then ([ADR 0043](../adr/0043-the-manyages-name.md)). The `manyages.com` zone holds:
 
 | Record | Value | Why |
@@ -244,7 +244,7 @@ then ([ADR 0043](../adr/0043-the-manyages-name.md)). The `manyages.com` zone hol
 | `@` TXT | `v=spf1 -all` | no server may send mail as the domain |
 | `_dmarc` TXT | `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s` | receivers reject mail that claims to come from it |
 
-The old domain, `humanitributary.com` (Cloudflare `angelina.ns.cloudflare.com`, `rex.ns.cloudflare.com`), is not
+The old domain, `humanitributary.com` (the same Cloudflare account and nameservers), is not
 renewed: it expires on November 26, 2027, and its redirects work until then. Its zone keeps the same two mail
 records, and:
 
