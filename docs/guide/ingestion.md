@@ -836,7 +836,7 @@ words (`EVENT_WORD_RE`: massacre, execution, killed, famine, bombing …) count 
 **Where it goes** (`auto_ok`): attached at once, as `job:image_search`, only the primary entity's own P18 when that
 entity is an event or a work, the license is public domain or CC0, `Restrictions` is empty, no sensitivity signal,
 and the score is at least `AUTO_SCORE` (0.7). Otherwise the best candidate at `REVIEW_SCORE` (0.35) or more goes to
-the owner's Review page (status `review`) and up to `KEEP` − 1 (2) runners-up wait as `alternate`; a denied one is
+the owner's Review page, its Images tab (status `review`), and up to `KEEP` − 1 (2) runners-up wait as `alternate`; a denied one is
 never proposed again for the entry, and an alternate is promoted when the one before it is denied. Below 0.35 nothing
 is kept.
 
@@ -895,7 +895,8 @@ so and points at `make schedule-status`.
 `tests/test_ingest.py` covers the whole pipeline with no network; `tests/test_evidence_packs.py` covers evidence
 packs (selection by policy, robots and blocked hosts, passages, the payload and its cap, retention, the API) with an
 `httpx.MockTransport`; `tests/test_images.py` covers `image_search` the same way (the cooldown and the retry limit,
-the license and AI filters, routing, the sensitivity signals, the Review page's decisions, the snapshot's fields). `tests/cassette.py` replays recorded responses
+the license and AI filters, routing, the sensitivity signals, the Review page's decisions and its Images tab, the
+snapshot's fields, ratings batch 4). `tests/cassette.py` replays recorded responses
 from `tests/fixtures/ingest/` and fails loudly on any request not in the cassette; unknown robots.txt requests answer
 404 (allow all). `tests/record_fixtures.py` re-records cassettes against the live services (not part of the suite).
 `tests/fixtures/ingest/first_run.json` is a recording of the first real run's routing inputs (three misrouted stories'

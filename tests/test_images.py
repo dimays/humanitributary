@@ -278,8 +278,10 @@ class Routing(Base):
         self.assertFalse(Image.objects.filter(entry__slug="an-caesar-assassinated").exists())
         c = ImageCandidate.objects.get(entry__slug="an-caesar-assassinated")
         self.assertEqual((c.status, c.license, c.license_url), ("review", "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"))
-        self.assertEqual(RV.count(), 1)
-        self.assertEqual([i.key for i in RV.items(timezone.now())], [f"image-{c.pk}"])
+        # Pictures have their own tab and count; the To review count and the badge are the reads only.
+        self.assertEqual((RV.count(), RV.image_count()), (0, 1))
+        self.assertEqual([i.key for i in RV.image_items()], [f"image-{c.pk}"])
+        self.assertEqual(RV.items(timezone.now()), [])
 
     def test_a_p18_of_an_entity_that_is_not_an_event_goes_to_review(self):
         self.world.kinds[CAESAR_QID] = "Q5"  # a person: their portrait, not the event
@@ -356,7 +358,7 @@ class ReviewImages(Base):
         self.world.files[PD_FILE] = commons_page(PD_FILE, license="cc-by-sa-4.0", short="CC BY-SA 4.0")
         self.run_job()
         c = ImageCandidate.objects.get(entry__slug="an-caesar-assassinated")
-        page = self.client.get(reverse("opsconsole:review") + f"?item=image-{c.pk}")
+        page = self.client.get(reverse("opsconsole:review") + f"?tab=images&item=image-{c.pk}")
         self.assertContains(page, "CC BY-SA 4.0")
         self.assertContains(page, 'name="sensitive"')
         self.assertContains(page, c.file_page)
@@ -366,7 +368,7 @@ class ReviewImages(Base):
         self.assertEqual((im.sensitive, im.license, im.license_url), (True, "CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"))
         self.assertTrue(Revision.objects.filter(table_name="timeline_image", actor="human:op").exists())
         self.assertEqual(OpsAction.objects.get(pk=r.json()["action"]).kind, "review_approve")
-        self.assertEqual(RV.count(), 0)
+        self.assertEqual((RV.count(), RV.image_count()), (0, 0))
 
     def test_deny_promotes_the_runner_up_then_waits_for_the_cooldown(self):
         a = commons_page("File:Death of Caesar A.jpg", name="Assassinated Julius Caesar in the Senate", license="cc-by-4.0", short="CC BY 4.0")
@@ -391,9 +393,12 @@ class ReviewImages(Base):
         self.run_job()
         c = ImageCandidate.objects.get()
         self.assertTrue(self.decide("defer", f"image-{c.pk}", note="later").json()["ok"])
-        self.assertEqual((RV.count(), RV.count(backlog=True)), (0, 1))
+        # One backlog for every kind: the deferred picture leaves the Images tab and its count, and lists in Backlog.
+        self.assertEqual((RV.image_count(), RV.count(backlog=True)), (0, 1))
+        self.assertEqual([i.key for i in RV.items(timezone.now(), backlog=True)], [f"image-{c.pk}"])
+        self.assertContains(self.client.get(reverse("opsconsole:review") + "?tab=backlog"), f"image-{c.pk}")
         self.assertTrue(self.decide("restore", f"image-{c.pk}").json()["ok"])
-        self.assertEqual((RV.count(), RV.count(backlog=True)), (1, 0))
+        self.assertEqual((RV.count(), RV.image_count(), RV.count(backlog=True)), (0, 1, 0))
 
     def test_the_flag_form_sets_and_clears_a_pictures_flag(self):
         im = Image.objects.get(entry__slug="un-charter")
@@ -407,7 +412,8 @@ class ReviewImages(Base):
         im.refresh_from_db()
         self.assertFalse(im.sensitive)
         self.assertFalse(self.decide("flag", entry="an-punic-wars", sensitive="1").json()["ok"])  # no picture
-        self.assertContains(self.client.get(reverse("opsconsole:review")), "Blur it")
+        self.assertContains(self.client.get(reverse("opsconsole:review") + "?tab=images"), "Blur it")
+        self.assertNotContains(self.client.get(reverse("opsconsole:review")), "Blur it")
 
     def test_the_job_flags_an_attached_picture_and_the_owner_clears_it(self):
         im = Image.objects.get(entry__slug="un-charter")
@@ -418,7 +424,7 @@ class ReviewImages(Base):
         self.assertTrue(im.sensitive)
         flag = ImageCandidate.objects.get(kind="flag")
         self.assertEqual((flag.status, flag.image_id), ("review", im.pk))
-        page = self.client.get(reverse("opsconsole:review") + f"?item=image-{flag.pk}")
+        page = self.client.get(reverse("opsconsole:review") + f"?tab=images&item=image-{flag.pk}")
         self.assertContains(page, "https://manyages.example/images/un-charter.jpg")
         self.assertTrue(self.decide("deny", f"image-{flag.pk}").json()["ok"])
         im.refresh_from_db()
@@ -505,3 +511,34 @@ class Ratings(FreshStorage, TestCase):
             self.assertIn("Rated 2026-11-28d (source discovery, ADR 0048)", p.access_notes)
         self.assertTrue(JobState.objects.get(name="ratings_2026_11_28d").state["applied"])
         self.assertEqual(ratings.apply_all(), Counter(), "each batch once per database")
+
+
+@override_settings(PUBLIC_SITE_URL="https://manyages.example")
+class ImagesTab(Base):
+    """The Review page's Images tab (ADR 0048): its own list and count; the To review tab, its count, the sidebar badge
+    and the agents' round summary cover the reads only; a decision there returns to the Images tab."""
+
+    def setUp(self):
+        super().setUp()
+        self.op = User.objects.create_user("op", password="x", is_staff=True)
+        self.op.user_permissions.add(Permission.objects.get(codename="ops_operator", content_type__app_label="opsconsole"))
+        self.client.force_login(self.op)
+
+    def test_the_images_tab_keeps_pictures_out_of_the_reads(self):
+        from agentapi.operations import owner_review_count
+
+        self.world.files[PD_FILE] = commons_page(PD_FILE, license="cc-by-sa-4.0", short="CC BY-SA 4.0")
+        self.run_job()
+        c = ImageCandidate.objects.get()
+        main = self.client.get(reverse("opsconsole:review"))
+        self.assertNotContains(main, f"image-{c.pk}")
+        self.assertContains(main, "Images<span class=\"n\">1</span>", html=False)
+        self.assertNotContains(main, 'aria-label="1 waiting"')  # the sidebar badge counts reads only
+        self.assertEqual(owner_review_count(), 0)
+        tab = self.client.get(reverse("opsconsole:review") + "?tab=images")
+        self.assertContains(tab, f"image-{c.pk}")
+        self.assertContains(tab, '<input type="hidden" name="tab" value="images">', html=False)
+        # A decision made without the script comes back to the Images tab.
+        r = self.client.post(reverse("opsconsole:review_decide"), {"decision": "defer", "item": f"image-{c.pk}", "key": uuid.uuid4().hex, "tab": "images"})
+        self.assertEqual(r.status_code, 303)
+        self.assertIn("tab=images", r["Location"])

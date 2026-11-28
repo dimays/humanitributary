@@ -4,7 +4,7 @@ Purpose: This procedure tells how to decide the pictures that the `image_search`
 blur a picture, or show it unblurred again.
 
 The job attaches a picture by itself only when the match is sure (ADR 0048). It sends the other pictures to the
-Review page. The Review page holds two kinds of picture item:
+Review page, on its own tab Images. The tab Images holds two kinds of picture item:
 
 | Kind | What waits | Approve | Deny |
 |---|---|---|---|
@@ -13,6 +13,9 @@ Review page. The Review page holds two kinds of picture item:
 
 A picture with a blur shows on the public page behind a short notice and the button "Show image".
 
+The tab Images has its own count. The count of the tab "To review" and the badge in the sidebar do not include
+pictures.
+
 ## Before you start
 
 - You have a staff user with the permission `ops_operator`.
@@ -20,7 +23,7 @@ A picture with a blur shows on the public page behind a short notice and the but
 
 ## Procedure
 
-1. Open the Review page of the console, `https://data.manyages.com/ops/review/`.
+1. Open the tab Images of the Review page, `https://data.manyages.com/ops/review/?tab=images`.
    Make sure that the list on the left shows the items of the kind Image.
 2. Click the first item of the kind Image.
    Make sure that the item shows the event, the picture, its credit and its license.
@@ -45,7 +48,7 @@ A picture with a blur shows on the public page behind a short notice and the but
 12. If you cannot decide now, click Defer.
     Make sure that the next item opens.
 13. Do steps 2 to 12 for each item of the kind Image.
-    Make sure that no item of the kind Image stays in the list.
+    Make sure that the tab Images shows 0.
 
 > **NOTE:** These pictures can disturb a viewer: the dead, the wounded, executions, atrocities, the victims of a
 > disaster and graphic medical subjects. If you are not sure, put a tick in the box Sensitive. A viewer can always
@@ -74,7 +77,7 @@ A picture with a blur shows on the public page behind a short notice and the but
 
 1. Find the entry id of the event. The entry id is the text after `#` in the address of the public page.
    Make sure that the entry id is correct.
-2. Scroll to the form "A picture's sensitive flag" below the list of the Review page.
+2. Open the tab Images and scroll to the form "A picture's sensitive flag" below the list.
    Make sure that the form shows the field "Entry id".
 3. Type the entry id in the field "Entry id".
    Make sure that the field shows the entry id.

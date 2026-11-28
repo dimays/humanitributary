@@ -125,11 +125,20 @@ def image_qs(*, backlog: bool = False):
 
 
 def count(*, backlog: bool = False) -> int:
-    """The Review page's count and the sidebar's badge: items waiting for the owner (never the backlog, never the
-    items agents can still do). One query: the sidebar reads it on every console page."""
+    """The To review tab's count and the sidebar's badge: the reads waiting for the owner, claims, drafts and tasks
+    (never the backlog, never the items agents can still do, never pictures: they have their own tab, ADR 0048).
+    With `backlog`, every deferred item, pictures included (one backlog). One query: the sidebar reads it on every
+    console page."""
     tasks = person_tasks(backlog=backlog).order_by().values_list("pk")
-    return tasks.union(_draft_qs(backlog=backlog).order_by().values_list("pk"), image_qs(backlog=backlog).order_by().values_list("pk"),
-                       all=True).order_by().count()
+    parts = [_draft_qs(backlog=backlog).order_by().values_list("pk")]
+    if backlog:
+        parts.append(image_qs(backlog=True).order_by().values_list("pk"))
+    return tasks.union(*parts, all=True).order_by().count()
+
+
+def image_count() -> int:
+    """The Images tab's count: pictures and flags waiting for the owner, not deferred (ADR 0048)."""
+    return image_qs().count()
 
 
 @dataclass
@@ -183,9 +192,17 @@ def _image_item(c: ImageCandidate) -> Item:
                 backlog=c.backlog or {})
 
 
+def image_items() -> list[Item]:
+    """The Images tab: pictures and flags waiting for the owner, oldest first (ADR 0048)."""
+    out = [_image_item(c) for c in image_qs().select_related("entry__as_event", "entry__as_branch")]
+    out.sort(key=lambda i: (i.since, i.key))
+    return out
+
+
 def items(now, *, backlog: bool = False, agents: bool = False) -> list[Item]:
-    """The queue, oldest first; with `agents`, then the agent-workable items in the agents' order. The backlog tab
-    lists the deferred ones, oldest deferral first."""
+    """The To review queue of reads (claims, drafts, tasks), oldest first; with `agents`, then the agent-workable
+    items in the agents' order. Pictures are on their own tab (`image_items`). The backlog tab lists every deferred
+    item, pictures included, oldest deferral first."""
     out = []
     for t in person_tasks(backlog=backlog).select_related("target_entry"):
         out.append(_task_item(t, "claim" if t.kind == "verify_claim" else "task", now))
@@ -194,8 +211,9 @@ def items(now, *, backlog: bool = False, agents: bool = False) -> list[Item]:
         x = e.concrete
         out.append(Item(f"draft-{e.slug}", "draft", getattr(x, "title", None) or getattr(x, "name", e.slug), e.held_at or e.created_at, entry=e,
                         backlog=held.get(e.slug) or {}))
-    for c in image_qs(backlog=backlog).select_related("entry__as_event", "entry__as_branch"):
-        out.append(_image_item(c))
+    if backlog:
+        for c in image_qs(backlog=True).select_related("entry__as_event", "entry__as_branch"):
+            out.append(_image_item(c))
     if backlog:
         out.sort(key=lambda i: (_parse(i.backlog.get("at")) or i.since, i.key))
         return out

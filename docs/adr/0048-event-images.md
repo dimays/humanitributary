@@ -91,9 +91,13 @@ A flagged picture is never attached without the owner. The job also reads the ca
 attached, 50 a run, the legacy set included. Where the signals fire it sets the flag and asks the owner to confirm
 or clear it. A flag the owner cleared is never set again by the job.
 
-**On the Review page** ([0046](0046-the-owners-review-queue.md)) two new item kinds appear: a picture, and an
-attached picture's flag. Each has approve (with a Sensitive box), deny, defer and restore. A form below the queue
-sets or clears any entry's flag (OpsAction `review_flag`).
+**On the Review page** ([0046](0046-the-owners-review-queue.md)) two new item kinds appear, a picture and an
+attached picture's flag, on their own **Images** tab with its own count. The To review tab, its count, the sidebar
+badge and the agents' `owner_review` count stay the reads only (claims, drafts and tasks), so a few thousand
+pictures never bury a claim that waits for the owner's read. A picture or a flag is decided as any item is:
+approve (with a Sensitive box), deny, defer, the same five-second undo, and one shared Backlog where a deferred
+picture waits until it is brought back to the Images tab. A form on the Images tab sets or clears any entry's flag
+(OpsAction `review_flag`).
 
 **On the page.** A picture renders lazily, with its size, credit, license (linked to its deed) and source page. A
 flagged picture is blurred behind "This image may be disturbing." and a native "Show image" button. While hidden it
@@ -124,6 +128,10 @@ and a snapshot still loads and exports byte for byte ([0007](0007-one-snapshot-s
   (`onerror`). The page sends no referrer. If Wikimedia asks, or the page's traffic grows, the alternative is to
   host copies of the PD and CC0 files, which those licenses allow. That would be a new decision.
 - CC BY-SA pictures are shown as they are. ShareAlike binds adaptations, and the page adapts nothing.
+- **The review load.** A dry run on release 2026.11.26.2 found 2,575 events with an acceptable P18: 521 would be
+  attached at once and 2,054 would wait on the Images tab. The owner chose a separate tab for them over stricter
+  automatic attachment: a picture can wait, a read shouldn't, and a looser rule would put unchecked pictures on the
+  page.
 - **Coverage.** It depends on Wikidata: events whose cited article's item has a P18 get one quickly, and the rest
   depend on the catalogs and the owner. The license and AI filters will leave some events without a picture, by
   design.
