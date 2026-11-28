@@ -31,17 +31,20 @@ A task is stuck when its status is `claimed` but no agent does the work. The lea
 The agent command can release a task in the name of its holder:
 
 ```bash
-heroku run python manage.py tasks release <id> --agent agent:<holder name> -a humanitributary-staging
+heroku run python manage.py tasks release <id> --agent agent:<holder name> --defer-minutes 0 -a humanitributary-staging
 ```
 
-Make sure that the output shows the task with the status `queued`.
+Make sure that the output shows the task with the status `queued` and `"not_before": null`.
+
+> **NOTE:** A release from the command line or from an agent waits 60 minutes before agents get the task again
+> (ADR 0041). The option `--defer-minutes 0` cancels the wait.
 
 ## Other actions on a task
 
 | Action | When to use it | What it does |
 |---|---|---|
 | Extend the lease (`extend_lease`) | The agent still works, but needs more time. | The lease runs 1 to 1,440 minutes from now. If the current end is later, it runs from that end. |
-| Requeue (`requeue_tasks`) | A task is `failed` or `cancelled`, and it must run again. | The task becomes `queued`, with `attempts` 0. |
+| Requeue (`requeue_tasks`) | A task is `failed`, `cancelled` or deferred, and it must run now. | The task becomes `queued`, with `attempts` 0. The time "not before" and the field Needs become empty. |
 | Cancel (`cancel_tasks`) | A `queued` task is not necessary. | The task becomes `cancelled`. The action does not cancel a task with a live lease. |
 
 > **NOTE:** The release from the console keeps the attempt in the count. A release from the command line gives the
