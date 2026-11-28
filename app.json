@@ -1,7 +1,7 @@
 {
   "name": "ManyAges",
   "description": "The data platform behind an interactive, cited timeline of all history: the admin, the agent API and the scheduled jobs (docs/adr/0020-heroku-hosting.md).",
-  "repository": "https://github.com/dimays/humanitributary",
+  "repository": "https://github.com/dimays/manyages",
   "stack": "heroku-24",
   "buildpacks": [{ "url": "heroku/nodejs" }, { "url": "heroku/python" }],
   "formation": {
@@ -13,7 +13,7 @@
     "ENVIRONMENT": { "description": "Anything but dev turns on production safety (staging, prod).", "value": "staging" },
     "SECRET_KEY": { "description": "Django's signing key.", "generator": "secret" },
     "ALLOWED_HOSTS": { "description": "Comma-separated host names: the app's herokuapp.com domain, later the custom domain.", "required": true },
-    "INGEST_CONTACT": { "description": "The contact in the bot's User-Agent: a project URL, never a person.", "value": "https://github.com/dimays/humanitributary" },
+    "INGEST_CONTACT": { "description": "The contact in the bot's User-Agent: a project URL, never a person.", "value": "https://github.com/dimays/manyages" },
     "STORAGE_BACKEND": { "description": "local accepts a dyno's throwaway disk until the S3_* variables are set (ADR 0016); remove it then.", "value": "local", "required": false }
   }
 }

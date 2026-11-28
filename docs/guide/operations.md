@@ -213,7 +213,7 @@ database; the bare domain is reserved for the public page.
 | Processes | From the `Procfile`: `release` runs `migrate` before each release goes live (a failed migration stops the deploy); `web` 1 × Basic; `worker` 1 × Basic (`run_jobs --loop`): the only place jobs run |
 | Object storage | AWS S3, us-east-1: `humanitributary-staging-raw` and `humanitributary-staging-releases`, private (public access blocked, SSE-S3). The IAM user `humanitributary-staging` has no console login and may only list those two buckets and read, write and delete their objects |
 | Database | Heroku Postgres Essential-1, Postgres 16 (10 GB, 20 connections), as `DATABASE_URL`; TLS required; a backup daily at 03:00 Chicago time (`heroku pg:backups`) |
-| Deploys | Connected to `dimays/humanitributary`: `main` deploys automatically once CI has passed on it |
+| Deploys | Connected to `dimays/manyages`: `main` deploys automatically once CI has passed on it |
 
 Config vars (`heroku config -a humanitributary-staging` lists them; never paste their values anywhere):
 

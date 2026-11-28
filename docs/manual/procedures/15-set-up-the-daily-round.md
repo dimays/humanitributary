@@ -9,7 +9,7 @@ Do this procedure one time. After that, the routine starts one round each day ([
 
 - You have the Heroku CLI, and it has access to the app `humanitributary-staging`.
 - You have a claude.ai account with Claude Code on the web, and access to the GitHub repository
-  `dimays/humanitributary`.
+  `dimays/manyages`.
 - You have a password manager for the tokens.
 
 ## Procedure
@@ -87,7 +87,7 @@ Do this procedure one time. After that, the routine starts one round each day ([
 | Field | Value |
 |---|---|
 | Name | `Daily agent round` |
-| Repository | `dimays/humanitributary`, the default branch `main` |
+| Repository | `dimays/manyages`, the default branch `main` |
 | Cloud environment | `humanitributary-round` |
 | Schedule | the cron `0 6 * * *` (UTC) |
 | Prompt | `Run today's agent round. Follow .claude/skills/run-round/SKILL.md exactly, with the trigger "schedule". Do not change, commit or push files in the repository.` |

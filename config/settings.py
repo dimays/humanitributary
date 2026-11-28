@@ -177,7 +177,7 @@ WRITE_EVENT_THRESHOLD = float(os.getenv("WRITE_EVENT_THRESHOLD", "70"))
 
 # Ingestion (ingest/, docs/adr/0012-ingestion.md). The User-Agent names the bot and a generic contact, never a
 # person: the project's repository by default (Wikimedia asks for a contact).
-INGEST_CONTACT = os.getenv("INGEST_CONTACT", "https://github.com/dimays/humanitributary")
+INGEST_CONTACT = os.getenv("INGEST_CONTACT", "https://github.com/dimays/manyages")
 INGEST_USER_AGENT = os.getenv("INGEST_USER_AGENT", f"{SITE_NAME}Bot/0.1 (history timeline research; +{INGEST_CONTACT}) python-httpx")
 # Evidence packs (ingest/prefetch.py, docs/adr/0036-evidence-packs.md): the clean text of a page the prefetch_sources
 # job stored is deleted from the private store this many days after it was last fetched; a publisher whose license

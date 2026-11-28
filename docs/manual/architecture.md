@@ -75,7 +75,7 @@ flowchart TB
     pg[("Heroku Postgres")]
     raw[("S3 bucket humanitributary-staging-raw")]
     rel[("S3 bucket humanitributary-staging-releases")]
-    gh["GitHub dimays/humanitributary<br/>Actions: make check-pr"]
+    gh["GitHub dimays/manyages<br/>Actions: make check-pr"]
 
     admin & ops & api & health --> pg
     site -- "latest.json and timeline.html only" --> rel
@@ -165,7 +165,7 @@ flowchart TB
         rel[("S3 humanitributary-staging-releases")]
     end
     subgraph ghub["GitHub"]
-        repo["dimays/humanitributary"]
+        repo["dimays/manyages"]
         ci["Actions workflow check<br/>make check-pr"]
     end
     reader --> dnsroot & dnswww

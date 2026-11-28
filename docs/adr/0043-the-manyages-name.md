@@ -43,8 +43,8 @@ Cloudflare (a 308 keeps the method and body) or keeps serving until the domain e
 **The identifiers stay.** Renaming the environment variables means pasting nine secrets into the cloud environment
 again; the audit functions and their settings would need a migration that rewrites triggers on every audited table;
 the buckets, the Heroku app and the databases would need copies and moves of live data. None of them is seen by a
-reader. The repository is `dimays/humanitributary` until the owner chooses to rename it (GitHub redirects the old
-URL; the routine's source and the `INGEST_CONTACT` URL then change).
+reader. The repository is the exception: it is the bot's public contact, so it became `dimays/manyages` (GitHub
+redirects `dimays/humanitributary`), and `INGEST_CONTACT` and the round routine's source name the new URL.
 
 ## Consequences
 
