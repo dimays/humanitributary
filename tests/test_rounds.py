@@ -479,7 +479,8 @@ class PreflightSkillTests(TestCase):
         for skill in ("drain-write-events", "fill-gaps", "verify-claims", "verify-stale-claims", "map-branch-entities", "run-round"):
             body = (settings.BASE_DIR / f".claude/skills/{skill}/SKILL.md").read_text()
             self.assertIn("INGEST_USER_AGENT", body, skill)
-            self.assertIn("one in-app browser tab", body, skill)
+            self.assertIn("No browser for source pages", body, skill)  # a person reads a browser_only page (ADR 0046)
+            self.assertNotIn("one in-app browser tab", body, skill)
 
 
 class SizeCeilingTests(TestCase):
