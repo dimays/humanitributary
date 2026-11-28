@@ -317,7 +317,8 @@ class HealthTests(FreshStorage, TestCase):
         from evidence.models import Publisher
         from ingest.models import Feed
 
-        pub = Publisher.objects.create(domain="example.org", name="Example")
+        with revising("human:test", reason="a test publisher"):  # a canonical table: the trigger needs revising()
+            pub = Publisher.objects.create(domain="example.org", name="Example")
         a, b = (Feed.objects.create(name=n, url=f"https://example.org/{n}.xml", kind="rss", publisher=pub, config={"job": "gazette"}) for n in ("a", "b"))
         t0 = timezone.now()
         bad = FetchRun.objects.create(job="gazette", feed=a, started_at=t0 - timedelta(hours=2), status="failed", error="down")
