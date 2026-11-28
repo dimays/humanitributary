@@ -509,8 +509,9 @@ def rounds(request):
     plan, agents, notes = body.get("plan") or {}, body.get("agents") or [], body.get("notes") or ""
     if not isinstance(plan, dict) or not isinstance(agents, list) or not isinstance(notes, str):
         return error(400, "plan is an object, agents a list, notes text")
-    if Round.objects.filter(started_by=actor, started_at__gte=timezone.now() - timedelta(days=1)).count() >= 6:
-        return error(429, "6 rounds in the last day from this token: at most 6", retry_after=3600)
+    limit = settings.AGENT_API_ROUNDS_PER_DAY
+    if Round.objects.filter(started_by=actor, started_at__gte=timezone.now() - timedelta(days=1)).count() >= limit:
+        return error(429, f"{limit} rounds in the last day from this token: at most {limit}", retry_after=3600)
     try:
         r, proceed = R.start(trigger=trigger, by=actor, plan=plan, agents=agents, notes=notes, key=key)
     except R.RoundRefused as e:

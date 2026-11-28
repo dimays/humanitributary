@@ -686,7 +686,8 @@ the kind; a retry with the same key and body returns the stored answer
 **Limits.** On top of the per-minute limit, per token: `edits/check` 20 an
 hour, `edits/apply` 6 an hour, `releases/check` 10 an hour,
 `releases/publish` 4 a day (`AGENT_API_*` in `config/settings.py`), counted
-from the `OpsAction` rows; `POST rounds` 6 a day. Over a limit: 429 with
+from the `OpsAction` rows; `POST rounds` 6 a day by default
+(`AGENT_API_ROUNDS_PER_DAY`, counted from the `Round` rows). Over a limit: 429 with
 `Retry-After`. An API action still `running` after 10 minutes lost its
 request (Heroku ends one after 30 seconds) and is closed as failed by the next
 lock check, so it never holds the publish lock.
