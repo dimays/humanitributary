@@ -39,9 +39,33 @@ api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/extend" -d '{"minutes": 30}'
 
 A lease that runs out may be taken over by another agent; then your `complete` is refused (409) and the work is
 lost. If you can't finish, `release` the task (untouched) or `fail` it with the reason; never leave it to lapse.
+A release is deferred (ADR 0041): the task isn't offered again for an hour, so neither you nor the next agent claims it
+straight back. Say why, `-d '{"reason": "…"}'` (`"defer_minutes"`: 0 to 10080 for another wait). When only a person
+can unblock it, add `"needs": "browser"` (a page only a browser may read) or `"needs": "owner"` (the owner's call): it
+waits a week, and the round's summary lists it for the owner. Never release and re-claim the same task in a loop.
 
 ## Fetching: honest, one tab, never forced
 
+- **Ask the policy before every fetch.** Before any WebFetch or `curl` of a source page (anything but the agent API
+  itself), ask the API whether your script may read it (ADR 0041):
+
+  ```bash
+  api -G "$HUMANITRIBUTARY_API/policy" --data-urlencode "url=<the page>"
+  # {"policy": "allowed", "may_fetch": true, "browser_read": true, "why": "…", "crawl_delay": 1.0, "publisher": {…}}
+  ```
+
+  Fetch only when `may_fetch` is true, and leave `crawl_delay` seconds between requests to one host. When it is
+  false, don't fetch, and don't reach the page another way (another tool, a mirror, a cache): `citation_only`,
+  `browser_only`, `never_fetch`, `ai_blocked`, `robots`, `blocked`, `unrated`, `forbidden`, and `api_only` outside
+  its `api_base` are never read by script. `why` says which (for `api_only`, the API base to use instead). Then:
+  1. **Use another source.** Wikipedia's article on the subject cites several; its references often lead to a
+     readable one (ask the policy for each). Wikipedia and Wikidata themselves are `allowed`.
+  2. **Read it in a browser** only if you have one (a local session's in-app browser) and `browser_read` is true;
+     mark the cite `"method": "browser_read"`. A cloud session has no browser.
+  3. **Don't cite it unread.** No task skill allows a citation-only cite: a page you could not read is no source.
+  4. **Release the task** when it can't be done without that page, so a person can read it:
+     `api -X POST "$HUMANITRIBUTARY_API/tasks/<id>/release" -d '{"needs": "browser", "reason": "<url>: <why>"}'`.
+     It waits a week for the owner instead of coming straight back to you or the next agent.
 - **Never disguise the client.** Every page you fetch by script sends the project's honest User-Agent:
   `curl -sS -A "$INGEST_USER_AGENT" <url>` (the same value as the app's `INGEST_USER_AGENT`). No spoofed browser
   User-Agent, no header tricks, no proxies, mirrors or caches to get round a site that refuses automated reads.
@@ -68,7 +92,9 @@ state and its predecessor.
 
 ## 2. Find the candidates
 
-Look each candidate up on Wikidata (read-only, with the honest User-Agent):
+Look each candidate up on Wikidata (read-only, with the honest User-Agent). The Wikidata and Wikipedia API calls
+below are `allowed` (`GET policy` says `may_fetch` for them), so they need no policy call each; any other page you
+read does (above).
 
 ```bash
 UA="$INGEST_USER_AGENT"

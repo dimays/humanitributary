@@ -177,7 +177,8 @@ Every request goes through `ingest.http.Fetcher` and the source policy
 ## What the agent sends back
 
 The `fill-gaps` skill (`.claude/skills/fill-gaps/SKILL.md`) claims a task,
-reads (with the project's honest User-Agent, one browser tab at most, a lease
+reads (asking `GET policy?url=` before every scripted fetch and fetching only
+when `may_fetch`, with the project's honest User-Agent, one browser tab at most, a lease
 extended when a task passes about 20 minutes), and completes it over the agent API with one of
 ([the schema](work-queue-and-agents.md#results-validated-then-applied)):
 
@@ -189,6 +190,11 @@ extended when a task passes about 20 minutes), and completes it over the agent A
 - `{"decision": "nothing_notable", "note": "…"}` (a note of at least 20
   characters, and no events): nothing is written; the result is the record
   that keeps the job off that window for `retry_after_days`.
+
+A gap that can't be filled without a page only a browser may read is
+released with `{"needs": "browser", "reason": "<url>: <why>"}`: it waits a
+week in the console's Deferred tab for the owner instead of coming back to
+the next filler ([deferred releases](work-queue-and-agents.md#deferred-releases)).
 
 ## The owner's command and the digest
 
