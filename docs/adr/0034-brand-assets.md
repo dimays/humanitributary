@@ -1,6 +1,6 @@
 # 0034 — Brand files drawn from the page's mark, a preview card rendered from the page, served at the root of every host
 
-**Status:** proposed (November 2026)
+**Status:** proposed (November 2026); amended by [0043](0043-the-manyages-name.md) (the brand files carry the new name)
 
 ## Context
 

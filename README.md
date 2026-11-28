@@ -1,4 +1,6 @@
-# Humanitributary
+# ManyAges
+
+At [manyages.com](https://manyages.com). It was Humanitributary (humanitributary.com) until November 2026; the old domain redirects until it expires ([ADR 0043](docs/adr/0043-the-manyages-name.md)).
 
 <!-- The product's name lives here, in config/settings.py SITE_NAME and in site/template.html, nowhere else. -->
 

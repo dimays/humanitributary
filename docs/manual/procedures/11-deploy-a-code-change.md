@@ -78,7 +78,7 @@ Purpose: This procedure tells how a code change goes from a branch to the live a
 14. Get the health of the system:
 
     ```bash
-    curl -s https://data.humanitributary.com/healthz
+    curl -s https://data.manyages.com/healthz
     ```
 
     Make sure that `"ok"` is `true`.

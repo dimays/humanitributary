@@ -1,6 +1,6 @@
 ---
 name: fill-gaps
-description: Work the fill_gap queue in the Humanitributary repo through the agent API. Claim a gap the gap_waves job found (a branch with no published events, or far fewer than its peers, in one window of a content wave), read sources on that branch in that window, write 1–3 events in the SCHEMA style that cite pages actually read (at least one not Wikipedia), or report that nothing notable is sourceable, and complete the task. Use when asked to fill gaps, work fill_gap tasks, run a content wave, or deepen a branch's history.
+description: Work the fill_gap queue in the ManyAges repo through the agent API. Claim a gap the gap_waves job found (a branch with no published events, or far fewer than its peers, in one window of a content wave), read sources on that branch in that window, write 1–3 events in the SCHEMA style that cite pages actually read (at least one not Wikipedia), or report that nothing notable is sourceable, and complete the task. Use when asked to fill gaps, work fill_gap tasks, run a content wave, or deepen a branch's history.
 ---
 
 # Fill gaps in the timeline

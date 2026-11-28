@@ -21,7 +21,7 @@ code change.
 - Commands for the hosted system use the Heroku app `humanitributary-staging`. This app holds the live data and
   serves the public page.
 - `<version>`, `<id>` and other words in angle brackets are values that you supply.
-- The operations console is at `https://data.humanitributary.com/ops/`. Its page names and button names can change.
+- The operations console is at `https://data.manyages.com/ops/`. Its page names and button names can change.
   If a command does the same action, the procedure also gives the command.
 
 ## Safety labels

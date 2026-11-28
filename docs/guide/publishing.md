@@ -537,9 +537,9 @@ content, read a snapshot too (`--from-json`, default
 
 ### The page's head
 
-`site/template.html`'s `<head>` is the page's public face: the title ("Humanitributary — all of history, cited":
+`site/template.html`'s `<head>` is the page's public face: the title ("ManyAges — all of history, cited":
 the name exactly as `SITE_NAME` has it, then a short description), a one-sentence `description`, the canonical URL
-`https://humanitributary.com/`, the icons (`favicon.ico` for 16 to 48 pixels, `favicon.svg` for every other size,
+`https://manyages.com/`, the icons (`favicon.ico` for 16 to 48 pixels, `favicon.svg` for every other size,
 `apple-touch-icon.png`), the web manifest, a light (`#ffffff`, the header) and a dark (`#1c1d21`) `theme-color`, and
 the Open Graph and Twitter card tags a link preview reads (`og:site_name`, `og:title`, `og:description`, `og:url`,
 `og:image` with its size and alt text; `summary_large_image` with `twitter:image` and its alt text). The icon and manifest links are relative, like

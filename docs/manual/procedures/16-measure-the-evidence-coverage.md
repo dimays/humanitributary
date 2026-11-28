@@ -19,7 +19,7 @@ on a site that did not refuse the job.
 
 ## Procedure
 
-1. Open the Work page of the console, `https://data.humanitributary.com/ops/work/`.
+1. Open the Work page of the console, `https://data.manyages.com/ops/work/`.
    Make sure that the cards of `write_event`, `fill_gap` and `verify_claim` show "evidence ready".
 2. Write the report:
 

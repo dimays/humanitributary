@@ -465,14 +465,14 @@ class PublicPageTests(FreshStorage, TestCase):
         head = page.split("</head>", 1)[0]
         name = settings.SITE_NAME
         for tag in (f"<title>{name} — all of history, cited</title>", '<meta name="description" content="',
-                    '<link rel="canonical" href="https://humanitributary.com/">',
+                    '<link rel="canonical" href="https://manyages.com/">',
                     '<link rel="icon" href="favicon.ico" sizes="48x48">', '<link rel="icon" href="favicon.svg" type="image/svg+xml">',
                     '<link rel="apple-touch-icon" href="apple-touch-icon.png">', '<link rel="manifest" href="site.webmanifest">',
                     '<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">',
                     '<meta name="theme-color" content="#1c1d21" media="(prefers-color-scheme: dark)">',
                     f'<meta property="og:site_name" content="{name}">', f'<meta property="og:title" content="{name} — all of history, cited">',
-                    '<meta property="og:url" content="https://humanitributary.com/">', '<meta property="og:description" content="',
-                    '<meta property="og:image" content="https://humanitributary.com/og-image.png">',
+                    '<meta property="og:url" content="https://manyages.com/">', '<meta property="og:description" content="',
+                    '<meta property="og:image" content="https://manyages.com/og-image.png">',
                     '<meta name="twitter:card" content="summary_large_image">', '<meta name="twitter:title" content="',
                     '<meta name="twitter:description" content="', '<meta name="twitter:image" content="',
                     '<meta property="og:image:alt" content="', '<meta name="twitter:image:alt" content="'):

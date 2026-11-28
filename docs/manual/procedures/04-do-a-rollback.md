@@ -12,7 +12,7 @@ database.
 
 ## Procedure with the console
 
-1. Open the releases page of the console, `https://data.humanitributary.com/ops/releases/`.
+1. Open the releases page of the console, `https://data.manyages.com/ops/releases/`.
    Make sure that you can see the release that is live now.
 2. Find the earlier release that readers must get.
    Make sure that its change totals agree with what you expect.
@@ -23,7 +23,7 @@ database.
 5. Wait one minute, and then get the headers of the public page:
 
    ```bash
-   curl -sI https://humanitributary.com/ | grep -i x-release
+   curl -sI https://manyages.com/ | grep -i x-release
    ```
 
    Make sure that `X-Release` names the earlier version.

@@ -20,7 +20,7 @@ No agent gets an item on this page. The item waits until you decide.
 
 ## Procedure
 
-1. Open the Review page of the console, `https://data.humanitributary.com/ops/review/`.
+1. Open the Review page of the console, `https://data.manyages.com/ops/review/`.
    Make sure that the tab "To review" shows the number of items.
 2. Click the first item in the list on the left.
    Make sure that the item shows its kind, its text and the list "Read these in your browser".

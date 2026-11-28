@@ -1,6 +1,6 @@
 ---
 name: run-round
-description: Run one agent round of the Humanitributary platform end to end through the agent API — the daily cloud routine's job, or a round started by hand. Check the round settings first (paused, skipped), read the queue, plan the mix by value and budget, start role agents with the task skills (fill-gaps, map-branch-entities, drain-write-events, verify-claims), then independent reviewers who read every cited page and write an edit file, check and apply it, run the release gates and publish when everything passes, record the round, and post a short summary. Use when asked to run a round, run the daily round, or when the scheduled routine starts.
+description: Run one agent round of the ManyAges platform end to end through the agent API — the daily cloud routine's job, or a round started by hand. Check the round settings first (paused, skipped), read the queue, plan the mix by value and budget, start role agents with the task skills (fill-gaps, map-branch-entities, drain-write-events, verify-claims), then independent reviewers who read every cited page and write an edit file, check and apply it, run the release gates and publish when everything passes, record the round, and post a short summary. Use when asked to run a round, run the daily round, or when the scheduled routine starts.
 ---
 
 # Run an agent round
@@ -23,7 +23,7 @@ subagent: pass the variable's *name*.
 
 | Variable | What | Scope |
 |---|---|---|
-| `HUMANITRIBUTARY_API` | `https://data.humanitributary.com/api/agent` | |
+| `HUMANITRIBUTARY_API` | `https://data.manyages.com/api/agent` | |
 | `INGEST_USER_AGENT` | The project's honest User-Agent, for every page fetched by script | |
 | `HUMANITRIBUTARY_TOKEN_ROUND` | records the round (`POST rounds`, `PATCH rounds/<id>`) | `round` |
 | `HUMANITRIBUTARY_TOKEN_WRITER` | the writers | `write_event` |

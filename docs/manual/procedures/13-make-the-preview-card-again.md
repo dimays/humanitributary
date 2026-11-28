@@ -3,7 +3,7 @@
 Purpose: This procedure tells how to make the picture that a shared link to the page shows, and when to make it.
 
 The preview card is `site/brand/og-image.png`, 1200 by 630 pixels. Messages, feeds and search results show it
-when a person shares `https://humanitributary.com/`. The script `site/cards.mjs` builds the page from a release. It opens
+when a person shares `https://manyages.com/`. The script `site/cards.mjs` builds the page from a release. It opens
 the page in a Chrome with no window, and takes a picture of the timeline. Then it puts the mark, the name, one line
 and the domain above the picture. The card is a file in git, so a preview never waits for a render.
 
@@ -36,7 +36,7 @@ publish does not need a new card.
 4. Open `var/cards/card-small.png`, the card at half size.
    Make sure that you can read the name and the line.
 5. Commit `site/brand/og-image.png`, and deploy it with procedure [11](11-deploy-a-code-change.md).
-   Make sure that `https://humanitributary.com/og-image.png` shows the new card after the deploy.
+   Make sure that `https://manyages.com/og-image.png` shows the new card after the deploy.
 
 > **NOTE:** To show a different part of the timeline, change `VIEW` in `site/cards.mjs`. `node site/cards.mjs
 > --explore` writes each era at five depths to `var/cards/`, so that you can compare them.
